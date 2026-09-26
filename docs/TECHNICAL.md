@@ -1,0 +1,1530 @@
+# SlyTerm technical details
+
+This is the reference for how SlyTerm behaves, how to configure and script it, and how it is
+built. For an overview of what the app does, see the [README](../README.md). To build it and send
+a change, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+- [Principles](#principles)
+- [The overlay](#the-overlay)
+- [What each tab's Claude is doing](#what-each-tabs-claude-is-doing)
+- [Bringing a session in from another terminal](#bringing-a-session-in-from-another-terminal)
+- [Lookup](#lookup)
+- [Games and sources](#games-and-sources)
+- [Web tabs](#web-tabs)
+- [Settings](#settings)
+- [Scripting](#scripting)
+- [Troubleshooting](#troubleshooting)
+- [Architecture](#architecture)
+- [Migration notes](#migration-notes)
+
+## Principles
+
+These hold for every feature, and a change that breaks one of them is a bug:
+
+- **No game interaction.** SlyTerm never reads a game's memory or network traffic and never sends
+  it input. It is a window on top, nothing more.
+- **The screen is read only on request.** The lookup takes one screenshot around the pointer when
+  its hotkey (or its URL) fires, with SlyTerm's own windows excluded, and reads it on device.
+  Nothing is captured at any other time.
+- **The game keeps the keyboard.** A finished turn, a permission prompt, a bell or a page arriving
+  in a web tab never takes focus from the game, and a floating web tab never takes it on its own. A
+  hidden overlay that has news comes back in click-through, so the next click and keystroke still
+  reach the game.
+- **Nothing is typed into a conversation on a guess.** Allow and refuse type one key, and only
+  after a fresh check that the prompt up is the one the user read. Any doubt ends in a toast.
+- **Claude Code's files are read, never written.** The session registry and the transcripts are
+  Claude Code's own undocumented formats, read best effort and defensively.
+
+## The overlay
+
+### Window and modes
+
+Set your game to **borderless windowed** for the most reliable overlay. Native macOS fullscreen
+also works; exclusive fullscreen may not. If the overlay ends up behind the game, raise Settings ›
+Window › Level to "Pop-up menu, highest".
+
+- **Interact** (green dot). The terminal takes clicks, scrolling, text selection and typing, like
+  any terminal. Typing goes to the terminal, not the game.
+- **Click-through** (orange dot, dimmed). Every click and scroll passes through to the game
+  underneath. Only the tab strip stays clickable, and clicking it (switching tabs, dragging the
+  window) leaves you in click-through: the mode changes only by hotkey, eye button or trackpad
+  tap, so a stray click on the strip never swallows your next click on the game. The keyboard goes
+  back to the game. Click-through covers every SlyTerm window at once: a floating web tab lets
+  clicks through too, all but its toolbar (see [Click-through and focus](#click-through-and-focus)).
+- **Panic** (red dot) covers the whole screen, menu bar included, with a fully opaque terminal and
+  puts the keyboard in it. Nothing of the game shows through. Press the hotkey, the button or
+  `⌘Return` again and the window goes back exactly where it was, with its previous opacity, mode
+  and visibility. From a web tab it switches to the terminal you were reading it over, opening
+  one if you have none, and comes back to the page when you leave. It also silences every web tab
+  and hides the floating ones; leaving panic shows them again and lets the sound go on. Works from
+  the hidden state too.
+
+By default the overlay switches to click-through on its own as soon as the terminal loses keyboard
+focus, that is, the moment you click into the game. So the loop is: hotkey or eye button, type your
+prompt, click back into the game and keep playing, glance at Claude's output as it streams. The
+keyboard moving between SlyTerm's own windows, from the terminal to a floating web tab or back,
+does not count. Turn this off in Settings › Window ("Switch to click-through when the terminal
+loses focus") if you would rather switch modes only by hand.
+
+### Trackpad tap
+
+A quick tap with three fingers roughly side by side, anywhere on the trackpad, toggles
+click-through by default. Settings › Shortcuts › Trackpad sets how many fingers (2 to 5) and whether
+the tap toggles click-through, shows or hides the terminal, fires panic mode, or does nothing.
+
+It relies on Apple's private MultitouchSupport framework, the same one BetterTouchTool uses, so a
+future macOS update could stop it; that pane then says "Unavailable" and the hotkeys keep working.
+macOS cannot be told to ignore the tap, so in System Settings › Trackpad › Point & Click set "Look
+up & data detectors" to Force Click or off, otherwise every tap also opens a dictionary panel. One
+tuning key has no control: `tapAlignment` (max vertical spread, default 0.50 of the trackpad
+height, 1 disables the check). Enable `debug` and tap a few times to see in
+`~/Library/Logs/SlyTerm.log` why a tap was or was not recognised.
+
+### Tab bar
+
+The bar goes where you put it. Drag it into the upper half of the screen and, the moment it
+crosses the middle, the terminal flips to hang below it; drag it back down into the lower half and
+the terminal goes back above it. The bar itself never leaves your pointer (the terminal is what
+moves), so the bar is always the window's outer edge and the terminal is what reaches toward the
+middle, where the game is. Settings › Window › Tab bar pins it to the top or the bottom of the
+window instead.
+
+### Tabs and folders
+
+Every tab knows its own folder: SlyTerm reads it from the shell directly, with no shell
+integration needed. New tabs open in the current tab's folder (turn that off in Settings ›
+Terminal to always use the default folder). Tabs and their folders are restored at launch; only
+the tab that comes back in front runs the startup command, so putting six folders back does not
+start six `claude` sessions at once. Quitting with several tabs or a running command asks first
+(tick "Don't ask again", untick it in Settings › General, or `defaults write
+com.charlesmelki.slyterm confirmQuit -bool false`); logging out, restarting and shutting down are
+never held up by that prompt. When the shell sets no title, the tab shows its folder name and
+follows `cd`.
+
+Every tab exports `SLYTERM_TAB_ID` to its shell, which the activity monitor, `slyterm://notify`
+and "Bring In a Session" use to tell tabs apart.
+
+### Font and keyboard
+
+By default SlyTerm uses the font your iTerm2 default profile uses, so a prompt that renders there
+(oh-my-posh, Powerlevel10k, Starship with Nerd Font icons) renders here. Without iTerm2 it picks the
+first installed Nerd Font, and the system monospaced font otherwise, with installed Nerd Fonts as
+glyph fallback. Change it under Settings › Terminal › Font, which lists the installed Nerd Fonts
+first and then every other fixed-pitch family.
+
+Option as Meta is **off** by default so that `{`, `[`, `|`, `~` keep working on French and other
+international layouts. `⇧Return` or `⌥Return` gives you a newline in Claude Code.
+
+### Startup animation
+
+At launch the icon plays itself over the first terminal: SF Symbols' `terminal` draws in, its
+cursor blinks, the underscore bends into the smirk, the prompt shuts for a wink, and the whole
+thing switches off like an old screen (a snap to a line, a dot, a flare) as the shell comes on
+underneath. The shell is running the whole time and nothing it prints is lost; any hotkey, tab
+switch or click-through cuts the animation short. Turn it off in Settings › General ("Play the
+logo animation", key `startupAnimation`).
+
+### Every action and its keys
+
+| Action | How |
+| --- | --- |
+| Show / hide the overlay | `⌃⌥H` (configurable), or the `–` button; floating web tabs stay where they are |
+| Toggle click-through | `⌃⌥Tab` (configurable), the eye button, or a three-finger tap on the trackpad; every SlyTerm window at once |
+| Panic: fullscreen opaque terminal | `⌃⌥P` (configurable), `⌘Return` inside the terminal or a web tab, or the expand button |
+| Look up what is under the pointer, in a web tab | `⌃⌥Q` (configurable), or "Look Up Under Pointer" in the menu bar item, which also has a "Lookup Game" submenu. Press it again without moving for the next guess |
+| Pick which line near the pointer to look up | `⌃⌥⇧Q` (configurable), or "Pick Text Near Pointer…" in the menu bar item, then the key shown next to the line |
+| What each tab's Claude is doing | A spinner at the head of the tab while it works, an orange `?` while it waits for you; hover the tab for the detail |
+| Claude finished or is waiting | The tab turns yellow, the strip lights up and a card says what happened. Press `⌃⌥Tab`, or click the eye button |
+| Allow or refuse what Claude asks, from the game | `⌃⌥Y` / `⌃⌥N` (configurable), while a permission prompt is up in that tab |
+| Pause what web tabs are playing, or play it again | `⌃⌥V` (configurable), or "Play / Pause" in the menu bar item |
+| Move the window | Drag the tab strip |
+| Resize | Drag the left or right edge, or the edge the tab strip is not on |
+| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip; middle-click closes a tab or a web tab's square |
+| Switch tabs | `⌘1`…`⌘9` (terminals only); `⌃Tab` / `⌃⇧Tab`, `⌘⌥←` / `⌘⌥→` or `⌘⇧[` / `⌘⇧]` go through the terminals from a terminal, and through the web tabs in the SlyTerm window from a web tab |
+| Go to a web tab | `⌥⌘1`…`⌥⌘9`, the web tabs in the order of their squares, from a terminal, a web tab or a floating window; hover a square to see its key |
+| Web tab ↔ terminal | `⌘G` (the last web tab in front in the SlyTerm window; opens the active game's first source when there is none) |
+| New web tab | `⌘L` in a terminal, `⌘T` in a web tab or a floating window, or "New Web Tab" in the menu bar item; in a web tab, `⌘L` goes to its address field |
+| Open a link in a new web tab | `⌘`-click or middle-click opens it behind the one you are on |
+| Reopen a closed web tab | `⌘⇧T` in a web tab or a floating window, up to the last ten, most recent first |
+| Pop a web tab out / put it back | The pop-out button in its toolbar / the same button, or a click on its dimmed square in the strip |
+| Move or resize a floating web tab | Drag its toolbar / drag its edges |
+| Copy / paste / select all | `⌘C` (with a selection) / `⌘V` / `⌘A` |
+| Font size, or page zoom in a web tab | `⌘+` / `⌘-` / `⌘0` |
+| In a web tab: back / forward / reload | `⌘←` / `⌘→` / `⌘R` |
+| In a web tab: find in page | `⌘F`, then `Return` / `⇧Return` or `⌘G` / `⌘⇧G` for the next / previous match, `Esc` to close; `⌘E` searches for the selection |
+| Bring a session in from another terminal | `⌘⇧T` in a terminal, "Bring In a Session…" in the menu bar item, or a right-click on `+` |
+| Newline in Claude Code | `⇧Return` or `⌥Return` |
+| Open Settings | `⌘,` in the SlyTerm window or a floating web tab, or "Settings…" in the menu bar item |
+| Quit | `⌘Q` while the terminal or a web tab has focus, or the menu bar item |
+
+## What each tab's Claude is doing
+
+### On the strip
+
+A tab that runs a Claude Code session says so on the strip, with nothing to set up: a small spinner
+at the head of the tab while Claude works, an orange question mark while it waits for you (a
+permission prompt, a question) and the yellow dot below once it has finished and nobody looked.
+Hover the tab and the tooltip says more: "Claude is working for 2m · editing GuideTab.swift",
+"Claude is waiting for you · run `npm test`", "Claude finished 3m ago" and the first line of what
+it said. The hint at the right of the strip shows the selected tab's activity while it works,
+"running the tests · 2m", so in click-through the strip alone says whether it is worth coming back
+yet.
+
+SlyTerm reads this from the two files Claude Code writes anyway: its session registry, which says
+whether each session is busy, waiting or idle, and the transcript, which says what the busy one is
+running and what the waiting one is waiting for. A poll once a second, re-reading a transcript only
+when it has grown, costs about a millisecond. Both formats are Claude Code's own and undocumented,
+so everything read from them is best effort: when the transcript cannot be read the status still
+shows, only the label does not. `SlyTerm --activity` (see [Command-line modes](#command-line-modes))
+prints what the poll sees.
+
+A tab and a session are matched through the tab id the shell exports, and then only while the
+`claude` is the job in front on the tab's own terminal. So a `claude` started in the tab is found;
+one suspended with `⌃Z`, or running inside tmux, screen or an editor's terminal started from the
+tab, is not, since the tab's screen is not where it is.
+
+### When Claude needs you
+
+A turn finishing, or a prompt appearing, marks that tab yellow and lights the whole strip up to full
+brightness even in click-through, so it stands out over the dimmed terminal. So does a terminal
+bell, or `open -g slyterm://notify` from a script or a hook. It also plays the system alert sound;
+switch that off in Settings › General ("Play a sound when a tab needs attention", key
+`attentionSound`). It never takes the keyboard from the game: if the overlay was hidden it comes
+back in click-through mode, so your next click and your next keystroke still go to the game.
+Press `⌃⌥Tab`, or click the eye button, to read it and the mark clears; clicking the yellow tab only
+brings it to the front, it does not take you out of click-through. Nothing that happens in the tab
+you are typing in is news, so a turn finishing there marks nothing and a shell completion beep stays
+quiet.
+
+### The card
+
+With the mark comes a card, hung off the strip and readable over the game: the tab's name, what
+happened and, for a finished turn, how long it took and the last paragraph of Claude's answer; for a
+permission prompt, the command it wants to run or the file it wants to edit; for a question, the
+question and its options. A finished card fades after ten seconds, a waiting one stays until it is
+answered or closed with its ×. Clicking the card brings its tab forward and, like a click on the
+strip, leaves you in click-through; `⌃⌥Tab` with a card up opens the tab the card is about,
+whichever tab is selected.
+
+The card sits on the side of the strip away from the terminal when the screen has room there, and
+over the terminal's corner otherwise, never for the tab you are looking at. There is one card at a
+time, but no request gets lost behind another: a finished turn never covers a request that still
+stands, and a request pushed off the card by a newer one comes back once that one is answered or
+closed (or, when you clicked the card, once that tab is answered or looked at, so the keys keep
+meaning the tab you just turned to).
+
+### Allow or refuse from the game
+
+A permission prompt can be answered without leaving the game: `⌃⌥Y` allows what Claude asks and
+`⌃⌥N` refuses it, both configurable in Settings › Shortcuts and named on the card. They type the one
+key the prompt takes (Return for the highlighted "Yes", Escape for "No") into the tab the card is
+about, or the selected tab, and only when a fresh look confirms all of this:
+
+- that tab's Claude is waiting on the very prompt the card showed,
+- the prompt has been up for at least a second and was not answered a moment ago,
+- it is for a tool known to put up a plain yes or no (a command, an edit, a read, a fetch or
+  search, an MCP tool),
+- and the Claude is still the job in front in the tab.
+
+Otherwise a small toast says why and nothing is typed. So a prompt that changed while you reached
+for the key wants another look at the card first, and some prompts always want the terminal: a
+question, which is never answered blind (the card says to press `⌃⌥Tab`), a plan to approve, a
+subagent asking for something, and several calls issued at once, where the transcript cannot say
+which one the prompt on screen is about.
+
+### Turning it off
+
+Turn the card off in Settings › General ("Show a card when Claude finishes or asks you something",
+key `activityCards`) and a Claude finishing or asking only marks its tab: the marks on the strip and
+the yellow tab stay, but there is no card, no sound, and a hidden overlay stays hidden. The allow
+and refuse shortcuts go with it, `slyterm://allow` and `slyterm://refuse` included.
+
+Those two URLs are off anyway until you turn them on, since any program of yours can open a URL,
+and a Claude that can run `open` could approve its own next request:
+`defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`. `activityCardSeconds`
+(default 10; 0 keeps a finished card until it is closed) has no control in Settings either.
+
+### Hooks
+
+The poll notices a change within a second; a Claude Code hook calling `slyterm://notify` (see
+[Claude Code hooks](#claude-code-hooks)) makes it instant, and a terminal bell
+(`preferredNotifChannel` set to `terminal_bell` in Claude Code's settings) marks the tab like any
+other bell. A session brought in with Attach runs in Claude's daemon rather than in the tab, so its
+status is read through the `claude attach` client in the tab and its registry entry, when both can
+be seen.
+
+## Bringing a session in from another terminal
+
+You have Claude halfway through something in iTerm2, the game starts, and you would rather carry on
+in the overlay than keep alt-tabbing out of it. macOS cannot move a running process from one
+terminal app to another (a process is tied to the terminal it was started in, for good), so what
+SlyTerm moves is the **state**: it opens a tab here that picks the work up where the other one left
+it.
+
+Three kinds of thing can come in, and each comes across differently:
+
+- **A Claude Code conversation.** SlyTerm stops it where it is, then runs `claude --resume <id>`
+  here. Same session id, same transcript, so the conversation continues rather than starting over.
+  It takes a few seconds, while the old one shuts down. A conversation you have not typed anything
+  into yet has no transcript, so bringing it in gives you a fresh one.
+- **A background Claude**, started with `claude --bg` or sent to the background by typing `/bg`
+  in it. That one lives in Claude's own daemon rather than in a terminal, so nothing has to be
+  stopped: SlyTerm runs `claude attach <id>` here and you are back in it, uninterrupted.
+- **A plain shell tab.** You get a new tab in that shell's folder, with whatever it was running
+  typed at the prompt but *not* run, so you can read it before pressing Return.
+
+### The picker
+
+Open the picker with `⌘⇧T` while the terminal has focus, with "Bring In a Session…" in the menu bar
+item, or with a right-click on the `+` of the tab strip. It lists what is running in your other
+terminals, grouped into Claude Code sessions and plain terminal tabs, each row with its folder,
+which app it is in, how long it has been going and what it is doing right now: Working (mid-turn),
+Waiting (Claude is waiting for your answer in that tab), Idle, Background, or "Already here" for one
+of SlyTerm's own tabs, which it offers to switch to instead. A Claude conversation is listed under
+the title its own `/resume` picker gives it; a shell tab is listed under what it is running, or the
+name of the shell when it is sitting at its prompt. Type to filter by name, folder or app, `↑` /
+`↓` to move, `Return` to bring the selected one in, `Esc` to close. The panel stays within the
+screen however many rows it gains, and it can be dragged by its title if it is covering something
+you want to see.
+
+### Move, Copy, Attach
+
+`Return` does the obvious thing for the row it is on: Move for a foreground Claude, Attach for a
+background one, "Open Folder Here" for a shell tab. `⌥Return` on a Claude conversation makes a
+**copy** instead: `claude --resume <id> --fork-session`, a new conversation with the same history
+behind it, and the one in iTerm2 left running. That is the one for a side question about what it
+already knows while the first carries on working.
+
+Moving a Claude that is mid-turn interrupts it, and whatever it was in the middle of writing is
+lost; the transcript on disk is not, which is why the resumed session still knows everything up to
+that point. So SlyTerm asks before interrupting a session it can see is working, or waiting for an
+answer to a permission prompt or a question. Turn the question off in Settings › General ("Ask
+before interrupting a Claude that is working or waiting for an answer"). To avoid it altogether,
+type `/bg` in the source tab first: the session moves into Claude's daemon without being
+interrupted, and the picker then offers Attach, which stops nothing at all.
+
+By default the tab a session came from is closed once it is here, so you are not left with a dead
+prompt in iTerm2 to go back and tidy up. Only iTerm2 and Terminal.app can be told to close a tab, so
+the checkbox is off for every other terminal, and the first time you use it macOS asks once whether
+SlyTerm may control that app. Terminal.app only knows how to close a whole window, so a tab there
+is closed when it is alone in its window and left where it is otherwise. Untick "Close the tab a
+session came from after moving it" in Settings › General to keep the source tab.
+
+### From the source tab
+
+You do not have to go and find the session in the picker: the tab it is in can hand itself over.
+Inside a Claude Code conversation, a `!` command has the session id in its environment; from a
+plain shell, the tty is enough.
+
+```sh
+! open -g "slyterm://teleport?session=$CLAUDE_CODE_SESSION_ID"   # inside a Claude Code conversation
+open -g "slyterm://teleport?tty=$(tty)"                            # from a plain shell
+```
+
+`-g` keeps the terminal you typed it in at the front, so handing a session over never takes the
+screen from the game.
+
+### Attached sessions and hooks
+
+A background Claude runs inside the daemon, not inside the tab, so its notify hook has no
+`SLYTERM_TAB_ID` to report and cannot light up the tab you attached it to. The terminal bell still
+can: set `preferredNotifChannel` to `terminal_bell` in Claude Code's settings and an attached
+session marks its tab like any other. A session you moved rather than attached runs in the tab
+itself and needs none of this, which is why Move is the default.
+
+## Lookup
+
+Point at something in your game (a quest in the journal, an item in your bags, the title of what
+you have open), press `⌃⌥Q`, and the page your game's sources have for it opens in a **web tab**
+next to your terminals, never in your browser: a browser would come to the front and take the
+keyboard, which is the one thing you cannot afford mid-fight. A small message next to the pointer
+says which page is opening, or what was read when nothing matched. Typical time from key press to
+the tab: 200 to 400 ms, plus about half a second for the page.
+
+The overlay does not take focus when a guide arrives: if it was hidden it comes back in
+click-through mode, so your next click and keystroke still go to the game. Press `⌃⌥Tab`, or click
+the eye button, when you want to read and scroll it.
+
+The pointer is what matters, not the keyboard focus, so it works in both interact and
+click-through mode, and while the game is fullscreen.
+
+### How it decides
+
+Fastest path first:
+
+1. **Which game is being played:** the one whose app owns the window under the pointer, else the
+   one whose app is in front, else the game picked by hand in the menu bar's **Lookup Game**
+   submenu. The app under the pointer and the app in front are both asked, in that order, because a
+   pointer resting on a browser or the desktop does not mean you stopped playing. With no game
+   configured at all it says so instead of guessing.
+2. **The line under the pointer.** It screenshots a 900×48 pt band around the pointer and reads it
+   with Apple's on-device text recognition, in the game's language. The line under the pointer is
+   stripped of what a game draws around a name (progress counters like `(2/6)`, levels like `Niv.
+   50` or `Lvl 50`, a leading `[15]`, stack counts like `x3`, list bullets, plus whatever strip
+   patterns the game adds) and matched, accent- and case-insensitive, against the offline index of
+   every indexed source of that game. Best score wins, ties go to the source you put first.
+   Truncated names still match.
+3. **Around the pointer.** Nothing convincing under the pointer: it looks around it, because the
+   name of an item in your bags or your inventory is in a tooltip, not under the pointer. Every
+   source that can be asked is asked about the line under the pointer at once, and if one names a
+   page, that opens: a quest in the WoW quest log is no slower than it was. Meanwhile it
+   screenshots the window under the pointer (the game's own when one of them is, the whole display
+   when none is), reads it, and groups the lines the way they sit on screen: short stacked lines are
+   a tooltip or a panel, lines side by side on one row (`One-Hand … Sword`) belong together, and
+   lines on different fills never do. A tooltip has a fill of its own, so it stays apart from the
+   quest log or the panel it is drawn over, however close their text.
+
+   A group is taken for a **tooltip** when one of its lines under the first is a line only the
+   game's tooltips have (`Sell Price:`, `Use:`, `Rank 1`, `30 sec cooldown`, `Niveau 56 • Poil`,
+   `POIDS`, `2 more options`), or when its only line is one, as the mouseover text at the top left
+   of Old School RuneScape is. Those are the game's [tooltip lines](#advanced-patterns). A group
+   right above a tooltip, a text height or so over it, is its name set apart (RuneLite's `Use Pot`
+   over its `Weight:`), and tooltip groups stacked on one another are one tooltip drawn in
+   sections, the way Dofus draws an item's name, its weight and price, and its description on
+   panels of their own. A tooltip line is never a candidate itself.
+
+   The candidates are, in order: the line under the pointer (or, when the pointer rests past the
+   end of a short line on its row, as it does on a quest log's row, that line); then the first line
+   of every tooltip, nearest tooltip first, **wherever it is on screen** (WoW puts an action bar's
+   tooltip in the bottom-right corner, fifty text heights from the button, and Dofus an item's to
+   the left of the whole inventory window); then the first line of every other group, nearest the
+   pointer first. A line set bigger than the rest of its group, as a tooltip's name is, counts for a
+   little more and is a candidate even when it is not the first. The group the pointer is on a line
+   of comes after the others: its heading, a zone or a category, is what you meant least.
+
+   Beyond the tooltips, only the candidates within about ten text heights of the pointer are tried,
+   and one opens only when something recognises it: an offline index or the sources' own searches,
+   asked about the first few the index does not know, all at once, no more than three texts in a
+   press, each asked of every source that can be asked. For a title next to the pointer, either has
+   to name a page that is that text letter for letter, give or take one letter in ten: not a longer
+   name the text is part of, nor a shorter one inside it, so "The Defia" left of a quest title by a
+   tooltip does not open "The Defiant". The line under the pointer is held to the looser rule of a
+   text you pointed at. The first recognised in that order wins.
+
+   The window is read with the fast text recognition first. When nothing it read is recognised, it
+   is read once more with the accurate one, which is three to four times slower but reads what the
+   fast one garbles (a pixel font like Old School RuneScape's, where `Use Pot` comes out `USÈ
+   Pot`), and the texts that reading adds are tried the same way, never one already asked. A tooltip
+   typically takes under a second, most of it the site answering, and one the fast pass misread
+   about a second more. A game with no index whose sources are all plain search URLs has nothing to
+   recognise a guess with, and goes straight to step 5 when there is text under the pointer.
+4. **The whole window.** Still nothing, in a game with an index: the best match anywhere in that
+   window, under stricter rules. Among equal matches the biggest text wins, which is the title of
+   the selected quest in the journal, so the hotkey also works with the pointer anywhere.
+5. **The sources' own search.** Still nothing: the text under the pointer, else the first tooltip's
+   name, else the title nearest the pointer, goes to **every** source that can be asked, each its
+   own way (a MediaWiki's `opensearch`, Wowhead's suggestions, a Weebly site's search page,
+   DofusDB's item API), and the page one of them names opens if the name that came back still reads
+   as the text asked for. A text they already turned down in this press is not asked again, and
+   neither is a title near the pointer the press had no room left to ask about: here it would only
+   be held to the looser rule of the line under the pointer. Failing that, and for those two, the
+   **first** source's search URL opens, which is the one thing every source can do. This is what
+   finds a quest that lives as a section of a region page rather than on a page of its own.
+
+Every source that can be asked is asked at once, wherever the lookup asks. When more than one names
+a page, a page named exactly the text asked for wins over one that only comes close, and among
+those the source you put first: a Weebly site's search, which matches any of the words, answers
+`Wabbit en feu` for `Poils de Wo Wabbit`, and DofusDB's page of that very name opens instead. Once
+one site has named a page, the others have one second more to answer, so a site that is slow or
+down costs a second rather than a timeout. The message says which site answered.
+
+### Press again for the next guess
+
+Press `⌃⌥Q` again without moving the pointer (6 points of slack, within 10 seconds of the last
+answer) and the next thing near it that is recognised opens instead of the same page: the next
+candidate in the same order, further and further from the pointer, including what was too far for
+the first press. When the press already knows what the next one will open, the message says so:
+`Guide: Thunderfury  ·  ⌃⌥Q again: Bindings of the Windseeker`. Once nothing new is left it goes
+back to the first page and round again, and if it only ever found one it says `Nothing else near
+the pointer`.
+
+Move the pointer, wait ten seconds, ask for another game or go from a dry run to a real press, and
+the next press starts over. So does a press after the screen changed under a pointer that did not
+move, as a list does when you scroll it with the wheel: each press again reads the line on the
+pointer's row first, and starts over when it reads differently.
+
+### Pick mode
+
+When you would rather choose, press `⌃⌥⇧Q`. The screenshot it just took is frozen over the screen,
+dimmed, with every line near the pointer lit and labelled with a key: press the key to look that
+line up. The keys go by where they sit on the keyboard, the home row first, then the rows above and
+below it, and each label shows the letter that key types on your layout, so on AZERTY you see `Q`
+where QWERTY shows `A`. They go first to the group the pointer is in, nearest line first, then down
+each tooltip, nearest tooltip first wherever it is, then down the other groups, nearest first, so a
+tooltip's name gets one of the first keys.
+
+The screenshot is read with the fast recognition, or the accurate one when the fast one found no
+tooltip with a name in it, since the line you pick is the text looked up: that is about half a
+second more before the frame freezes. `Return` takes the highlighted line, which starts on the one
+`⌃⌥Q` alone would have gone for; `Tab`, `⇧Tab` and the arrows move the highlight; `Esc` cancels,
+and so does `⌃⌥⇧Q` pressed again. `⌃⌥Q` while the picker is up takes the highlighted line.
+
+It is keyboard first because moving the mouse closes the game's tooltip, but once the frame is
+frozen you can also click a lit line, and a click anywhere else cancels. The picker shows the
+screenshot its own key press took, and nothing else. When it closes, the keyboard goes back where it
+was: to the game when the game had it, whether or not the terminal is in click-through.
+
+### Permission and caches
+
+The lookup needs the **Screen Recording** permission. The first press asks for it; grant SlyTerm in
+System Settings › Privacy & Security › Screen Recording and relaunch the app. Nothing is captured
+outside a hotkey press.
+
+Each site's index is cached as one JSON file per host under
+`~/Library/Application Support/SlyTerm/lookup/`, loaded and refreshed in the background at launch
+and rebuilt when it is more than a week old. The first lookup on a site that has never been indexed
+waits three seconds for the crawl and then goes on to the search rather than leaving the hotkey
+silent; the crawl carries on and installs itself when it is done.
+
+### Where guides open
+
+The page arrives styled for its site: see [Reader mode and blocking](#reader-mode-and-blocking) for
+what that means on a wiki, on Wowhead and on anything else. It goes to the web tab the lookup used
+last, docked or floating, or to a new one when that one is playing something: see
+[The lookup's tab](#the-lookups-tab).
+
+Pick "In your browser" in Settings › Lookup and guides go to your browser instead; "Keep the game in
+front, load the page behind it" then leaves the game where it is and loads the page behind it, for
+a second screen. Web tabs stay on the strip either way, for everything else. The same pane says
+whether Screen Recording has been granted.
+`open -g "slyterm://lookup?dry=1"` shows what would open without opening it, which is handy for
+tuning.
+
+## Games and sources
+
+Settings › Lookup holds the games. A game is a name, the app it runs in, the language its text is
+in, and an ordered list of **sources**. A source is a site: a name and a search URL with `{query}`
+where the text goes, the way a browser's custom search engines work, as in
+`https://oldschool.runescape.wiki/w/Special:Search?search={query}`. That is all you have to type.
+SlyTerm then asks the address what sits behind it and says so under the table: "MediaWiki · 41 726
+pages indexed", "Website · no index", or "Detecting…" while it looks, and "The URL needs {query}
+where the text goes" when you left that out. What it finds (the kind of site, its home page, the
+address its list of pages comes from) is the whole difference between a search box and an offline
+index that lands on the exact page.
+
+`+` under the games list offers the presets (World of Warcraft as a submenu, one row per version)
+and **Custom Game…**; `−` removes the selected game. Under the sources table, `+` and `−` add and
+remove a source and `▲` / `▼` reorder it. The order is worth getting right, and the caption says
+why: "Sources with an index (a wiki or a sitemap) are matched offline first; then every source that
+can be asked is: a page named exactly the text wins over a near one, and among equals the source
+higher up. The first source's search page is the fallback."
+
+**Text language** is what Apple's text recognition reads the screen in: Automatic, or one of its
+languages. A game set to several (the Dofus preset reads French and English) shows as an item of
+its own. **Game app** is the app the game runs in, picked from what is running, or "Any (choose the
+game by hand)". "Detect the game from the app in front" is what uses it, and "Otherwise use" names
+the game that answers when nothing recognisable is in front. The menu bar's **Lookup Game** submenu
+is those same two settings while you play: "Automatic (from the app in front)" toggles the
+detection, and picking a game is picking the one "Otherwise use" holds.
+
+### Advanced patterns
+
+**Advanced**, under the sources table, holds two lists of the game, one regular expression per
+line, where a pattern that does not compile is logged and ignored:
+
+- **Strip patterns**, removed from what was read off the screen before matching.
+- **Tooltip lines**: lines only the game's tooltips have. A group of lines with one of them is a
+  tooltip, and its first line is tried before anything but the line under the pointer, wherever the
+  game drew it (see [How it decides](#how-it-decides)). A line that also shows anywhere in the
+  game's static interface does not belong here: the panel it is on would be taken for a tooltip.
+  They are matched against the line as it was read, before the strip patterns. Prefix a pattern
+  with `(?i)` to ignore case, and anchor it with `^` when you can.
+
+The presets have both built in, on top of what you type here, and they come with the app: a game
+made from a preset gets whatever a later version of SlyTerm knows, and the boxes show only what you
+added.
+
+- The World of Warcraft presets strip the `(Dungeon)` a quest log suffixes and know an item's and a
+  spell's tooltip lines in English and in French (`Sell Price`, `Prix de vente`, `Use:`, `Equip:`,
+  `Binds when`, `Lié quand`, `Requires`, `Item Level`, `Durability`, `Unique`, `Rank 1`, `15 Mana`,
+  `Instant`, `30 sec cooldown`, `Tools:`, `Reagents:` and so on).
+- Dofus knows the line under an item's name (`Niveau 56 • Poil`), `POIDS`, `PRIX MOYEN` and the
+  `Épingler l'infobulle` hint.
+- Old School RuneScape and RuneScape know the mouseover text's `2 more options` and RuneLite's
+  `Weight:`, and strip what the mouseover text and RuneLite's box by the pointer write around a
+  name: the action in front of it (`Use`, `Take`, `Wield`, `Attack`, `Talk-to`, `Chop down`,
+  `Climb-up` and the rest, case-sensitive and only before a capital, so "Enter the Abyss" keeps its
+  first word), `/ 2 more options`, a monster's `(level-2)` and the `-> Bucket` of an item used on
+  another. `Use Pot / 2 more options` is looked up as `Pot`.
+
+Under them are the reader CSS and hidden selectors of the selected source, which are appended to
+what web tabs already know about that host.
+
+### Import and export
+
+**Import…** and **Export…** pass one game around as JSON, saved as `Dofus.slyterm-game.json`: a
+game somebody worked out for a site is worth passing on. An import is always an addition, never an
+overwrite: it comes in with fresh identifiers and sits next to what you already have.
+
+### The presets
+
+A fresh install starts with the first of them, Dofus, configured.
+
+- **Dofus** (Dofus pour les Noobs, then DofusDB). Dofus pour les Noobs is a Weebly site, whose
+  sitemap gives every page name away in its slugs: the quest under your pointer is matched offline
+  against ~2500 pages, and the site's own `apps/search` answers for the rest. An item has no guide
+  page there, which is what [DofusDB](https://dofusdb.fr/fr), the encyclopedia, is for: the name in
+  an item's tooltip opens its page, as `dofusdb.fr/fr/database/object/649` for `Poils de Wo
+  Wabbit`. DofusDB has no index (some 22 000 items, 50 to a request), but its API finds an item by
+  name, with the accents the recognition dropped and an `i` it read as `l` forgiven (`Polls de Wo
+  Wabblt` still finds it), and by the name's longest word when a slip elsewhere keeps the whole name
+  from matching. It is detected from its address, and the address's first part is the language it
+  is asked in: `https://dofusdb.fr/en/database/objects?q={query}` for English, and `es`, `de` and
+  `pt` the same.
+- **World of Warcraft** (Wowhead), one preset per version because Wowhead keeps one database per
+  version: Retail at `wowhead.com`, Classic (the Anniversary, Era and Hardcore realms) at
+  `wowhead.com/classic`, Burning Crusade Classic at `/tbc`, Mists of Pandaria Classic at
+  `/mop-classic` and WoW: Forever at `/forever`. They sit in a submenu of their own under `+`. No
+  sitemap, so no index (Wowhead's addresses are numeric ids), but the endpoint behind each
+  database's search box names the exact page, so a quest opens as `wowhead.com/classic/quest=…` and
+  an item as `wowhead.com/item=…`. When several pages share a name it prefers the quest, then the
+  item, the NPC, the zone, the achievement and the spell. Every version is the same app to macOS, so
+  with several of them configured the one picked by hand answers when World of Warcraft is in
+  front.
+- **Old School RuneScape** (OSRS Wiki). A MediaWiki: every article title is listed through its API
+  and matched offline, and `opensearch` catches what the recognition misspelled. Point at an item
+  and the mouseover text names it at the top left of the game, which is a tooltip wherever the
+  pointer is.
+- **RuneScape** (RuneScape Wiki), the modern game, RS3 to its players. The OSRS wiki's sibling, read
+  the same way; at some 92 000 articles it is the largest index the app builds.
+
+### Any other site
+
+Any MediaWiki-based wiki works from one URL, Fandom and wiki.gg included. Paste the wiki's own
+search address with `{query}` in it and the detection finds its `api.php` at the root or under
+`/w/`, lists its articles from there, and reads the wiki's `server` and `articlepath` so a title
+becomes the address that wiki really serves it at, subdirectory and all. Anything else is indexed
+from `sitemap.xml` when it has one, and a site with neither is still a search URL, which is all the
+fallback needs.
+
+### Where games are stored
+
+All of it lives in the same preferences as everything else: `lookupGames` is the games as a JSON
+array, `lookupActiveGame` the identifier of the one picked by hand, and `lookupAutoDetect` whether
+the app in front gets to pick instead. The JSON is what Export… writes, one game at a time; in it,
+`stripPatterns` and `tooltipPatterns` are the two Advanced lists as you typed them, and `preset` is
+what brings the built-in ones along:
+
+```sh
+defaults write com.charlesmelki.slyterm lookupAutoDetect -bool false
+defaults read com.charlesmelki.slyterm lookupGames
+```
+
+## Web tabs
+
+A web tab is a page inside SlyTerm: a guide the lookup opened, or anything typed into an address
+field, video included. It sits in the SlyTerm window next to your terminals, and it can be popped
+out into a floating window of its own over the game and put back later. Web tabs are not numbered
+like your terminals: `⌘1`…`⌘9` count terminals only, so your tab numbers never move because a page
+is open.
+
+### Web tabs on the strip
+
+Each web tab is a square at the right end of the strip, next to `+`, in the order they were opened,
+with no title, so the terminals keep the room for theirs. A square shows its site's icon or, until
+it has one, a book for a page the lookup opened, a play symbol for a page with a video and a globe
+for anything else. Hover it and a label shows at once beside the squares, over the terminals' tabs:
+the page title, followed by " · click to put it back" for a floating one, and its key, `⌥⌘1` for
+the first square up to `⌥⌘9` for the ninth. The selected square is highlighted, a page that is playing puts a
+small speaker on its square (sound, or a video in view; a muted loop in a corner does not count),
+and a floating one is drawn dimmed with a dashed outline: clicking it puts the page back into the
+SlyTerm window and selects it. A middle-click on a square closes that web tab.
+
+The squares never squeeze the terminals below 44 pt each. The web tabs that do not fit go behind a
+last `…` square ("N more web tabs"), which is highlighted when the tab in front is one of them and
+carries the speaker when one of them plays; clicking it lists them by title, with their `⌥⌘` key
+up to the ninth, and picking one does what clicking its square would.
+
+With no web tab open, one dimmed globe holds the place, so nothing in the strip shifts when a page
+comes or goes; clicking it, like `⌘G`, opens the active game's first source. The squares stay
+when Settings › Lookup sends guides to your browser.
+
+### The toolbar and the address field
+
+Along the top of a web tab, from left to right: back and forward, the address field, find, reader
+mode, pop out ("Pop out into a floating window", or "Put back into the SlyTerm window" while it
+floats), open in your browser and, on a floating window only, `×` to close it.
+
+- **The address field** shows the page title, or its host when it has none, with the address as its
+  tooltip. Click it in interact mode, or press `⌘L`, and it shows the address, selected, ready to be
+  typed over. `Return` opens what you typed in this tab and `⌘Return` in a new web tab, in front;
+  `Esc` cancels and gives the page the keyboard back. A web address opens as typed and a bare host
+  such as `wowhead.com` as `https://` (`http://` for `localhost` and an IPv4 address); anything
+  else, `https://` with no host included, is a search, sent to the address in Settings › General ›
+  Web tabs › "Search with", DuckDuckGo by default. Nothing but an `http` or `https` address ever
+  comes out of the field. `⌘C`, `⌘V`, `⌘X` and `⌘A` work in it.
+- **Reader mode**: the button switches between reader mode and the full page, and names the mode a
+  click takes you to. On a streaming site, where the reader never applies (see
+  [Reader mode and blocking](#reader-mode-and-blocking)), it is disabled, with the tooltip "Reader
+  mode is off on streaming sites".
+- **Open in browser**, the compass, hands the current page to your real browser, honouring "Keep
+  the game in front, load the page behind it".
+
+### Keys in a web tab
+
+While a web tab is in front in the SlyTerm window:
+
+- `⌘←` / `⌘→` back and forward, `⌘R` reload, `⌘+` / `⌘-` / `⌘0` zoom (kept in `guideZoom`, one for
+  every web tab), `⌘C` copy, `⌘V` paste and `⌘X` cut, into the page's own fields too (a site's
+  search box, a sign-in form), `⌘A` select all. The terminal font is not touched.
+- `⌘F` find, `⌘E` find the selection, and `⌘G` / `⌘⇧G` the next and previous match while the find
+  bar is open.
+- `⌘L` the address field. In a terminal, `⌘L` opens a new, blank web tab with its address field
+  ready.
+- `⌘G`, outside find, switches between the terminal and the last web tab you had in front in the
+  SlyTerm window, and opens the active game's first source when there is none.
+- `⌃Tab` / `⌃⇧Tab`, `⌘⌥←` / `⌘⌥→` and `⌘⇧[` / `⌘⇧]` go through the web tabs in the SlyTerm window;
+  from a terminal they go through the terminals.
+- `⌥⌘1`…`⌥⌘9` go to the web tab of that square, as a click on it would, putting a floating one back.
+- `⌘W` closes the web tab and shows the terminal again. `⌘T` opens a new, blank web tab with its
+  address field ready; a new terminal is `+` on the strip, or `⌘T` from a terminal.
+- `⌘⇧T` reopens the web tab closed last, as browsers do, in the SlyTerm window; again for the one
+  before, up to ten. With none left it beeps. From a terminal, `⌘⇧T` opens
+  [Bring In a Session](#bringing-a-session-in-from-another-terminal) instead.
+- Space, Page Down and the arrows scroll the page once the overlay has the keyboard.
+
+A floating window takes the same page keys (`⌘←` / `⌘→`, `⌘R`, `⌘F`, `⌘E`, `⌘G` / `⌘⇧G` while
+finding, `⌘C`, `⌘V`, `⌘X`, `⌘A`, `⌘+` / `⌘-` / `⌘0`), plus `⌘L`, `⌘T` for a new web tab in the
+SlyTerm window, `⌘⇧T` to reopen a closed one there, `⌥⌘1`…`⌥⌘9`, `⌘W` to close it, `⌘Return` for
+panic, `⌘,` for Settings and `⌘Q`.
+
+### Links
+
+- A link that asks for a new window (`target="_blank"`, `window.open`) opens a new web tab, in
+  front. A page opens one only in answer to a click or a key, and at most three in five seconds: a
+  pop-up it tries on a timer, or a burst of them, is dropped. The new tab does not keep a link back
+  to the page that opened it (see [Troubleshooting](#troubleshooting)).
+- `⌘`-click or middle-click on a link opens it in a new web tab behind the one you are on.
+- Every other link stays in the tab, whatever site it goes to.
+
+### Floating windows
+
+The pop-out button moves the page, as it is, into a window of its own over the game, and the SlyTerm
+window goes back to the terminal it showed before. When the page is playing a video, the window
+opens filled with it, as the site's own fullscreen would fill it (see
+[Streaming sites, DRM and fullscreen](#streaming-sites-drm-and-fullscreen)). Put it back with the
+same button or a click on its dimmed square in the strip; putting it back undoes the fill if popping
+out made it and it is still on, and brings the SlyTerm window back if it was hidden. `×` on its
+toolbar, or `⌘W`, closes it. Several web tabs can float at once.
+
+- **The window** is the page on the terminal's translucent background, with rounded corners,
+  resizable from its sides and its bottom down to 240 × 160 pt, and its toolbar across the top,
+  which covers the top edge as the strip does the SlyTerm window's. The toolbar is the handle: drag
+  its empty space to move the window.
+- **Where it opens.** A page opens where the last floating page was, and a video that is playing,
+  or filling the page, where the last floating video was; each is saved when you finish moving or
+  resizing a window of its kind. A page with a paused video opens as a page. The first page opens at
+  440 × 560 pt next to the SlyTerm window, the first video 420 pt wide at its own shape, plus the
+  toolbar, in the top-right corner of the SlyTerm window's screen, 16 pt in. A window that would
+  land exactly on another floating one is moved 24 pt, and every one is kept on its screen.
+- **A filled video keeps its shape.** While the page is filled with a video whose shape is known,
+  resizing keeps the page at that shape, with the toolbar on top.
+- **Hiding.** `⌃⌥H` and the strip's `–` hide the SlyTerm window only: floating windows stay until
+  they are put back or closed. Panic hides them (see
+  [Pausing from the game](#pausing-from-the-game)). The card that says what Claude did stays above
+  them.
+
+### Click-through and focus
+
+Click-through follows the rest of SlyTerm: `⌃⌥Tab`, the eye button, the trackpad tap and the switch
+when the terminal loses focus change every SlyTerm window at once. In click-through a floating page
+lets every click through to the game and dims to the click-through level, except a video that is
+playing, which has a level of its own: Settings › Window › Opacity › "Playing video", 85% by
+default, in click-through and in interact mode alike, so the game shows through the picture. The
+same holds in the SlyTerm window: with a web tab in front that is playing a video, the whole window,
+the tab's toolbar included, takes the video level; the strip keeps its usual level. A paused
+video goes back to the usual rule, opaque in interact mode.
+
+A floating window's toolbar stays clickable in click-through, like the strip, dimmed with the rest:
+its buttons work and dragging it moves the window. Its address field needs interact mode, since the
+toolbar cannot take the keyboard in click-through.
+
+Clicking a floating page in interact mode gives it the keyboard, and clicking into the game from
+there switches everything to click-through, as leaving the terminal does; so does hiding the
+SlyTerm window while a floating one is up, which gives the keyboard back to the game. Putting back
+a floating window that has the keyboard hands it to the SlyTerm window, and so does closing one
+while the SlyTerm window is on screen and interactive; otherwise the keyboard goes back to the
+game. A floating window never takes the keyboard on its own, and
+neither does a page arriving.
+
+### Pausing from the game
+
+`⌃⌥V` pauses every web tab that is playing, docked or floating. Pressed when nothing plays, it plays
+again what it paused, or else the tab that played last. A toast says what it did: "Paused" or
+"Playing" followed by the page title (and how many more when there are several), or "Nothing is
+playing" in orange. It is "Play / pause" in Settings › Shortcuts and "Play / Pause" in the menu bar
+item, and `slyterm://playpause` does the same. It works by telling SlyTerm's own page to pause or
+play, never with a keystroke.
+
+Some players, often on music sites, keep their sound outside the page, where SlyTerm's script
+cannot reach it. WebKit still hears the sound, so the tab counts as playing, and `⌃⌥V` holds
+it by suspending all of that tab's media, then lets it go on again. A held page cannot play
+anything, so the first click or key in it turns the hold into a plain pause, and the site's own
+controls work as usual; loading another page lets go of it too.
+
+Panic silences every web tab, suspending all of its media, sound kept outside the page included, and
+hides the floating windows; leaving panic shows them again and lets each tab go on as it was. A web
+tab in front in the SlyTerm window switches to the terminal, as described in
+[Window and modes](#window-and-modes).
+
+### Pausing on its own
+
+With Settings › General › Web tabs › "Pause videos when a guide opens or they go out of view" on,
+as it is by default, videos pause at the moments you stop watching them. Sound with no video in
+view, a podcast or music, is left playing.
+
+- **A guide opens.** The lookup, press again and `slyterm://guide?url=` pause every video that is
+  playing, in the SlyTerm window or floating, before the guide loads. `⌃⌥V` then plays them again,
+  as long as nothing else is playing.
+  A guide sent to your browser pauses nothing.
+- **A video in the SlyTerm window goes out of view:** another tab comes in front of it (a terminal,
+  another web tab, a new or a lookup's one), or the window hides. It plays again when it is back in
+  front: its square clicked, `⌥⌘N`, `⌃Tab` or `⌘G` to it, or `⌃⌥H` showing the window. A window
+  that comes back on its own, for a Claude that needs you, leaves it paused; `⌃⌥V` plays it.
+  Popping a video out is not leaving the view, and floating videos never pause for this.
+
+Panic keeps its own suspension, whatever this setting says; leaving it with `⌃⌥H`, which hides the
+window, leaves the video panic covered paused, to play again when the window comes back. Off, a
+video plays on until you pause it.
+
+### The lookup's tab
+
+The lookup never replaces a show. A guide loads into the lookup's own web tab, the one it used last,
+in the SlyTerm window or floating, unless that tab was closed, is playing something, or holds what
+`⌃⌥V`, panic or [pausing on its own](#pausing-on-its-own) paused: then the guide opens in a new
+web tab in the SlyTerm window, which becomes the lookup's tab. A web tab that `⌘G` or the empty
+globe opened on the game's first source is the lookup's too when it has none. A tab in the SlyTerm window is brought to the front, a hidden overlay
+coming back in click-through so the game keeps the keyboard; a floating one loads the page where it
+is. `slyterm://guide?url=` goes the same way, and `slyterm://web?url=` always opens a new web tab,
+in front, with the same rule for a hidden overlay.
+
+### Reader mode and blocking
+
+- **Reader mode** is what you get, on every site but the streaming ones: the article and its
+  screenshots on the terminal's own dark, translucent background, no header, no sidebar, no footer.
+  The toolbar button switches between reader mode and the full page, the site as its author made it.
+- **The reader is per site.** SlyTerm carries a stylesheet for each of the two sites it was tuned
+  on, Dofus pour les Noobs and Wowhead; one for MediaWiki, which serves the OSRS and RuneScape
+  wikis, warcraft.wiki.gg and any Fandom wiki, with chrome and rails gone and the article at the
+  full width of the tab; and a generic one for everything else, which hides the header, the nav,
+  the footer, the sidebar and the cookie banner and reads the rest in the system font. A light page
+  is inverted rather than recoloured, so the guides keep their own colours and the screenshots are
+  inverted back; a page that was already dark, Wowhead or a wiki in night mode, is left as it is.
+  Whatever you typed into a source's Advanced reader CSS and hidden selectors is appended after all
+  of that, so it wins.
+- **Screenshots stay small** on a site whose layout SlyTerm knows (Dofus pour les Noobs today), so
+  the text stays readable and the page short: a lone one is capped at a fraction of the tab, a run
+  of them becomes a row of thumbnails. Click any screenshot to expand it in place, click again or
+  press `Esc` to shrink it. The full page shows them at the site's size. Anywhere else images are
+  simply held to the width of the tab.
+- **Ads, the consent banner and the trackers are blocked in both modes**, always, from one list of
+  hosts that holds for every site but the streaming ones. The page loads in about half a second
+  instead of three seconds, and nothing pops up over the game. The slots a site serves from its own
+  address are hidden by the same per-site entry the reader uses, in both modes too: a blocked ad
+  leaves the same hole in the full page either way.
+- **Streaming sites are left as they are**, with no reader and no blocking, and so is their player
+  embedded in another page, such as a YouTube video in a guide: their players break under the
+  reader's styling, and YouTube stops playing when its ad requests are blocked. They are
+  YouTube, Netflix, Twitch, Kick, Prime Video, Disney+, Max, Hulu, Paramount+, Peacock,
+  Crunchyroll, Apple TV and Apple Music, Spotify, Deezer, SoundCloud, Vimeo, Dailymotion, Plex,
+  Canal+, france.tv, Arte and Molotov, subdomains included.
+- **Find in page** with `⌘F`, or the magnifier in the toolbar: a bar opens under the toolbar and the
+  page jumps to the first match as you type, every match highlighted and the current one in orange
+  with its rank in the count. Halfway through a long quest, type a few words of the step you are at
+  and you are there. `Return` / `⇧Return`, the arrow keys or `⌘G` / `⌘⇧G` step through the matches
+  and wrap around; `Esc` closes the bar and leaves the match selected, so `⌘C` copies it. `⌘E`
+  searches for whatever is selected in the page. Case and accents are ignored, so `dechet` finds
+  *Déchet*. Following a link keeps the bar and its query on the new page, with the matches marked
+  but no jump.
+
+### Streaming sites, DRM and fullscreen
+
+Services such as Netflix only offer their DRM, Apple's FairPlay, to Safari, so web tabs identify as
+Safari: their user agent ends in `Version/… Safari/605.1.15`, with the version of the Safari
+installed on the Mac. It is the same engine as Safari. Autoplay is allowed, so a video can start
+without a click. `SlyTerm --drm-check` prints the user agent and whether a page is offered FairPlay
+(see [Command-line modes](#command-line-modes)).
+
+Real fullscreen would open a new Space and take the screen from the game, so it stays off. A site's
+fullscreen button fills the web tab, or the floating window, instead: the video covers the page on
+black, and the site believes it is fullscreen, so its own controls and subtitles stay on screen.
+`Esc`, or the site's button again, goes back. Popping out a tab that is playing a video fills it
+the same way. As in a browser, a player embedded in another page fills it only when that page lets
+its frame go fullscreen.
+
+### Memory
+
+WebKit costs about 300 MB of helper processes while a web tab is open, and each web tab adds a page
+of its own to that. Closing the web tabs you do not use gives their memory back, which
+is why none is kept warm. Web tabs are not restored at launch.
+
+## Settings
+
+### The Settings window
+
+The menu bar item is for doing: show / hide, a new tab, click-through, panic mode, the lookup and
+which game it asks, a new web tab, play / pause, opacity (terminal, click-through, playing video),
+resetting the window position, quitting.
+Everything that configures the app is behind **Settings…** in it, in five tabs:
+
+- **General**: restoring the last session's tabs at launch, the logo animation, the quit
+  confirmation, the sound a tab plays when it needs you, the card that says what Claude finished or
+  asks, what bringing a session in from another terminal does about the tab it came from and about
+  interrupting a Claude mid-turn, and, under Web tabs, "Search with": the address that words typed
+  into a web tab's address field go to, with `{query}` where they go. An address without `{query}`
+  shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under Web tabs,
+  pausing videos when a guide opens or they go out of view (see
+  [Pausing on its own](#pausing-on-its-own)).
+- **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
+  the current one's, the startup command, Option as Meta.
+- **Window**: background opacity, the dim level in click-through, the level of a playing video,
+  switching to click-through on focus loss, the window level, where the tab bar sits.
+- **Shortcuts**: the eight global hotkeys and the trackpad tap.
+- **Lookup**: the games and their sources, the language each game's text is read in, how the game
+  is picked, where guides open ("In a web tab inside SlyTerm" or "In your browser"), whether Screen
+  Recording has been granted, and importing or exporting a game.
+
+Nothing there is modal: the terminal stays where it is and every change applies as you make it.
+
+### Shortcuts
+
+**Settings › Shortcuts** has all eight actions: show / hide the terminal, toggle click-through,
+panic mode, "Look up what's under the pointer", "Pick text near the pointer", "Allow what Claude
+asks", "Refuse it" and "Play / pause". Allow and refuse are off, and say so, while the card is off
+in General. Click a field, press the new shortcut, done. A shortcut needs ⌃, ⌥ or ⌘, except
+function keys and the top-left `§` / `` ` `` key, which work on their own; while SlyTerm runs, a key
+used alone is taken from every app, the game included. Esc cancels, ⌫ or Clear removes a shortcut.
+A global hotkey is only paused while its field is listening, so the others keep working while the
+window is open.
+
+The pane warns when two actions share a shortcut, when macOS uses it for one of its own (the list
+in System Settings › Keyboard › Keyboard Shortcuts, which `CopySymbolicHotKeys` returns), and when
+macOS did not accept it. It cannot see another app's shortcut: macOS registers the same combo for
+both apps without an error, and only one of them then gets the key.
+
+The defaults are all ⌃⌥ with a key. Games rarely bind Control and Option together, and if a finger
+slips off one of them the game gets ⌃ or ⌥ with a key, where a ⌘ chord would become ⌘Q, or ⌃⌘Q,
+which locks the screen. They stay off the ⌃⌥ keys that Magnet and Rectangle's recommended layout
+use (C, D, E, F, G, I, J, K, R, T, U, the arrows, Return, − and =), off macOS's ⌃⌥Space (next input
+source), and off W, A, S and D, which are held down while moving. What you press with a hand on
+the mouse (look up, pick, click-through, play / pause) is on the left of the keyboard; allow and
+refuse take both hands, which makes an accidental allow unlikely. One clash is known: Moonlight
+leaves a stream with ⌃⌥⇧Q, SlyTerm's pick mode.
+
+In `defaults`, a combo is written as modifiers `ctrl`, `alt`, `cmd`, `shift` joined with `+`, then a
+key: a letter or digit (resolved on your current keyboard layout, so `t` is the physical T on
+AZERTY too), `f1`–`f12`, `space`, `tab`, `escape`, `grave`, arrows, or `plus`, `minus`, `comma`… for
+punctuation.
+
+### Preferences from the shell
+
+Every setting is a key in the `com.charlesmelki.slyterm` defaults domain, so it can also be set from
+a shell:
+
+```sh
+defaults write com.charlesmelki.slyterm startupCommand "claude"
+defaults write com.charlesmelki.slyterm workingDirectory "$HOME/Projects/my-project"
+defaults write com.charlesmelki.slyterm hotkeyToggle "ctrl+alt+x"
+defaults write com.charlesmelki.slyterm fontName "JetBrains Mono"
+defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/Logs/SlyTerm.log
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `opacity` | `0.9` | Terminal background opacity while interactive, 0.2–1 (text stays opaque) |
+| `ghostOpacity` | `0.7` | Whole-window alpha in click-through, 0.2–1 |
+| `videoOpacity` | `0.85` | Whole-window alpha of a web tab playing a video, docked in front or floating, in both modes, 0.2–1 |
+| `autoGhost` | `true` | Switch to click-through when the terminal loses keyboard focus |
+| `fontSize` | `13` | 8–40 |
+| `fontName` | iTerm2's font | Empty for the system monospaced font |
+| `workingDirectory` | home | The folder the first tab starts in, and new tabs when inheriting is off |
+| `newTabInheritsDirectory` | `true` | A new tab starts in the current tab's folder |
+| `startupCommand` | empty | Typed into every new tab, such as `claude` |
+| `shell` | `$SHELL` | Run as a login shell in each tab |
+| `optionAsMeta` | `false` | Off keeps Option for accents and brackets on international layouts |
+| `scrollback` | `10000` | Lines kept per tab |
+| `restoreSession` | `true` | Bring the last run's tabs and folders back at launch |
+| `confirmQuit` | `true` | Ask before quitting with several tabs or a running command |
+| `attentionSound` | `true` | Play the system alert when a tab needs you |
+| `startupAnimation` | `true` | Play the logo over the first terminal at launch |
+| `windowLevel` | `statusBar` | `floating`, `statusBar` or `popUpMenu` |
+| `stripPosition` | `auto` | `auto` (follows the window), `top` or `bottom` |
+| `hotkeyToggle` | `ctrl+alt+h` | Show / hide |
+| `hotkeyGhost` | `ctrl+alt+tab` | Toggle click-through |
+| `hotkeyPanic` | `ctrl+alt+p` | Panic mode |
+| `hotkeyQuest` | `ctrl+alt+q` | The lookup (named from when it only knew Dofus quests) |
+| `hotkeyPick` | `ctrl+alt+shift+q` | Pick mode |
+| `hotkeyAllow` | `ctrl+alt+y` | Allow Claude's permission prompt |
+| `hotkeyRefuse` | `ctrl+alt+n` | Refuse it |
+| `hotkeyPlayPause` | `ctrl+alt+v` | Pause what web tabs are playing, or play it again |
+| `tapGesture` | `true` | The trackpad tap |
+| `tapGestureAction` | `ghost` | `ghost`, `toggle` or `panic` |
+| `tapFingers` | `3` | 2–5 |
+| `tapAlignment` | `0.5` | Max vertical spread between fingers, as a fraction of the trackpad height; 1 disables the check |
+| `questOpenInApp` | `true` | Open the lookup's pages in a web tab rather than the browser |
+| `questOpenInBackground` | `false` | In the browser, load the page behind the game |
+| `guideZoom` | `1` | Web tab page zoom, 0.5–2 |
+| `webSearchURL` | `https://duckduckgo.com/?q={query}` | Where words typed into a web tab's address field go, `{query}` where they go; an address without `{query}` is ignored |
+| `autoPauseVideo` | `true` | Pause videos when a guide opens, and a docked video when it goes out of view, playing it again on its return |
+| `lookupGames` | Dofus | The games, as a JSON array |
+| `lookupActiveGame` | | The identifier of the game picked by hand |
+| `lookupAutoDetect` | `true` | Let the app in front pick the game |
+| `teleportClosesSource` | `true` | Close the tab a session came from after moving it (iTerm2 and Terminal only) |
+| `teleportConfirmBusy` | `true` | Ask before interrupting a Claude that is working or waiting for an answer |
+| `activityCards` | `true` | The card when Claude finishes or asks, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for a Claude |
+| `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
+| `activityCardSeconds` | `10` | How long a finished card stays; 0 keeps it until closed (no control in Settings) |
+| `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
+
+The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
+`frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
+the last floating page and the last floating video were), `sessionDirectories` and
+`sessionSelected` (the tabs to restore), `lookupGamesVersion` and `lookupGames.v0` (see
+[Migration notes](#migration-notes)), and `migratedFormerDefaults`.
+
+`hotkeyQuest`, `questOpenInApp` and `questOpenInBackground` keep the names they were given when the
+feature only knew Dofus quests, and `guideZoom` the one from when there was a single Guide tab, so
+nothing already scripted has to change.
+
+## Scripting
+
+### URL scheme
+
+The app answers `slyterm://` URLs, so anything that can run a shell command can drive it:
+
+```sh
+open -g slyterm://toggle   # show / hide
+open -g slyterm://show     # show and focus
+open -g slyterm://hide
+open -g slyterm://ghost    # toggle click-through
+open -g slyterm://panic    # toggle the fullscreen opaque terminal
+open -g slyterm://notify   # mark the current tab as needing attention, never steals focus
+open -g slyterm://allow    # answer the permission prompt Claude has up with Yes (off until activityAnswerURLs)
+open -g slyterm://refuse   # or with No; both take ?tab= like notify, and do nothing unless a prompt is up
+open -g slyterm://lookup   # look up whatever is under the pointer
+open -g "slyterm://lookup?dry=1"   # same, but only show what would open
+open -g "slyterm://lookup?q=Abyssal%20whip"   # look that text up, without reading the screen
+open -g "slyterm://lookup?game=Old%20School%20RuneScape"   # ask that game's sources, whatever is in front
+open -g "slyterm://lookup?pick=1"   # pick mode: freeze the screen and choose the line; takes dry and game too
+open -g slyterm://pick     # the same, shorter
+open -g slyterm://quest    # what lookup used to be called, kept for scripts that use it
+open -g "slyterm://guide?url=https%3A%2F%2Fwww.dofuspourlesnoobs.com%2Fbestiaire.html"   # open a page in the lookup's web tab, or a new one when it is playing
+open -g slyterm://guide    # what ⌘G does: the last web tab, or the active game's first source
+open -g "slyterm://web?url=https%3A%2F%2Fwww.twitch.tv"   # open a page in a new web tab, in front
+open -g slyterm://playpause   # pause what web tabs are playing, or play it again, as ⌃⌥V does
+open -g slyterm://settings # open the Settings window
+open -g slyterm://hotkeys  # open it on the Shortcuts tab
+open -g slyterm://teleport # open "Bring In a Session"
+open -g "slyterm://teleport?session=<uuid>"   # move that Claude conversation here
+open -g "slyterm://teleport?session=<uuid>&mode=copy"   # a forked copy, the source untouched
+open -g "slyterm://teleport?pid=<pid>"        # the Claude with that pid
+open -g "slyterm://teleport?tty=ttys003"      # the shell on that tty: its folder, its command typed
+open -g "slyterm://teleport?cwd=/some/folder" # a new tab in that folder
+```
+
+`-g` keeps the current app in front.
+
+### Claude Code hooks
+
+Every tab exports `SLYTERM_TAB_ID`, so a Claude Code hook lights up the tab it runs in rather than
+whichever one you left selected. In `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "[ -n \"$SLYTERM_TAB_ID\" ] && open -g \"slyterm://notify?tab=$SLYTERM_TAB_ID\"" }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "[ -n \"$SLYTERM_TAB_ID\" ] && open -g \"slyterm://notify?tab=$SLYTERM_TAB_ID\"" }] }]
+  }
+}
+```
+
+`Stop` fires when Claude finishes a task, `Notification` when it asks for input or permission. The
+hooks are optional since the strip reads Claude's status on its own; what they add is the instant
+mark and card, where the poll takes up to a second. The `$SLYTERM_TAB_ID` test matters because
+`~/.claude/settings.json` is global: without it, the same hook running in iTerm2 or VS Code would
+have LaunchServices start SlyTerm just to light up a tab you are not looking at.
+
+### Command-line modes
+
+The SlyTerm binary also has command-line modes that check each stage of a feature from a terminal,
+without the hotkey and without putting a window over the game. There is no `--help`: an argument
+that is not one of these modes launches the full app.
+
+The lookup modes (everything before `--guide-snapshot` below) take `--game <name>`, either a game
+you have configured or one of the presets `dofus`, `wow` or `osrs`, made up on the spot so a site
+can be tried out before it is added to Settings; without it they use the game the hotkey would.
+`--preset <name>` is always the preset as this build ships it, even when a game you configured has
+that name, so `--preset dofus` tries DofusDB next to a Dofus game stored before it had it, without
+reading the games you configured at all.
+
+```sh
+B=dist/SlyTerm.app/Contents/MacOS/SlyTerm
+$B --match "La Geste de Ratagnan (2/6)"   # best index matches for a line of text
+$B --ocr screenshot.png                   # read an image and match every line, `--fast` for the fast pass
+$B --ocr screenshot.png --at 1204 880     # the image read around a pointer at that pixel (see below)
+$B --pick-snapshot screenshot.png 1204 880 pick.png --scale 2
+                                          # draw pick mode offscreen over that image, the pointer at
+                                          # that pixel, and write a PNG; `--scale 2` for a Retina
+                                          # screenshot; takes `--game`
+$B --lookup                               # the whole pipeline at the pointer, opens nothing
+$B --lookup 360 531                       # same at a screen point (origin bottom-left)
+$B --search "Abyssal whip" --game osrs    # what each source that can be asked resolves it to,
+                                          # and the answer the lookup would take
+$B --search "Poils de Wo Wabbit" --preset dofus
+                                          # the same with both of the Dofus preset's sites, as
+                                          # this build ships it
+$B --index                                # every game's sources, their kind and their index size
+$B --index --refresh                      # rebuild those indices now instead of waiting a week
+$B --probe "https://warcraft.wiki.gg/wiki/Special:Search?search={query}"
+                                          # what kind of site is behind a URL, and what it can index
+$B --guide-snapshot https://www.dofuspourlesnoobs.com/la-geste-de-ratagnan.html out.png
+                                          # render a guide page offscreen and write a PNG (see below)
+$B --guide-snapshot "https://www.youtube.com/watch?v=…" out.png --fill
+                                          # the same with the page's video filling it, as popping
+                                          # out a playing video does
+$B --drm-check                            # whether web tabs are offered FairPlay, and the user agent
+                                          # they send; loads nothing from the network
+$B --strip-snapshot strip.png             # draw the tab strip offscreen, every state in one PNG,
+                                          # web tabs overflowing into `…` included, and print what
+                                          # each `…` menu would list
+$B --float-snapshot float.png             # draw a floating web tab offscreen, a page and a video, in
+                                          # interact and click-through, and print where it opens
+                                          # and how its frame keeps a video's shape
+$B --card-snapshot card.png               # draw the kinds of card offscreen, stacked, truncation included
+$B --sessions                             # what "Bring In a Session" would offer, as a table
+$B --sessions --json                      # the same, for scripts
+$B --picker-snapshot picker.png           # draw the picker offscreen with sample rows, plus a
+                                          # second PNG with an `-empty` suffix for the empty state
+$B --activity                             # every running Claude, in any terminal: status, how long,
+                                          # what it is doing, what it asks, the last thing it said
+$B --activity --json                      # the same, for scripts
+$B --activity --transcript s.jsonl        # what the parser reads from one transcript file
+$B --activity --poll --times 4            # scan repeatedly and time it; a quiet pass opens no file
+```
+
+- `--ocr screenshot.png --at X Y` takes the pointer in pixels with the origin at the top left, as
+  Preview's inspector shows it. It prints the image's blocks, the fill each line is on, which
+  blocks are tooltips and the lines that make them one (`*`), the candidates the hotkey would try,
+  and what the nearby stage alone answers, asking the site and reading accurately when the fast
+  reading comes to nothing, as the hotkey does. The band under the pointer, the whole-window match
+  and the search page are not run. `--pick` adds the pick list, `--fast` keeps to the fast pass.
+- `--guide-snapshot` renders with the real configuration, rules and stylesheet, without showing a
+  window, so the reader mode can be worked on without putting anything over the game. `--full`
+  renders the full page, `--width` / `--height` set the size, `--scroll` reaches the rest of the
+  page, `--eval <js>` clicks or switches mode before the picture, and `--find <text>` opens the find
+  bar, which puts the whole tab in the PNG. It also prints a `media:` line: the media the page's
+  controller takes for the main one (a video or an embedded player, and its size, or `none`), what
+  a fill would cover, the state the main frame reports, and after `tab:` the tab's own state,
+  merged over every frame with what WebKit says is playing, so sound the script cannot see shows
+  there. `--fill` fills the page before the picture and prints the filled element's rect against
+  the viewport.
+- `--drm-check` loads a small page with the web tabs' real configuration in an offscreen web view,
+  under an `https://` address so the page counts as secure but without going to the network, and
+  prints the user agent, whether `navigator.requestMediaKeySystemAccess('com.apple.fps', …)`
+  succeeds and then `createMediaKeys()`, and what
+  `WebKitMediaKeys.isTypeSupported('com.apple.fps.1_0', 'video/mp4')` answers. It gives up after
+  20 seconds.
+- `--sessions` columns are kind, host, status, pid, tty, folder, session or attach id, the action
+  Return would take, and the label. `--session <uuid>`, `--pid <pid>` and `--tty ttys003` narrow it
+  to the one a `slyterm://teleport` URL would pick, so a URL can be checked before it is fired at a
+  live session.
+
+None of the command-line modes signals a process, types into a session or puts a window on screen.
+What they write is the PNG you name and, for the index modes, the index cache. Run from the app
+bundle, they share the app's preferences; run as `.build/debug/SlyTerm`, outside a bundle, they use
+a separate `SlyTerm` defaults domain.
+
+## Troubleshooting
+
+- **Overlay hidden behind the game.** Settings › Window › Level → "Pop-up menu, highest", and make
+  sure the game is not in exclusive fullscreen.
+- **Hotkey does nothing, or moves a window instead.** Another app has the same combination, often
+  a window manager. macOS does not report it to either app, so change the shortcut in one of them.
+  When macOS itself refuses a combo, or uses it, Settings › Shortcuts says so next to the field and
+  the menu bar item shows "Shortcut unavailable" under the refused row.
+- **No spinner on a tab that runs Claude.** The tab and the session are matched through the tab id
+  the shell exports, and then only while the `claude` is the job in front on the tab's own
+  terminal. So a `claude` started in the tab is found; one suspended with `⌃Z`, or running inside
+  tmux, screen or an editor's terminal started from the tab, is not, since the tab's screen is not
+  where it is. A session brought in with Attach is read through its `claude attach` client and its
+  daemon's registry entry, and shows nothing when either is missing. `SlyTerm --activity` prints
+  what the poll sees, and `debug` logs every transition as `activity:` lines.
+- **`⌃⌥Y` does nothing.** The card is off in Settings › General, which turns the shortcut off with
+  it; or nothing is waiting in that tab; or the prompt is not a plain yes or no (a question, a
+  plan, a subagent's request, several calls at once); or it changed since the card showed it, the
+  card came up less than a second ago, or it was just answered. A toast by the strip says which.
+- **Typing goes to the game instead of the terminal.** You are in click-through mode (orange dot).
+  Press `⌃⌥Tab`, click the eye button, or three-finger tap. Clicking the tab strip does not do it on
+  purpose: it would fire every time you switched tabs or moved the window.
+- **Typing goes to the terminal instead of the game.** The terminal has focus (green dot). Click
+  into the game once, or press `⌃⌥Tab`.
+- **The lookup says Screen Recording is needed, again.** The app is ad-hoc signed by default, and
+  macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and the grant
+  has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security › Screen
+  Recording, then relaunch). To keep it across builds, create a self-signed "Code Signing"
+  certificate in Keychain Access (Certificate Assistant › Create a Certificate) and build with
+  `CODESIGN_IDENTITY="its name" ./build.sh`.
+- **The lookup opens the wrong page or nothing.** Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q`
+  to pick the line yourself. To see why, run `defaults write com.charlesmelki.slyterm debug -bool
+  true`, press the hotkey, and read `~/Library/Logs/SlyTerm.log`: it lists which game answered,
+  what was read under and around the pointer, what was asked and every match score. A screenshot of
+  the same screen goes through `--ocr screenshot.png --at X Y` for the ranking in full. A tooltip
+  the game draws far from the pointer that is not marked as one there wants a line only its
+  tooltips have in the game's **Tooltip lines**.
+- **The lookup opens a search page instead of the guide.** Either that source has no offline index
+  to match against (Wowhead and DofusDB have none by design, and a site with neither a sitemap nor a
+  wiki API gets none), or the index is still being built, which is what the first lookup on a newly
+  added site runs into: it waits three seconds for the crawl and then goes to the search rather
+  than leaving you with nothing. `--index` says which of the two it is, source by source, with the
+  size and the age of every index; `--index --refresh` rebuilds them on the spot.
+- **The wrong game was picked.** The lookup asks the app under the pointer, then the app in front,
+  then the game chosen by hand. Set each game's **Game app** in Settings › Lookup so it can be
+  recognised, or turn "Detect the game from the app in front" off and pick the game yourself, in
+  that pane or in the menu bar's "Lookup Game" submenu.
+- **The lookup opened a new web tab instead of its own.** Its own was playing something, and the
+  lookup never replaces a show: the new tab is the lookup's from then on (see
+  [The lookup's tab](#the-lookups-tab)).
+- **A floating web tab's address field does not take typing.** SlyTerm is in click-through, where
+  the toolbar's buttons work but typing does not. Press `⌃⌥Tab`, then click the field.
+- **Ads play on YouTube.** Nothing is blocked on streaming sites, since YouTube stops playing when
+  its ad requests are blocked (see [Reader mode and blocking](#reader-mode-and-blocking)).
+- **Signing in through a pop-up does not finish.** A pop-up opens as a new web tab, without the
+  link back to the page that opened it, so a site that signs you in through a pop-up window never
+  hears back from it. Sign in on the site's own page instead.
+- **A streaming site will not play.** Web tabs identify as the Safari installed on the Mac, since
+  services only offer their DRM to Safari. `SlyTerm --drm-check` prints the user agent they send and
+  whether a page is offered FairPlay; the toolbar's browser button hands the page to your browser.
+- **`claude` not found.** Tabs run your shell as a login shell so the `~/.zprofile` PATH applies.
+  If `claude` only lives in `~/.zshrc`, either move the PATH line to `~/.zprofile` or use the full
+  path `~/.local/bin/claude` as the startup command.
+
+## Architecture
+
+SlyTerm is one Swift package: an executable target, `SlyTerm`, with
+[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) as its only dependency, and a tiny C
+target, `CMultitouch`, that declares the layout of the touch frames Apple's private
+MultitouchSupport framework hands the trackpad tap. It
+links AppKit, Carbon, ScreenCaptureKit, Vision and WebKit. `build.sh` wraps the release binary,
+`Resources/Info.plist` and the icons into `dist/SlyTerm.app`; the app is `LSUIElement`, so it has no
+Dock icon, and it registers the `slyterm` URL scheme.
+
+### Source map
+
+| File | What it holds |
+| --- | --- |
+| `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
+| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events |
+| `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
+| `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
+| `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
+| `TerminalTab.swift` | One terminal tab: a SwiftTerm view, its pty and login shell, and its folder read from the kernel |
+| `TabStripView.swift` | The strip: tabs, the web tabs' squares, activity marks, tooltips, the hint; `--strip-snapshot` |
+| `HotKeys.swift` | `HotKeyCenter` over Carbon `RegisterEventHotKey`, and `KeyCombo` parsing on the current layout and checking against macOS's own shortcuts |
+| `HotkeyRecorder.swift` | The list of global actions and the shortcut recorder field |
+| `Settings.swift` | Every preference over `UserDefaults`, the `didChange` notification, the debug log, the HoverTerm carry-over |
+| `SettingsWindow.swift` | The five Settings panes |
+| `RemoteControl.swift` | The `slyterm://` routes |
+| `TrackpadGestures.swift` | The N-finger tap, over `Sources/CMultitouch` |
+| `Fonts.swift` | Nerd Font detection and iTerm2's profile font |
+| `StartupAnimation.swift` | The logo animation, a pure function of time |
+| `Lookup.swift` | The lookup pipeline, press again, screen capture, OCR, the toast; `LookupCLI` |
+| `LookupNearby.swift` | Lines into blocks, tooltips and the ranking of candidates around the pointer |
+| `LookupPicker.swift` | Pick mode's frozen-frame panel; `--pick-snapshot` |
+| `LookupModel.swift` | Games and sources, `LookupStore` (storage and migrations), `LookupPresets`, the index cache location |
+| `LookupIndex.swift` | `LookupText` (cleaning, folding, scoring) and the offline indices |
+| `LookupResolvers.swift` | HTTP, one resolver per kind of site, and `LookupProbe`, which detects the kind from a URL |
+| `WebModel.swift` | The types web tabs, floating windows, the strip and the controller share, and `WebSites`: the streaming sites, the Safari user agent, what an address field's text opens |
+| `GuideTab.swift` | `GuideContent` (blocking rules, per-site stylesheets, the web view's configuration), `GuideTab` (one web tab: its toolbar and address field, its icon, its media state), `--guide-snapshot` |
+| `GuideFindBar.swift` | A web tab's find bar |
+| `WebMedia.swift` | The fullscreen shim and the media controller every page gets, as scripts; `WebMediaFrames`, the frames' reports merged into a tab's media state; `WebIcons`, the favicons; `--drm-check` |
+| `FloatingWebPanel.swift` | `FloatingWeb`, a web tab's floating window: the page panel, the toolbar panel over it, its frames, dragging and the kept aspect |
+| `Activity/ClaudeActivity.swift` | The types the monitor, strip, card and answer share |
+| `Activity/ActivityMonitor.swift` | The poll of Claude Code's registry and transcripts |
+| `Activity/TranscriptTail.swift` | The transcript parser, pure over lines of bytes |
+| `Activity/ActivityCard.swift` | The card; `--card-snapshot` |
+| `Activity/ActivityAnswer.swift` | Allow and refuse, and every check before the keystroke |
+| `Activity/ActivityCLI.swift` | `--activity` |
+| `Teleport/TeleportModel.swift` | The types discovery, engine and picker share |
+| `Teleport/SessionDiscovery.swift` | What is running in other terminals, from the registry and the process table |
+| `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source |
+| `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
+| `Teleport/SessionsCLI.swift` | `--sessions` |
+
+`Tools/` holds scripts run by hand: `make-icon.swift` rebuilds `Resources/AppIcon.icns` from
+`Resources/StatusItemIcon.pdf`, `make-lookup-fixtures.swift` draws synthetic game screenshots for
+tuning the lookup, `preview-startup-animation.swift` renders instants of the logo animation to a
+contact sheet, and `make-readme-animation.swift` renders the whole of it to
+`docs/startup-animation.gif`, the loop at the top of the README.
+
+```sh
+swift Tools/make-icon.swift
+swift Tools/make-lookup-fixtures.swift <out dir>   # prints each file's --at X Y and expected first candidate
+```
+
+The two animation scripts use top-level code, which only compiles from a file named `main.swift`,
+so they are linked to one first:
+
+```sh
+ln -sf "$PWD/Tools/preview-startup-animation.swift" /tmp/main.swift
+swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/preview
+/tmp/preview out.png                 # a sheet of the whole timeline
+/tmp/preview out.png 1.9 2.1 2.3     # chosen instants, in seconds
+
+ln -sf "$PWD/Tools/make-readme-animation.swift" /tmp/main.swift
+swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/make-readme-animation
+/tmp/make-readme-animation docs/startup-animation.gif
+```
+
+### Windows and focus
+
+- `OverlayPanel` is a borderless, resizable `NSPanel` with `.nonactivatingPanel`, so it can take
+  keyboard input without activating the app: the game keeps its menu bar and its Space.
+  `collectionBehavior` includes `fullScreenAuxiliary` and `canJoinAllSpaces` so it also floats over
+  fullscreen apps. Its `constrainFrameRect` is overridden so panic mode can cover the menu bar.
+- Click-through is `ignoresMouseEvents`, which is all-or-nothing per window, so the tab strip is a
+  separate child panel that stays clickable and doubles as the drag handle.
+- A floating web tab is two panels built the same way (`FloatingWeb`): the page panel, a resizable
+  `OverlayPanel` that can become key, and over its top band a child `FloatingBarPanel` holding the
+  tab's toolbar, which is the drag handle. Both are borderless and non-activating, with the main
+  window's `collectionBehavior` (`canJoinAllSpaces`, `fullScreenAuxiliary`, `stationary`,
+  `ignoresCycle`) and no animation. In click-through the page panel ignores the mouse and the
+  toolbar panel never does, as with the strip, but the toolbar panel can only become key in
+  interact mode. Showing one orders both front without making either key. Handing the keyboard back
+  to the game (click-through, hiding, closing a window that has it) first asks the app that was in
+  front back when SlyTerm is active, then orders the key panels out and back in while every SlyTerm
+  panel refuses key, so AppKit cannot pass the keyboard from one of them to another. The card is
+  ordered back above a floating window each time one comes to the front.
+- The card, the toast and the two pickers are panels of their own. The card and the toast never
+  become key and never activate the app. The pickers take the keyboard without activating the app
+  where macOS allows it (the session picker activates only when that is refused), and give it back
+  when they close: the lookup picker to whichever app had it, the session picker to the terminal
+  when the overlay is interactive.
+- Global hotkeys use Carbon `RegisterEventHotKey`: no Accessibility permission, and they fire even
+  while a fullscreen game has the keyboard.
+
+### Tabs
+
+A tab is anything that satisfies the `Tab` protocol: `TerminalTab` (a pty and a SwiftTerm view) or
+`GuideTab`, a web tab (a `WKWebView` under a small toolbar). Showing a tab and the attention signal
+go through the protocol; folders, pasting and the font are terminal business. The controller keeps
+the terminals in one ordered list and the web tabs in another, in strip order, docked and floating
+alike, which is why the numbered shortcuts and the saved session see only terminals. A web tab's
+toolbar and page can be lifted out of its own view into a `FloatingWeb` and put back: the same web
+view moves, so the page is not reloaded. Terminal emulation is SwiftTerm's
+`LocalProcessTerminalView`, one per tab, with its own pty and login shell; a tab's folder is read
+from the kernel, so it follows `cd` without shell integration.
+
+### Threads
+
+The UI is main-thread only. Work that costs anything happens off it and only the answer crosses
+back:
+
+- the activity monitor's scan (the process table, `sysctl` per process, transcript tails) on a
+  serial background queue;
+- the session discovery scan, off the main thread whenever the picker refreshes;
+- Apple events to iTerm2 and Terminal on a queue of their own, because the first one raises the
+  Automation permission dialog and does not return until the user answers it;
+- screen capture, OCR and every network request of the lookup;
+- a web tab's icon, fetched with an ephemeral `URLSession` whose delegate runs on one serial
+  queue; the cache it goes into is only touched on the main thread;
+- the installed Safari's version for the web tabs' user agent, read from its `Info.plist` once,
+  off the main thread at launch;
+- the debug log, which has one writer queue.
+
+Waits in the teleport engine are 100 ms timers, never sleeps, since the overlay may be sitting over
+a game while a `claude` shuts down.
+
+### Claude activity
+
+`ActivityMonitor` polls Claude Code's session registry (`~/.claude/sessions/<pid>.json`) once a
+second, three times slower while the overlay is hidden. It matches each live session to a tab by
+the `SLYTERM_TAB_ID` in its environment (read once per pid, since it never changes) when it is also
+the foreground job on that tab's pty, and reads the last 64 KB of the transcript only when its size
+or mtime moved, going back 512 KB once when that tail holds no assistant text, as a turn full of big
+tool results does.
+
+`TranscriptTail` turns those lines into the pending tool call, the request behind a waiting status
+and the last assistant text; the status itself is the registry's. Nothing is decoded into a struct,
+nothing is force-unwrapped, and a line that does not parse is skipped, because the format changes
+between Claude Code releases. Transitions become `ActivityEvent`s on the main thread, which the
+controller turns into the attention mark and the card, and the strip draws `TerminalTab.activity`.
+
+Allow and refuse type a single Return or Escape into the pty, after a fresh scan has confirmed that
+the prompt the card showed is still up and not yet answered, and `tcgetpgrp` on the tab's pty that
+the Claude is still in front.
+
+### Web tabs
+
+A web tab blocks with one `WKContentRuleList`, compiled once at launch and cached by WebKit under a
+versioned identifier (`slyterm-guide-v5`), and restyles with a `WKUserScript` injected at document
+start, so the first paint is already dark. Every rule's trigger carries an `unless-domain` list
+built from `WebSites.streamingHosts` (`*youtube.com` and so on), which is what leaves streaming
+sites unblocked. `unless-domain` only looks at the page in the tab, so a last rule,
+`ignore-previous-rules` with an `if-frame-url` list of the same hosts
+(`^https?://([^/]+\.)?youtube\.com[:/]` and so on), lifts the blocking inside a streaming site's
+player embedded in another page. Reader mode is one class on `<html>`: the stylesheet hides the
+site's chrome and inverts the whole page rather than forcing a text colour, which would flatten the
+guides' own colours; screenshots are inverted back so they look normal.
+
+The script carries a map of host suffix to stylesheet, built from the table of sites SlyTerm was
+tuned on plus every source of every configured game, and picks the longest suffix matching
+`location.host`: a user script cannot ask the app anything, and the tab follows links wherever they
+go. It is given the streaming hosts too, and never applies the reader on one of them. Editing a game
+in Settings throws the scripts away and makes them again, so the next page loaded is styled with
+it.
+
+Every web tab's `WKWebViewConfiguration` comes from one factory, which `--drm-check` uses too:
+Safari's user agent suffix as `applicationNameForUserAgent` (`Version/… Safari/605.1.15`, with the
+installed Safari's version, or 18.0 when it cannot be read), no user action required for media
+playback, `javaScriptCanOpenWindowsAutomatically` off (it is on by default on macOS, which lets a
+page's timer open window after window), the reader script, the fullscreen shim and the media
+controller. The media controller's message handler is added by `GuideTab` when it is created, not
+by the factory, so `--drm-check`'s web view has none; it goes through a weak proxy so the
+configuration does not keep the tab alive, and is removed when the tab closes. WebKit's own element
+fullscreen stays off (`isElementFullscreenEnabled`, off by default): it opens a new Space, which
+would pull the screen away from the game.
+
+`createWebViewWith` never returns a web view: it opens the page in a new web tab and forgets the
+opener, which is why a pop-up sign-in cannot report back. A tab opens at most three of these in
+five seconds; the rest are dropped with a `guide: pop-up ignored` log line.
+
+The fullscreen shim runs in the page's own world, in every frame, at document start. It redefines
+`requestFullscreen` and its `webkit` spellings on `Element.prototype`; `exitFullscreen` and its
+spellings, and the `fullscreenElement`, `fullscreenEnabled` and `fullscreen` getters and theirs, on
+`Document.prototype`; and `webkitEnterFullscreen`, `webkitExitFullscreen` and the
+`webkitSupportsFullscreen` and `webkitDisplayingFullscreen` getters on `HTMLVideoElement.prototype`.
+A request dispatches `slyterm-fullscreen-enter` at the element, or `slyterm-fullscreen-exit` at the
+document, and resolves its promise; real fullscreen is never touched, and the element reported as
+fullscreen is the one carrying `data-slyterm-fill`.
+
+The media controller, `window.__slytermMedia`, runs in an isolated world
+(`WKContentWorld.defaultClient`) in every frame, out of the page's reach. Its main media is the
+largest visible `<video>`, a playing one first, else, in the main frame only, the largest visible
+`<iframe>` of at least 200 × 112 px. A site's request fills the element it named (a video climbs to
+its player container); SlyTerm's own fill, when a playing video is popped out, takes the main
+media's container, found by climbing while the parent's rect stays within 4 px of the element's,
+below `body`. Filling marks the element the page asked for with `data-slyterm-fill`, the target
+with `data-slyterm-filled`, what lies between it and its video with `data-slyterm-fill-path`, and
+each ancestor with `data-slyterm-fill-ancestor`, which neutralises `transform`, `translate`,
+`rotate`, `scale`, `filter`, `perspective`, `contain`, `content-visibility`, `will-change`,
+`backdrop-filter`, `clip-path`, `mask`, `opacity`, `mix-blend-mode`, `isolation` and `z-index`,
+so that `position: fixed` is the viewport, nothing clips or fades the player and nothing paints
+over it; `data-slyterm-fill-root` on `<html>` hides the page's scrollbars. They are attributes
+rather than classes because some players' frameworks rewrite `className` as they render. One
+stylesheet sets the target `position: fixed; inset: 0` at `100vw` × `100vh` on black at the top
+`z-index`, and its videos to `object-fit: contain`. Then `fullscreenchange` and
+`webkitfullscreenchange` fire at the element and `resize` at the window, so the site lays out its
+fullscreen controls. `Esc` while filled unfills, and so does the target shrinking to 0 × 0 (a
+`ResizeObserver` watches it), which is what YouTube does to its player on an in-page navigation
+without leaving fullscreen. Unfilling undoes all of it and fires the same events. A frame that asks
+to fill has its frame element filled by the parent page only when that element allows fullscreen
+(`allowfullscreen`, `webkitallowfullscreen` or `allow="fullscreen"`); otherwise the parent tells
+the frame to leave its own fill, as a refused request would.
+
+The controller posts `{token, playing, busy, video, aspect, filled, gone}` on media events (`play`,
+`playing`, `pause`, `ended`, `emptied`, `loadedmetadata`, `volumechange`, `resize`, captured on
+the document), on fill changes, on a scroll or a resize while a silent video runs, and on
+`pagehide` as gone; the token is random per frame. `busy` means some media element is neither
+paused nor ended; `playing` that one of those is also audible (not muted, volume above 0) or is a
+video showing at least 200 × 112 px of itself in the viewport, so a muted loop in a corner does not
+count; `video` that the main media is a video whose `videoWidth` is above 0, `aspect` its
+`videoWidth / videoHeight`. All of it is the page's word, so `GuideTab` checks every field (a token
+of at most 64 characters, booleans, an aspect that is a finite number, clamped to 0.5–4) and drops
+a message that does not parse. It keeps at most 16 frames, keyed by token with their latest
+`WKFrameInfo`, forgets them when a main-frame navigation commits, and merges them into the tab's
+media state: playing when any frame plays, the video and its aspect from the playing frame or else
+the main frame, filled when any frame is. Commands go back with `evaluateJavaScript(_:in:in:)` into
+that frame's isolated world, and an error from a frame that has gone away is ignored. Pausing
+remembers which frames it paused, so playing resumes those, or else the frame that played last.
+
+The script cannot see media outside the document, such as a `new Audio()` never added to it, or
+inside a shadow root. So every web tab also reads WebKit's private `_isPlayingAudio`, the flag
+Safari's speaker icon shows, every 2 s and whenever a frame reports (only where this WebKit has
+it), and counts as playing when WebKit hears sound that no frame reports.
+`requestMediaPlaybackState` would not do: it answers `.playing` for any page that merely holds a
+media element, such as a wiki page with sound samples. When `⌃⌥V` pauses a tab whose frames report
+nothing playing and WebKit hears sound, it calls `setAllMediaPlaybackSuspended(true)`
+and remembers it, and playing again resumes it: suspending is the only public way to pause media
+the script cannot reach and resume it later. A suspended page cannot start anything itself, so a
+mouse or key down in the web view first sends `pauseAllMediaPlayback`, then lifts the suspension,
+before the event reaches the page, which leaves the media paused but playable; a main-frame
+navigation lifts it too. `setMediaSuspended(_:)`, the suspension for panic, is a second reason kept
+apart from `⌃⌥V`'s: WebKit's suspension is one switch, on while either reason holds, so lifting
+panic's leaves a tab `⌃⌥V` held still held.
+
+The first time a host is seen in a launch, once a main-frame load finishes, the page is asked for
+its icons (`link[rel~=icon]`, `shortcut icon`, `apple-touch-icon`, preferring 32 px and up and PNG
+or ICO, else the origin's `/favicon.ico`). The one chosen is fetched off the main thread with an
+ephemeral `URLSession`, `http` and `https` only, with a 5 s timeout and at most 256 KB, and must
+decode to an image of non-zero size. Icons are cached in memory per host, one fetch per host per
+launch; a later page on the same host gets the cached one, or none, without being asked.
+
+### Lookup
+
+`SCScreenshotManager` (ScreenCaptureKit) takes the screenshot, with SlyTerm's own windows excluded
+so the terminal text is never read by mistake; `VNRecognizeTextRequest` (Vision, in the game's
+languages or detecting them itself, fast level first, accurate as a fallback) reads it.
+
+Each kind of source has a builder and a resolver: a sitemap, with Weebly's slugs spelling accents as
+bare entity names (`au-delagrave-du-mur`) decoded back; a MediaWiki's `allpages` and `opensearch`,
+its titles turned into addresses through `siteinfo`; Wowhead's suggestions, which name a page no
+index could have; DofusDB's item API. Names are matched with a Levenshtein ratio plus containment
+bonuses over an inverted index of their words.
+
+Around the pointer, lines are grouped into blocks by a union-find over pairs that stack or share a
+row, and ranked by their distance in text heights, so a Retina capture, a scaled UI and a
+screenshot file rank alike.
+
+All the matching runs on device. The only network calls are the weekly index refresh and the
+sources' own search for what no index placed: the line under the pointer and at most the three
+titles nearest it, plus a few more each time you press again.
+
+### Icons and the startup animation
+
+Both icons come from one piece of art, `Resources/StatusItemIcon.pdf`. The menu bar uses it
+directly as a template image, and `swift Tools/make-icon.swift` sets it on a dark tile to rebuild
+`Resources/AppIcon.icns`, the icon Finder, Spotlight and the Screen Recording list show. Run that
+only when the art changes; `build.sh` just copies the result.
+
+The startup animation (`StartupAnimation.swift`) is drawn with Core Animation from the icon's own
+paths, stroked rather than filled so the underscore and the smirk can be the same curve with its
+control points moved. Every frame is a pure function of time, driven by a `CADisplayLink`, which is
+what lets `Tools/preview-startup-animation.swift` render any instant of it to a PNG for tuning,
+and `Tools/make-readme-animation.swift` turn it into the README's GIF. Rerun that one after changing
+the animation. The shell starts underneath right away; only the terminal view's alpha is held at 0
+while the logo is up.
+
+### Files on disk
+
+| Path | What |
+| --- | --- |
+| `~/Library/Preferences/com.charlesmelki.slyterm.plist` | Every setting and the app's own state |
+| `~/Library/Application Support/SlyTerm/lookup/` | One index per host, as JSON, rebuilt weekly |
+| `~/Library/Logs/SlyTerm.log` | The debug trace, written only while `debug` is on |
+| WebKit's usual places under `~/Library` | The web tabs' cookies and cache, shared by all of them, and the compiled blocking rules |
+| `~/.claude/sessions/*.json` and Claude Code's transcripts | Read, never written |
+
+## Migration notes
+
+### Coming from HoverTerm
+
+SlyTerm is the same app under a new name, with a new bundle identifier
+(`com.charlesmelki.slyterm`), URL scheme (`slyterm://`) and tab variable (`SLYTERM_TAB_ID`).
+Settings, hotkeys, the window frame and the last session are copied over from the old name on the
+first launch. Screen Recording has to be granted again, and any hook or script that used
+`hoverterm://` or `$HOVERTERM_TAB_ID` needs the new spelling. The old
+`~/Library/Application Support/HoverTerm` cache, `~/Library/Logs/HoverTerm.log` and the
+`com.charlesmelki.hoverterm` preferences can be deleted once the old app is gone.
+
+### DofusDB in stored Dofus games
+
+A Dofus game made before DofusDB was part of the preset gets it once, after its other sources, the
+first time a version of SlyTerm that has it launches (`lookupGamesVersion` 1); remove it and it
+stays removed. A version of SlyTerm from before DofusDB cannot read a game that has it: it leaves
+that game out, and loses it for good the next time it saves the list. The list as it was before
+DofusDB was added is kept under `lookupGames.v0`, so to go back to such a version, quit SlyTerm and
+put that copy back first:
+
+```sh
+defaults write com.charlesmelki.slyterm lookupGames -string "$(defaults read com.charlesmelki.slyterm lookupGames.v0)"
+```

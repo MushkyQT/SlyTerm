@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in SlyTerm does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem goes through [private reporting](https://github.com/MushkyQT/slyterm/security/advisories/new), not an issue. A question goes to [Discussions](https://github.com/MushkyQT/slyterm/discussions).
+
+        Before you paste a log or attach a screenshot, read it. The log holds text read off your screen, folder paths and what Claude was asked to do; a game screenshot can hold other players' names and chat. Remove or blur anything that is not yours to share.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 26.0
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit you built
+      description: The output of `git rev-parse --short HEAD` in your clone.
+      placeholder: 0da7f45
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game and display mode
+      description: If a game is involved, its name and whether it runs borderless windowed, in macOS fullscreen or in exclusive fullscreen.
+      placeholder: World of Warcraft, borderless windowed
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log
+      description: Turn the log on with `defaults write com.charlesmelki.slyterm debug -bool true`, reproduce the problem, and paste the relevant lines of `~/Library/Logs/SlyTerm.log`. Turn it off again with `-bool false`.
+      render: text
+  - type: textarea
+    id: lookup
+    attributes:
+      label: For a lookup that opens the wrong page
+      description: A screenshot of the game, and the output of `SlyTerm --ocr screenshot.png --at X Y --game <game>`, X and Y being the pointer in pixels from the top left. The binary is `SlyTerm.app/Contents/MacOS/SlyTerm`; see [Command-line modes](https://github.com/MushkyQT/slyterm/blob/main/docs/TECHNICAL.md#command-line-modes).

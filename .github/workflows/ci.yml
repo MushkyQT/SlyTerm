@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and snapshots
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: swift build
+
+      - name: Snapshots
+        # An argument a mode does not take launches the full app, which never exits on its own.
+        timeout-minutes: 5
+        run: |
+          bin=.build/debug/SlyTerm
+          out="$RUNNER_TEMP/snapshots"
+          mkdir -p "$out"
+          written() { test -s "$1" || { echo "::error::$(basename "$1") was not written"; exit 1; }; }
+          for mode in strip float card picker; do
+            $bin --$mode-snapshot "$out/$mode.png"
+            written "$out/$mode.png"
+          done
+          written "$out/picker-empty.png"
+          # The fixtures tool prints each image's path, then a line with `--at X Y --game G`.
+          swift Tools/make-lookup-fixtures.swift "$RUNNER_TEMP/fixtures" |
+            while read -r shot && read -r _ x y _ game _; do
+              $bin --pick-snapshot "$shot" "$x" "$y" "$out/pick-$(basename "$shot")" --scale 2 --game "$game"
+              written "$out/pick-$(basename "$shot")"
+            done
+
+      - name: Upload snapshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshots
+          path: ${{ runner.temp }}/snapshots
+          retention-days: 14

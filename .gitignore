@@ -1,0 +1,7 @@
+.build/
+dist/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+Resources/AppIcon.iconset/
+.claude/worktrees/

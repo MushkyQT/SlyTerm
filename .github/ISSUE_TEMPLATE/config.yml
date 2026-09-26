@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/MushkyQT/slyterm/discussions/categories/q-a
+    about: How to set something up, or whether SlyTerm can do something.
+  - name: Security problem
+    url: https://github.com/MushkyQT/slyterm/security/advisories/new
+    about: Report it privately, not in an issue.

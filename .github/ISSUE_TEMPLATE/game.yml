@@ -1,0 +1,42 @@
+name: Share a game
+description: A game you set up in Settings › Lookup, to be added as a preset.
+labels: [game]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Set the game up in Settings › Lookup and check that the lookup opens the right pages. Then select it, use **Export…**, and attach the `.slyterm-game.json` file below. [Adding a game](https://github.com/MushkyQT/slyterm/blob/main/CONTRIBUTING.md#adding-a-game) says what a preset needs.
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      placeholder: Old School RuneScape
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: Each source's search URL, in the order you put them, and what Settings says under the table for it.
+      placeholder: https://oldschool.runescape.wiki/w/Special:Search?search={query} · MediaWiki · 41 726 pages indexed
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: The exported game
+      description: Drag the `.slyterm-game.json` file here, or paste its contents.
+    validations:
+      required: true
+  - type: textarea
+    id: checked
+    attributes:
+      label: What you checked
+      description: What you looked up in the game and the page each opened, the misses included, and any strip patterns or tooltip lines you added and why.
+  - type: checkboxes
+    id: public
+    attributes:
+      label: Public pages
+      options:
+        - label: Every source opens public pages without signing in.
+          required: true

@@ -1,0 +1,26 @@
+name: Feature idea
+description: Something SlyTerm could do. Agreeing on the behaviour before the code saves a rewrite.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the [principles](https://github.com/MushkyQT/slyterm/blob/main/docs/TECHNICAL.md#principles) first. SlyTerm never interacts with the game, reads the screen only when asked, never takes the keyboard from the game unprompted and never types into a conversation on a guess. An idea that needs one of these bent will not be merged.
+  - type: textarea
+    id: player
+    attributes:
+      label: What the player would see and do
+      description: From the game, step by step. What you press or click, what appears, and where the keyboard goes.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+    validations:
+      required: true
+  - type: textarea
+    id: existing
+    attributes:
+      label: Existing features that come close
+      description: A feature that could be extended to do this, rather than a new window or a new hotkey.
