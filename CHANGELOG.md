@@ -9,6 +9,9 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Added
 
+- Send Back returns a session to the terminal it was brought in from, and Ghostty (1.3 or later)
+  and WezTerm can now take sessions back, as iTerm2 and Terminal do. A tab started in SlyTerm goes
+  to the terminal chosen in Settings, which can now also be Ghostty or WezTerm.
 - While Settings or the setup assistant is open, SlyTerm shows in the Dock and in `⌘Tab`, with an
   app menu, so switching to another app no longer leaves the window out of reach behind it.
 

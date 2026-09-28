@@ -178,7 +178,7 @@ logo animation", key `startupAnimation`).
 | In a web tab: back / forward / reload | `⌘←` / `⌘→` / `⌘R` |
 | In a web tab: find in page | `⌘F`, then `Return` / `⇧Return` or `⌘G` / `⌘⇧G` for the next / previous match, `Esc` to close; `⌘E` searches for the selection |
 | Bring a session in from another terminal | `⌘⇧T` in a terminal, "Bring In a Session…" in the menu bar item, or a right-click on `+` |
-| Send a tab's session back to iTerm2 or Terminal | Right-click the tab, "Send Tab Back to …" in the menu bar item, or "Send Back and Quit" when quitting |
+| Send a tab's session back to its terminal | Right-click the tab, "Send Tab Back to …" in the menu bar item, or "Send Back and Quit" when quitting |
 | Newline in Claude Code, Codex, omp and pi | `⇧Return` or `⌥Return` |
 | Open Settings | `⌘,` in the SlyTerm window or a floating web tab, or "Settings…" in the menu bar item |
 | Quit | `⌘Q` while the terminal or a web tab has focus, or the menu bar item |
@@ -518,19 +518,27 @@ any agent in the picker.
 
 ### Sending a session back
 
-A session can go the other way, from a SlyTerm tab to iTerm2 or Terminal: right-click the tab in the
-strip (or Control-click it) and choose "Send Back to iTerm2", choose "Send Tab Back to iTerm2" in the
-menu bar item for the tab in front, or quit with "Send Back and Quit". Settings › General › Other
-terminals chooses iTerm2 or Terminal ("Send sessions back to"); Terminal is used when iTerm2 is not
-installed. No other terminal can be told to open a tab and type into it.
+A session can go the other way, from a SlyTerm tab to iTerm2, Terminal, Ghostty or WezTerm:
+right-click the tab in the strip (or Control-click it) and choose "Send Back to iTerm2", choose
+"Send Tab Back to iTerm2" in the menu bar item for the tab in front, or quit with "Send Back and
+Quit". The menus name the terminal that tab would go to.
+
+A tab brought in from one of those four (moved, copied, attached or opened as a folder) remembers
+it and goes back there. Any other tab goes to the one chosen in Settings › General › Other
+terminals ("Send sessions back to"), and when that one is not installed, to iTerm2, else Terminal.
+The memory lasts as long as the tab: a tab restored at launch is a new shell and has none. Ghostty
+counts only from 1.3, the first version with an AppleScript dictionary (`NSAppleScriptEnabled` in
+its Info.plist); WezTerm counts when its bundle has the `wezterm` command line in `Contents/MacOS`.
+Warp, kitty, Alacritty and VS Code cannot be told to open a tab and run a line in it.
 
 - **An agent's conversation** is stopped here the way a move stops it (`SIGTERM`, 5 s, then for
   Claude Code two Ctrl-C into SlyTerm's own tab while Claude is still in front of it, 3 s more).
-  Then a new tab opens in iTerm2's front window, or a new iTerm2 window when there is none, or a new
-  Terminal window, and `cd '<folder>'; <resume command>` is typed and run there (`;`, so the
-  session still resumes where that terminal is not allowed into the folder). SlyTerm's tab closes,
-  and when it was the last one the tab that replaces it does not run the startup command. It asks before interrupting a session that is working or waiting, like a move, with the
-  same setting.
+  Then a new tab opens in the other terminal's front window (WezTerm's first listed window; a new
+  window when there is none, and always a new window in Terminal), and `cd '<folder>'; <resume
+  command>` is typed and run there (`;`, so the session still resumes where that terminal is not
+  allowed into the folder). SlyTerm's tab closes, and when it was the last one the tab that
+  replaces it does not run the startup command. It asks before interrupting a session that is
+  working or waiting, like a move, with the same setting.
 - **A background Claude you attached** is not stopped: SlyTerm closes its tab, which detaches it,
   and runs `claude attach <id>` in the other terminal.
 - **A plain shell** gets a new tab in its folder there. SlyTerm's tab closes, unless something is
@@ -540,12 +548,37 @@ installed. No other terminal can be told to open a tab and type into it.
 command there instead (`claude --resume <id> --fork-session`, `codex fork <id>`, `pi --fork <id>`)
 and leaves the SlyTerm tab running.
 
-Nothing is stopped until the other terminal has answered an Apple event, which is also when macOS
-asks, the first time, whether SlyTerm may control it. If the tab still does not open after the agent
-has stopped, the resume command is typed back into SlyTerm's tab, or into a new one when something
-else is in front of that tab's shell, and a toast says so. The other
-terminal is not brought to the front, so the game keeps the screen. The folder is shell-quoted,
-and left out if it contains a control character; the session id is checked as for a move.
+Nothing is stopped until the other terminal has answered: an Apple event for iTerm2, Terminal and
+Ghostty, which is also when macOS asks, the first time, whether SlyTerm may control it, and
+`wezterm cli --no-auto-start list` for WezTerm. A WezTerm that is not running is started without
+being brought to the front, and SlyTerm waits up to 10 s for it to answer. A terminal started this
+way (Ghostty is started by the Apple event) may open its own first window or tab as well, so the
+session's tab can have an empty one next to it.
+
+How each terminal gets its tab:
+
+- **iTerm2**: `create tab with default profile` in the current window, then `write text`.
+- **Terminal**: `do script`, which opens a window.
+- **Ghostty**: `new tab in front window` (or `new window`) with a surface configuration whose
+  `initial input` is the line and a newline, so the user's shell still starts and reads it.
+  Ghostty 1.3 brings itself to the front for a new tab or window and has no option not to: when it
+  takes the front within a second, SlyTerm gives the front back to the app that had it before the
+  send-back (before the quit dialog, for "Send Back and Quit", which waits for it before quitting),
+  through LaunchServices (`activate()` from a background app is refused since macOS 14). The game
+  loses the keyboard for that moment, and a game in its own full-screen Space may see the Space
+  switch and come back. LaunchServices also sends that app a reopen event, as a Dock click does,
+  so an app with no window open may open one.
+- **WezTerm**: its CLI, never through a shell: `spawn --window-id <id>` into the first window
+  `list --format json` gives (or `--new-window`), then `send-text --no-paste --pane-id <pane> --
+  <line>`. `--no-paste` because a bracketed paste would leave the line at the prompt, not run it;
+  `--no-auto-start` because without it a WezTerm that is not running gets a windowless server and
+  the tab opens where nobody sees it. Each call is given 5 s.
+
+If the tab still does not open after the agent has stopped, the resume command is typed back into
+SlyTerm's tab, or into a new one when something else is in front of that tab's shell, and a toast
+says so; that tab keeps the origin. The other terminal is not brought to the front (Ghostty only
+for a moment, see above), so the game keeps the screen. The folder is shell-quoted, and left out
+if it contains a control character; the session id is checked as for a move.
 
 "Send Back and Quit" is in the quit dialog, as its default button, whenever a tab runs an agent that
 can be resumed elsewhere. It sends every such tab back at once, without asking about each agent
@@ -1255,7 +1288,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `lookupAutoDetect` | `true` | Let the app in front pick the game |
 | `teleportClosesSource` | `true` | Close the tab a session came from after moving it (iTerm2 and Terminal only) |
 | `teleportConfirmBusy` | `true` | Ask before interrupting an agent that is working or waiting for an answer |
-| `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to: `iterm2` or `terminal` (Terminal when iTerm2 is not installed) |
+| `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to when it was not brought in from one of these: `iterm2`, `terminal`, `ghostty` or `wezterm` (iTerm2, else Terminal, when the one chosen is not installed) |
 | `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
 | `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
@@ -1434,8 +1467,9 @@ $B --activity --poll --times 4            # scan repeatedly and time it; a quiet
   the label. `--session <uuid>`, `--pid <pid>` and `--tty ttys003` narrow it to the one a
   `slyterm://teleport` URL would pick, so a URL can be checked before it is fired at a live session;
   `--tty` lists that terminal's agent, then its shell. With `--send-back` it prints, for each one,
-  what "Send Back" would do with it and the script it would send to the terminal chosen in
-  Settings; for a session outside SlyTerm it says the app would not offer it.
+  what "Send Back" would do with it and the script (for WezTerm, the commands) it would send to
+  the terminal chosen in Settings, since a SlyTerm tab's own origin is not visible from outside the
+  app; for a session outside SlyTerm it says the app would not offer it.
 - `--activity --transcript` tells the file's kind from its first line (a Codex rollout starts with
   `session_meta`, an omp session with its title, a pi session with its header, anything else is
   taken for Claude Code's), and `--agent <name>` forces it: `claude`, `codex`, `omp`, `pi`,
@@ -1580,7 +1614,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | `Teleport/TeleportModel.swift` | The types discovery, engine and picker share |
 | `Teleport/SessionDiscovery.swift` | What is running in other terminals, from Claude Code's registry, the process table and the agents' session files; which session each tab hosts |
 | `Teleport/AgentDiscovery.swift` | The Codex, omp, pi, Gemini CLI and Qwen Code processes in front on a terminal, and the session file each one writes |
-| `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source; sending a tab back to iTerm2 or Terminal |
+| `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source; sending a tab back to iTerm2, Terminal, Ghostty or WezTerm |
 | `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
 | `Teleport/SessionsCLI.swift` | `--sessions` |
 | `SetupAssistant.swift` | The first-launch setup window: its steps, the short game form, applying the choices; `--setup-snapshot` |

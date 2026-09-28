@@ -83,20 +83,71 @@ enum TeleportHost: Equatable {
 
 enum TeleportStatus: Equatable { case working, waiting, idle, unknown }
 
-// Only these two can be told to open a tab and type into it.
-enum SendBackTerminal: String {
+// Only these can be told to open a tab and type into it.
+enum SendBackTerminal: String, CaseIterable {
     case iTerm2 = "iterm2"
     case terminal = "terminal"
+    case ghostty = "ghostty"
+    case wezTerm = "wezterm"
 
-    var host: TeleportHost { self == .iTerm2 ? .iTerm2(sessionID: nil) : .appleTerminal(sessionID: nil) }
+    init?(host: TeleportHost) {
+        switch host {
+        case .iTerm2: self = .iTerm2
+        case .appleTerminal: self = .terminal
+        case .other("ghostty"): self = .ghostty
+        case .other("WezTerm"): self = .wezTerm
+        default: return nil
+        }
+    }
+
+    var host: TeleportHost {
+        switch self {
+        case .iTerm2: return .iTerm2(sessionID: nil)
+        case .terminal: return .appleTerminal(sessionID: nil)
+        case .ghostty: return .other(program: "ghostty")
+        case .wezTerm: return .other(program: "WezTerm")
+        }
+    }
+
     var name: String { host.displayName }
 
-    // The one chosen in Settings, or Terminal when iTerm2 is not installed.
+    var weztermCLI: URL? {
+        guard self == .wezTerm, let id = host.bundleIdentifier,
+              let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+            return nil
+        }
+        let cli = app.appendingPathComponent("Contents/MacOS/wezterm")
+        return FileManager.default.isExecutableFile(atPath: cli.path) ? cli : nil
+    }
+
+    // Ghostty answers Apple events from 1.3 on, and says so in its Info.plist.
+    var isAvailable: Bool {
+        guard let id = host.bundleIdentifier,
+              let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+            return false
+        }
+        switch self {
+        case .iTerm2, .terminal: return true
+        case .ghostty:
+            // Not `Bundle`, which caches: an update to 1.3 would go unseen until a relaunch.
+            let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+            let value = info?["NSAppleScriptEnabled"]
+            return value as? Bool == true || (value as? String)?.lowercased() == "yes"
+        case .wezTerm: return weztermCLI != nil
+        }
+    }
+
+    // The one chosen in Settings, else iTerm2, else Terminal.
     static var current: SendBackTerminal {
         let chosen = SendBackTerminal(rawValue: Settings.shared.sendBackTerminal) ?? .iTerm2
-        guard chosen == .iTerm2, let id = chosen.host.bundleIdentifier,
-              NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) == nil else { return chosen }
-        return .terminal
+        if chosen == .terminal || chosen.isAvailable { return chosen }
+        return SendBackTerminal.iTerm2.isAvailable ? .iTerm2 : .terminal
+    }
+
+    // Main thread. Back where the session was brought in from, when that terminal can take it.
+    static func destination(for tab: TerminalTab) -> SendBackTerminal {
+        if let origin = tab.origin, origin.isAvailable { return origin }
+        return current
     }
 }
 

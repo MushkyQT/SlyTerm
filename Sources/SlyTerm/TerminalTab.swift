@@ -24,6 +24,8 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
     private(set) var startDirectory: String
     private(set) var title: String { didSet { if title != oldValue { onTitleChange?() } } }
     var needsAttention = false { didSet { if needsAttention != oldValue { onAttentionChange?() } } }
+    // The terminal this tab's session was brought in from, where Send Back returns it.
+    var origin: SendBackTerminal?
     var onTitleChange: (() -> Void)?
     var onDirectoryChange: (() -> Void)?
     var onAttentionChange: (() -> Void)?
