@@ -473,6 +473,10 @@ final class OverlayController: NSObject, TabStripDelegate {
         switch event {
         case .finished(let id, _), .asks(let id, _):
             guard let tab = terminals.first(where: { $0.id == id }) else { return }
+            if case .finished = event, ActivityAnswer.justRefused(id) {
+                Settings.log("activity: \(tab.title) stopped after a refusal, no card")
+                return
+            }
             requestAttention(tab, quietly: !settings.activityCards)
             Activity.card?.present(event, tab: tab)
         case .answered(let id), .gone(let id):

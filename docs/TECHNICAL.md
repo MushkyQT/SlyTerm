@@ -254,6 +254,9 @@ subagent asking for something, and several calls issued at once, where the trans
 which one the prompt on screen is about. omp and pi have nothing to answer this way, and the toast
 says so ("omp is waiting, but not for a yes or no").
 
+Refusing stops the agent's turn. That stop comes from the key you pressed, so for five seconds
+after a refusal a turn ending in that tab brings no mark and no card.
+
 ### Turning it off
 
 Turn the card off in Settings › General ("Show a card when an agent finishes or asks you

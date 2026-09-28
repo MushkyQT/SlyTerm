@@ -15,6 +15,15 @@ enum ActivityAnswer {
         answered[tab] = nil
     }
 
+    // A refusal ends the turn at once (Codex even flashes "working" first): that end is the
+    // answer's doing, not news, so it gets no mark and no card.
+    private static var refusedAt: [UUID: Date] = [:]
+    static let refusalGrace: TimeInterval = 5
+
+    static func justRefused(_ tab: UUID) -> Bool {
+        refusedAt[tab].map { Date().timeIntervalSince($0) < refusalGrace } ?? false
+    }
+
     // A card that came up just before the key went down was not read: the key meant the one before.
     static let readingTime: TimeInterval = 1
 
@@ -111,6 +120,7 @@ enum ActivityAnswer {
             }
             tab.send(raw: answer == .allow ? keys.allow : keys.refuse)
             answered[tab.id] = prompt
+            refusedAt[tab.id] = answer == .refuse ? Date() : nil
             Settings.log("answer: \(answer.verb) \(summary) in \(tab.title)")
             Activity.card?.dismiss(tab: tab.id)
             Activity.host?.clearAttention(tab)
