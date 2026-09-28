@@ -31,8 +31,8 @@ For a lookup that opens the wrong page, a screenshot of the game and the output 
 [Command-line modes](docs/TECHNICAL.md#command-line-modes)) usually show the problem straight away.
 
 Before you post a log or a screenshot, read it. The log holds text read off your screen, folder
-paths and what Claude was asked to do; a game screenshot can hold other players' names and chat.
-Remove or blur anything that is not yours to share.
+paths and what your agents were asked to do; a game screenshot can hold other players' names and
+chat. Remove or blur anything that is not yours to share.
 
 A security problem goes through private reporting instead, as [SECURITY.md](SECURITY.md) says, and
 a question goes to [Discussions](https://github.com/MushkyQT/slyterm/discussions).
@@ -62,10 +62,11 @@ issue before adding another.
 
 ## Where things are
 
-All the app's code is in `Sources/SlyTerm`, with the Claude activity feature in `Activity/` and
+All the app's code is in `Sources/SlyTerm`, with the agent activity feature in `Activity/` and
 "Bring In a Session" in `Teleport/`. [The source map](docs/TECHNICAL.md#source-map) says what each
-file holds. `Tools/` has scripts run by hand (the icon, lookup test images, the startup animation
-preview and the README's GIF of it), and `Resources/` has `Info.plist` and the icons.
+file holds. `Tools/` has scripts run by hand (the icon, lookup test images, agent session fixtures,
+the startup animation preview and the README's GIF of it), and `Resources/` has `Info.plist` and
+the icons.
 
 ## Checking a change
 
@@ -86,7 +87,7 @@ the running app when it involves windows, focus or hotkeys.
    | Protected playback and the user agent | `--drm-check` |
    | Tab strip | `--strip-snapshot out.png` |
    | Activity card | `--card-snapshot out.png` |
-   | Claude status and the transcript parser | `--activity`, `--activity --transcript <file.jsonl>` |
+   | Agent status and the session file readers | `--activity`, `--activity --transcript <file>`, `--activity --title <text>`, `--activity --screen <file>`; `swift Tools/make-agent-fixtures.swift <dir>` writes files to try them on |
    | Bring In a Session | `--sessions`, `--picker-snapshot out.png` |
    | Pick mode | `--pick-snapshot shot.png X Y out.png --scale 2` |
    | Startup animation | `Tools/preview-startup-animation.swift` (its header says how to run it) |
@@ -103,9 +104,10 @@ the running app when it involves windows, focus or hotkeys.
    - `open slyterm://…` goes to whichever copy macOS has registered, usually the one in
      `/Applications`. To reach the build you are testing, name it:
      `open -g -a dist/SlyTerm.app "slyterm://lookup?dry=1"`.
-   - Allow and refuse type into real Claude Code sessions. Test them on a scratch session in a
-     scratch folder, never on a conversation you care about. `claude --permission-mode default`
-     makes Claude ask before it acts, so there is a prompt to answer.
+   - Allow and refuse type into real Claude Code and Codex sessions. Test them on a scratch
+     session in a scratch folder, never on a conversation you care about.
+     `claude --permission-mode default` makes Claude ask before it acts, so there is a prompt to
+     answer.
    - With `debug` on, the log has a line for every mode change, lookup, activity transition and
      answer, which tells you what happened when nothing visible did.
 4. **Say what you checked.** The pull request template asks for what you ran and saw offline, what
@@ -123,13 +125,14 @@ Match the code around you. In particular:
 - **Layout.** Four-space indentation, lines usually within 100 columns.
 - **Shapes.** Stateless groups of functions are an `enum`; app-wide objects are a `final class`
   with `static let shared`. When a feature has several parts, the types they share live in one file
-  (`Activity/ClaudeActivity.swift`, `Teleport/TeleportModel.swift`).
+  (`Activity/AgentActivity.swift`, `Teleport/TeleportModel.swift`).
 - **Threads.** UI on the main thread only. Anything that reads the process table, files, the
   network or runs OCR goes off it, and only its result comes back. Never block the main thread on
   an Apple event: the first one can wait for a permission dialog.
-- **Outside data is untrusted.** Claude Code's registry and transcripts, web responses and imported
-  game JSON can be malformed or change format. No force unwraps when parsing them, bounded reads,
-  and a line that does not parse is skipped.
+- **Outside data is untrusted.** The agents' files (Claude Code's registry and transcripts, Codex's
+  rollouts, omp's and pi's sessions) and titles, web responses and imported game JSON can be
+  malformed or change format. No force unwraps when parsing them, bounded reads, and a line that
+  does not parse is skipped.
 - **Settings.** A new preference gets a default in `Settings`'s `register(defaults:)`, is written
   through `set(_:_:)` so `Settings.didChange` fires, and appears in the right Settings pane and in
   the [preferences table](docs/TECHNICAL.md#preferences-from-the-shell). Never rename an existing
@@ -148,8 +151,10 @@ Match the code around you. In particular:
   No setting keys, no internals, no edge cases.
 - **docs/TECHNICAL.md** is the reference: behaviour in detail, every setting, the URL scheme, the
   command-line modes, troubleshooting and the architecture.
+- **CHANGELOG.md** lists what changed in each version, with a link to the pull request for each
+  line. Leave out changes nobody would notice, such as a comment or a rename inside one file.
 
-Update both in the same pull request as the behaviour they describe.
+Update all three in the same pull request as the behaviour they describe.
 
 ## Commits and pull requests
 
@@ -162,6 +167,13 @@ Update both in the same pull request as the behaviour they describe.
   can have as many commits as you like.
 - The description says what changed, how you checked it and what is still unverified. For a visual
   change, attach the snapshot PNG or a screenshot, with other players' names and chat blurred.
+- A pull request that changes the app raises its version, in `Resources/Info.plist`
+  (`CFBundleShortVersionString`, and `CFBundleVersion` up by one), and adds a section for that
+  version at the top of CHANGELOG.md. The version follows [semantic versioning](https://semver.org):
+  the patch number for a fix, the minor number for something new, the major number for a change
+  that takes something away, such as a feature, a hotkey, a URL route or a command-line mode. If
+  another pull request takes the number first, take the next one when you rebase. Once the pull
+  request is merged, the Tag workflow tags `main` with `vX.Y.Z`.
 - AI-assisted changes are welcome. Credit the tool with a `Co-Authored-By:` trailer, and review
   the change yourself before you open the pull request: you are its author.
 

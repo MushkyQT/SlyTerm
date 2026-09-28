@@ -3,8 +3,22 @@ import Foundation
 enum ActivityCLI {
     static func run(_ args: [String]) -> Bool {
         guard args.count >= 2, args[1] == "--activity" else { return false }
+        var agent: AgentKind?
+        if let name = value(of: "--agent", in: args) {
+            guard let kind = AgentKind(rawValue: name.lowercased()) else {
+                let names = AgentKind.allCases.map(\.rawValue).joined(separator: ", ")
+                let text = "unknown agent \(name); one of \(names)\n"
+                FileHandle.standardError.write(Data(text.utf8))
+                return true
+            }
+            agent = kind
+        }
         if let path = value(of: "--transcript", in: args) {
-            transcript(at: path, status: value(of: "--status", in: args))
+            transcript(at: path, status: value(of: "--status", in: args), agent: agent)
+        } else if let text = value(of: "--title", in: args) {
+            title(text, agents: agent.map { [$0] } ?? AgentTitle.kinds)
+        } else if let path = value(of: "--screen", in: args) {
+            screen(at: path, agents: agent.map { [$0] } ?? [.codex, .omp])
         } else if args.contains("--poll") {
             poll(times: value(of: "--times", in: args).flatMap(Int.init) ?? 2)
         } else {
@@ -26,11 +40,14 @@ enum ActivityCLI {
         FileHandle.standardError.write(Data("scanned \(rows.count) sessions in \(milliseconds) ms\n".utf8))
     }
 
-    private static let headings = ["PID", "HOST", "STATUS", "SINCE", "TURN", "DOING", "ASKS", "LAST MESSAGE"]
+    private static let headings = ["PID", "AGENT", "HOST", "STATUS", "SINCE", "TURN", "DOING",
+                                   "ASKS", "LAST MESSAGE"]
 
-    private static func table(_ rows: [(session: ClaudeSessionInfo, activity: ClaudeActivity)]) -> String {
+    private static func table(
+        _ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let cells = [headings] + rows.map { row in
             [String(row.session.pid),
+             row.session.agent.rawValue,
              host(row.session.host),
              name(row.activity.status),
              row.activity.since.map { activityElapsed(since: $0) } ?? "-",
@@ -57,11 +74,13 @@ enum ActivityCLI {
         return host.displayName
     }
 
-    private static func json(_ rows: [(session: ClaudeSessionInfo, activity: ClaudeActivity)]) -> String {
+    private static func json(
+        _ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let formatter = ISO8601DateFormatter()
         let objects: [[String: Any]] = rows.map { session, activity in
             var object: [String: Any] = [
                 "pid": session.pid,
+                "agent": session.agent.rawValue,
                 "sessionId": session.sessionID,
                 "cwd": session.cwd,
                 "name": session.name,
@@ -98,18 +117,25 @@ enum ActivityCLI {
         return text
     }
 
-    private static func transcript(at path: String, status: String?) {
+    private static func transcript(at path: String, status: String?, agent forced: AgentKind?) {
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)??.intValue
         guard FileManager.default.isReadableFile(atPath: url.path) else {
             FileHandle.standardError.write(Data("cannot read \(url.path)\n".utf8))
             return
         }
+        let agent = forced ?? kind(of: url)
         let started = Date()
-        let reading = TranscriptTail.read(url)
+        let reading: TranscriptTail.Reading
+        switch agent {
+        case .codex: reading = CodexRollout.read(url)
+        case .pi, .omp: reading = PiSession.read(url)
+        case .claude, .gemini, .qwen: reading = TranscriptTail.read(url)
+        }
         let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
 
         print("file:      \(url.path) (\((size ?? 0) / 1024) KB)")
+        if agent != .claude { head(of: url, agent: agent, reading: reading) }
         if let doing = reading.doing {
             print("pending:   \(doing.tool)")
             print("label:     \(doing.label)")
@@ -130,7 +156,94 @@ enum ActivityCLI {
         FileHandle.standardError.write(Data("parsed in \(milliseconds) ms\n".utf8))
     }
 
-    private static func describe(_ request: ClaudeRequest?) -> String {
+    // Codex rollouts open with `session_meta`, omp sessions with their title slot and pi sessions
+    // with their header; anything else is taken for Claude Code's.
+    private static func kind(of url: URL) -> AgentKind {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return .claude }
+        defer { try? handle.close() }
+        let start = (try? handle.read(upToCount: 512)) ?? Data()
+        let line = start.prefix { $0 != UInt8(ascii: "\n") }
+        let markers: [(String, AgentKind)] = [("session_meta", .codex), ("title", .omp),
+                                              ("session", .pi)]
+        for (marker, agent) in markers
+        where line.range(of: Data("\"type\":\"\(marker)\"".utf8)) != nil {
+            return agent
+        }
+        return .claude
+    }
+
+    private static func head(of url: URL, agent: AgentKind, reading: TranscriptTail.Reading) {
+        let formatter = ISO8601DateFormatter()
+        print("agent:     \(agent.rawValue)")
+        if agent == .codex, let head = CodexRollout.head(url) {
+            // Rollouts sit in `sessions/YYYY/MM/DD/` under the Codex home; a copy may sit beside
+            // its index.
+            let folder = url.deletingLastPathComponent()
+            let home = (0..<4).reduce(folder) { dir, _ in dir.deletingLastPathComponent() }
+            let names = CodexRollout.threadNames(in: folder)
+                .merging(CodexRollout.threadNames(in: home)) { $1 }
+            print("id:        \(head.id)")
+            print("cwd:       \(head.cwd)")
+            print("started:   \(head.startedAt.map(formatter.string(from:)) ?? "-")")
+            print("origin:    \(head.originator ?? "-")")
+            print("thread:    \(names[head.id] ?? "-")")
+            let prompt = head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) }
+            print("prompt:    \(prompt ?? "-")")
+        } else if agent != .codex, let head = PiSession.head(url) {
+            print("id:        \(head.id)")
+            print("cwd:       \(head.cwd)")
+            print("started:   \(head.startedAt.map(formatter.string(from:)) ?? "-")")
+            print("title:     \(head.title ?? "-")")
+            let prompt = head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) }
+            print("prompt:    \(prompt ?? "-")")
+        } else {
+            print("head:      -")
+        }
+        print("status:    \(reading.status.map(name) ?? "-")")
+        print("since:     \(reading.statusSince.map(formatter.string(from:)) ?? "-")")
+        print("ended:     \(reading.ended ? "yes" : "no")")
+    }
+
+    private static func title(_ text: String, agents: [AgentKind]) {
+        print("title:     \"\(text)\"")
+        for agent in agents {
+            let shown = AgentTitle.parse(text, agent: agent).map { parsed in
+                "\(name(parsed.status)) \(parsed.marked ? "marked" : "unmarked") \"\(parsed.name)\""
+            }
+            let column = agent.rawValue.padding(toLength: 11, withPad: " ", startingAt: 0)
+            print(column + (shown ?? "-"))
+        }
+    }
+
+    // A capture may start with a `# title: '…'` line: the tab's title when the screen was taken.
+    private static func screen(at path: String, agents: [AgentKind]) {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            FileHandle.standardError.write(Data("cannot read \(url.path)\n".utf8))
+            return
+        }
+        defer { try? handle.close() }
+        let data = (try? handle.read(upToCount: 256 * 1024)) ?? Data()
+        var lines = String(decoding: data, as: UTF8.self).components(separatedBy: "\n")
+        if lines.last == "" { lines.removeLast() }
+        var title: String?
+        if let first = lines.first, first.hasPrefix("# title: ") {
+            lines.removeFirst()
+            title = first.dropFirst("# title: ".count)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "'"))
+        }
+        print("file:      \(url.path) (\(lines.count) rows)")
+        for agent in agents {
+            if let title {
+                let status = AgentTitle.parse(title, agent: agent).map { name($0.status) } ?? "-"
+                print("title:     \(agent.rawValue) \(status) \"\(title)\"")
+            }
+            let request = AgentScreen.request(lines: lines, agent: agent)
+            print("request:   \(agent.rawValue) \(describe(request))")
+        }
+    }
+
+    private static func describe(_ request: AgentRequest?) -> String {
         switch request {
         case .permission(let tool, let summary, let detail):
             return "permission(\(tool)) \(summary)" + (detail.map { "\n  detail: " + $0.replacingOccurrences(of: "\n", with: "\n          ") } ?? "")
@@ -161,7 +274,7 @@ enum ActivityCLI {
         }
     }
 
-    private static func summary(_ request: ClaudeRequest?) -> String? {
+    private static func summary(_ request: AgentRequest?) -> String? {
         switch request {
         case .permission(_, let summary, _): return summary
         case .question(let text, _): return "asks: " + text

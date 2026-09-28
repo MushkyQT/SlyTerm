@@ -609,6 +609,13 @@ enum StripSnapshotCLI {
             hint: ("editing GuideTab.swift · 2m", NSColor(calibratedWhite: 1, alpha: 0.55)))
         add("a Claude waiting for you", selected: 1, marks: [1: .waiting],
             hint: ("waiting for you", .systemOrange))
+        add("Codex working: the tab shows its thread name, without the spinner frame", selected: 1,
+            marks: [1: .working],
+            hint: ("running `npm test` · 45s", NSColor(calibratedWhite: 1, alpha: 0.55)),
+            titles: ["slyterm", "Fix the login test | api", "Projects"])
+        add("Codex waiting on an approval, omp working in another tab", selected: 1,
+            marks: [1: .waiting, 2: .working], hint: ("waiting for you", .systemOrange),
+            titles: ["slyterm", "Fix the login test | api", "Run the tests"])
         add("a finished turn nobody looked at", selected: 1, attention: 2, marks: [2: .attention])
         add("all three at once: working, waiting, finished", selected: 0,
             attention: 2, marks: [0: .working, 1: .waiting, 2: .attention],

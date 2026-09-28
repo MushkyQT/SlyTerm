@@ -8,12 +8,12 @@ final class ActivityCard: ActivityCardPresenting {
     private let settings = Settings.shared
 
     private(set) var presentedTab: UUID?
-    private(set) var presentedPrompt: ClaudePrompt?
+    private(set) var presentedPrompt: AgentPrompt?
     private(set) var presentedAt: Date?
     // Holds other requests back after a click: a new card now would take the answer key the user
     // meant for the tab they just brought forward.
     private var held: UUID?
-    private var standing: [UUID: ClaudePrompt] = [:]
+    private var standing: [UUID: AgentPrompt] = [:]
     private var lastFinished: (tab: UUID, message: String)?
     private var dismissWork: DispatchWorkItem?
     private var generation = 0
@@ -44,17 +44,18 @@ final class ActivityCard: ActivityCardPresenting {
             // on nil would hide every text-less turn after the first.
             if let message = activity.lastMessage, let last = lastFinished,
                last.tab == tab.id, last.message == message { return }
-            guard let host = Activity.host, !host.isBeingViewed(tab) else { return }
-            if let up = presentedTab, presentedPrompt != nil, let asking = standingActivity(of: up, host: host) {
-                Settings.log("card: \(tab.title) finished, kept behind \(asking.tab.title)'s request")
-                return
-            }
+            guard let host = Activity.host, !host.isBeingViewed(tab),
+                  !isBehindRequest(tab, news: "finished", host: host) else { return }
             lastFinished = activity.lastMessage.map { (tab: tab.id, message: $0) }
             content = finishedContent(tab: tab, activity: activity)
         case .asks(_, let activity):
             guard let host = Activity.host, !host.isBeingViewed(tab) else { return }
             showRequest(activity, of: tab)
             return
+        case .notified(_, let title, let body):
+            guard let host = Activity.host, !host.isBeingViewed(tab),
+                  !isBehindRequest(tab, news: "sent a notification", host: host) else { return }
+            content = notifiedContent(tab: tab, title: title, body: body)
         case .answered, .gone, .changed:
             return
         }
@@ -93,13 +94,22 @@ final class ActivityCard: ActivityCardPresenting {
         panel.orderFrontRegardless()
     }
 
-    private func showRequest(_ activity: ClaudeActivity, of tab: TerminalTab) {
+    private func showRequest(_ activity: AgentActivity, of tab: TerminalTab) {
         guard let prompt = activity.prompt else { return }
         standing[tab.id] = prompt
         show(asksContent(tab: tab, activity: activity), for: tab.id, prompt: prompt)
     }
 
-    private func standingActivity(of id: UUID, host: ActivityHost) -> (tab: TerminalTab, activity: ClaudeActivity)? {
+    // News that needs no answer never covers a request that does.
+    private func isBehindRequest(_ tab: TerminalTab, news: String, host: ActivityHost) -> Bool {
+        guard let up = presentedTab, presentedPrompt != nil,
+              let asking = standingActivity(of: up, host: host) else { return false }
+        Settings.log("card: \(tab.title) \(news), kept behind \(asking.tab.title)'s request")
+        return true
+    }
+
+    private func standingActivity(of id: UUID, host: ActivityHost)
+        -> (tab: TerminalTab, activity: AgentActivity)? {
         guard let prompt = standing[id], let tab = host.terminals.first(where: { $0.id == id }),
               let activity = tab.activity, let now = activity.prompt, now.isSame(as: prompt),
               !host.isBeingViewed(tab) else { return nil }
@@ -108,7 +118,7 @@ final class ActivityCard: ActivityCardPresenting {
 
     private func showNextStanding() {
         guard settings.activityCards, let host = Activity.host else { standing = [:]; return }
-        var next: (tab: TerminalTab, activity: ClaudeActivity)?
+        var next: (tab: TerminalTab, activity: AgentActivity)?
         for id in Array(standing.keys) {
             guard let found = standingActivity(of: id, host: host) else {
                 standing[id] = nil
@@ -130,7 +140,7 @@ final class ActivityCard: ActivityCardPresenting {
         showNextStanding()
     }
 
-    private func show(_ content: ActivityCardView.Content, for tab: UUID, prompt: ClaudePrompt?) {
+    private func show(_ content: ActivityCardView.Content, for tab: UUID, prompt: AgentPrompt?) {
         dismissWork?.cancel()
         generation += 1
         presentedTab = tab
@@ -216,7 +226,8 @@ final class ActivityCard: ActivityCardPresenting {
         return chosen
     }
 
-    private func finishedContent(tab: TerminalTab, activity: ClaudeActivity) -> ActivityCardView.Content {
+    private func finishedContent(tab: TerminalTab,
+                                 activity: AgentActivity) -> ActivityCardView.Content {
         var title = "\(tab.title) · finished"
         if let duration = activity.lastTurnDuration { title += " · \(activityDuration(duration))" }
         let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
@@ -228,7 +239,19 @@ final class ActivityCard: ActivityCardPresenting {
             footer: footer([ghost.map { "\($0) to read" }]))
     }
 
-    private func asksContent(tab: TerminalTab, activity: ClaudeActivity) -> ActivityCardView.Content {
+    private func notifiedContent(tab: TerminalTab, title: String?,
+                                 body: String) -> ActivityCardView.Content {
+        let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
+        return ActivityCardView.Content(
+            accent: .systemYellow,
+            title: "\(tab.title) · \(title ?? "notification")",
+            body: Self.clamp(body) ?? body,
+            mono: nil,
+            footer: footer([ghost.map { "\($0) to read" }]))
+    }
+
+    private func asksContent(tab: TerminalTab,
+                             activity: AgentActivity) -> ActivityCardView.Content {
         let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
         switch activity.request {
         case .permission(_, let summary, let detail):
@@ -238,7 +261,7 @@ final class ActivityCard: ActivityCardPresenting {
                 accent: .systemOrange,
                 title: "\(tab.title) · needs an answer",
                 body: "Wants to \(summary)",
-                mono: detail.map { Self.clampLines($0, max: 6) },
+                mono: detail.map { Self.clampCharacters(Self.clampLines($0, max: 6), to: 600) },
                 footer: footer([allow.map { "\($0) allow" }, refuse.map { "\($0) refuse" },
                                 ghost.map { "\($0) to look" }]))
         case .question(let text, let options):
@@ -524,6 +547,18 @@ enum ActivityCardSnapshotCLI {
                   been at it. Everything is best effort: a line that does not parse is skipped, \
                   and nothing in the poll can crash the app.
                   """) ?? "",
+            mono: nil,
+            footer: "⌃⌥Tab to read"))
+        add("Codex asks to run a command, read off its screen", ActivityCardView.Content(
+            accent: .systemOrange,
+            title: "Fix the login test | api · needs an answer",
+            body: "Wants to run `npm test -- --grep login`",
+            mono: "npm test -- --grep login",
+            footer: "⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look"))
+        add("a notification from a program SlyTerm does not read", ActivityCardView.Content(
+            accent: .systemYellow,
+            title: "build · Build finished",
+            body: "All 214 targets built in 3m 12s, 2 warnings.",
             mono: nil,
             footer: "⌃⌥Tab to read"))
         add("a long command and a narrow strip", ActivityCardView.Content(

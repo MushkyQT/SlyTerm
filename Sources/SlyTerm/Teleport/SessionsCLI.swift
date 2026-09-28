@@ -17,13 +17,14 @@ enum SessionsCLI {
 
     private static func lookup(in args: [String]) -> [TeleportCandidate]? {
         if let id = value(of: "--session", in: args) {
-            return SessionDiscovery.claudeSession(id: id).map { [.claude($0)] } ?? []
+            return SessionDiscovery.agentSession(id: id).map { [.agent($0)] } ?? []
         }
         if let pid = value(of: "--pid", in: args).flatMap(pid_t.init) {
-            return SessionDiscovery.claudeSession(pid: pid).map { [.claude($0)] } ?? []
+            return SessionDiscovery.agentSession(pid: pid).map { [.agent($0)] } ?? []
         }
         if let tty = value(of: "--tty", in: args) {
-            return SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? []
+            let agents = SessionDiscovery.agentSessions(tty: tty).map(TeleportCandidate.agent)
+            return agents + (SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? [])
         }
         return nil
     }
@@ -53,8 +54,8 @@ enum SessionsCLI {
     private static func row(_ candidate: TeleportCandidate) -> [String] {
         let action = TeleportAction.primary(for: candidate).title
         switch candidate {
-        case .claude(let session):
-            return [session.isBackground ? "bg" : "claude",
+        case .agent(let session):
+            return [kind(session),
                     session.host.displayName,
                     name(session.status),
                     String(session.pid),
@@ -74,6 +75,11 @@ enum SessionsCLI {
                     action,
                     tab.foregroundCommand ?? tab.shellName]
         }
+    }
+
+    private static func kind(_ session: AgentSessionInfo) -> String {
+        guard session.agent == .claude else { return session.agent.rawValue }
+        return session.isBackground ? "bg" : "claude"
     }
 
     private static func folder(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
@@ -101,8 +107,11 @@ enum SessionsCLI {
                 "secondaryAction": TeleportAction.secondary(for: candidate).map { $0.title } ?? NSNull(),
             ]
             switch candidate {
-            case .claude(let session):
-                object["kind"] = session.isBackground ? "bg" : "claude"
+            case .agent(let session):
+                object["kind"] = kind(session)
+                object["agent"] = session.agent.rawValue
+                object["transcript"] = session.transcript?.path ?? NSNull()
+                object["turnsRunElsewhere"] = session.turnsRunElsewhere
                 object["pid"] = session.pid
                 object["sessionId"] = session.sessionID
                 object["name"] = session.name

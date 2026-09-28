@@ -6,17 +6,35 @@ enum SessionDiscovery {
     static func scan() -> [TeleportCandidate] {
         let table = ProcessTable()
         let sessions = claudeSessions(in: table).sorted { $0.startedAt > $1.startedAt }
-        let claimed = Set(sessions.compactMap(\.tty))
+        let agents = agentSessions(in: table, besides: sessions)
+            .sorted { $0.startedAt > $1.startedAt }
+        let claimed = Set((sessions + agents).compactMap(\.tty))
         let shells = shellTabs(in: table, ignoringTTYs: claimed).sorted { $0.startedAt > $1.startedAt }
-        return sessions.map(TeleportCandidate.claude) + shells.map(TeleportCandidate.shell)
+        return (sessions + agents).map(TeleportCandidate.agent)
+            + shells.map(TeleportCandidate.shell)
     }
 
-    static func claudeSession(id: String) -> ClaudeSessionInfo? {
-        claudeSessions(in: ProcessTable()).first { $0.sessionID.caseInsensitiveCompare(id) == .orderedSame }
+    static func agentSession(id: String) -> AgentSessionInfo? {
+        firstSession { $0.sessionID.caseInsensitiveCompare(id) == .orderedSame }
     }
 
-    static func claudeSession(pid: pid_t) -> ClaudeSessionInfo? {
-        claudeSessions(in: ProcessTable()).first { $0.pid == pid }
+    static func agentSession(pid: pid_t) -> AgentSessionInfo? {
+        firstSession { $0.pid == pid }
+    }
+
+    static func agentSessions(tty: String) -> [AgentSessionInfo] {
+        let name = ttyName(fromArgument: tty)
+        let table = ProcessTable()
+        let sessions = claudeSessions(in: table)
+        return (sessions + agentSessions(in: table, besides: sessions)).filter { $0.tty == name }
+    }
+
+    private static func firstSession(
+        where matches: (AgentSessionInfo) -> Bool) -> AgentSessionInfo? {
+        let table = ProcessTable()
+        let sessions = claudeSessions(in: table)
+        if let found = sessions.first(where: matches) { return found }
+        return agentSessions(in: table, besides: sessions).first(where: matches)
     }
 
     static func shellTab(tty: String) -> ShellTabInfo? {
@@ -24,11 +42,15 @@ enum SessionDiscovery {
         return shellTabs(in: ProcessTable(), ignoringTTYs: []).first { $0.tty == name }
     }
 
-    static func isRunning(_ session: ClaudeSessionInfo) -> Bool {
+    static func isRunning(_ session: AgentSessionInfo) -> Bool {
         guard kill(session.pid, 0) == 0 || errno == EPERM else { return false }
         guard let started = startTime(of: session.pid),
               startAgrees(started, procStart: session.procStart, startedAt: session.startedAt) else { return false }
         guard let inspected = arguments(of: session.pid) else { return false }
+        guard session.agent == .claude else {
+            guard let process = ProcessTable.lookup(pid: session.pid) else { return false }
+            return AgentDiscovery.kind(of: process, arguments: inspected) == session.agent
+        }
         return inspected.executablePath.localizedCaseInsensitiveContains("claude")
             || inspected.arguments.contains { $0.localizedCaseInsensitiveContains("claude") }
     }
@@ -123,7 +145,7 @@ enum SessionDiscovery {
         processStartFormat.date(from: raw.split(whereSeparator: \.isWhitespace).joined(separator: " "))
     }
 
-    private static func claudeSessions(in table: ProcessTable) -> [ClaudeSessionInfo] {
+    private static func claudeSessions(in table: ProcessTable) -> [AgentSessionInfo] {
         liveSessions(in: table).map { session in
             var named = session
             named.label = label(sessionID: session.sessionID,
@@ -135,8 +157,9 @@ enum SessionDiscovery {
     }
 
     static func liveSessions(in table: ProcessTable = ProcessTable(),
-                             inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) }) -> [ClaudeSessionInfo] {
-        var sessions: [ClaudeSessionInfo] = []
+                             inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) })
+        -> [AgentSessionInfo] {
+        var sessions: [AgentSessionInfo] = []
         for entry in registryEntries() {
             guard let process = table.entry(pid: entry.pid) else { continue }
             guard let started = startTime(of: entry.pid) else { continue }
@@ -155,7 +178,7 @@ enum SessionDiscovery {
             // `jobId` is something `claude attach` can open.
             let background = entry.kind != "interactive" && (entry.kind == "bg" || entry.jobID != nil)
             let environment = inspected?.environment ?? [:]
-            sessions.append(ClaudeSessionInfo(
+            sessions.append(AgentSessionInfo(
                 pid: entry.pid,
                 sessionID: entry.sessionID,
                 cwd: entry.cwd,
@@ -175,18 +198,50 @@ enum SessionDiscovery {
     }
 
     struct HostedSession {
-        var session: ClaudeSessionInfo
+        var session: AgentSessionInfo
         var processGroup: pid_t
     }
 
     // SLYTERM_TAB_ID is inherited by anything started in the tab (tmux, editors) and answers type
     // into the pty, so a session belongs to a tab only while it is the foreground job on its pty.
-    static func hostedSessions(tabs: [UUID: String],
-                               inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) }) -> [UUID: HostedSession] {
+    static func hostedSessions(tabs: [UUID: TabProbe],
+                               inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) },
+                               files: AgentDiscovery.Cache = AgentDiscovery.Cache())
+        -> [UUID: HostedSession] {
         let table = ProcessTable()
+        var hosted = hostedClaudes(tabs: tabs.mapValues(\.tty), in: table, inspect: inspect)
+        let open = Dictionary(tabs.filter { hosted[$0.key] == nil }.map { ($0.value.tty, $0.key) },
+                              uniquingKeysWith: { first, _ in first })
+        guard !open.isEmpty else { return hosted }
+        let every = AgentDiscovery.tuis(in: table, inspect: inspect)
+        let tuis = every.filter { open[$0.tty] != nil }
+        guard !tuis.isEmpty else { return hosted }
+        // A Codex or pi in another terminal may have begun the thread, or share the folder.
+        let shared = Set(tuis.map(\.agent)).intersection([.codex, .pi])
+        let others = every.filter { open[$0.tty] == nil && shared.contains($0.agent) }
+        var names: [String: String] = [:]
+        for tui in tuis where tui.agent == .codex {
+            guard let tab = open[tui.tty] else { continue }
+            names[tui.tty] = AgentDiscovery.threadName(inTitle: tabs[tab]?.titles[.codex]?.name)
+        }
+        let found = AgentDiscovery.sessionFiles(for: tuis + others, titleNames: names, in: table,
+                                                inspect: inspect, cache: files)
+        for tui in tuis {
+            guard let tab = open[tui.tty] else { continue }
+            if let group = tabs[tab]?.foregroundGroup, group != tui.process.pgid { continue }
+            let session = agentSession(of: tui, file: found[tui.process.pid],
+                                       fallbackID: "tab:" + tab.uuidString, cache: files)
+            hosted[tab] = HostedSession(session: session, processGroup: tui.process.pgid)
+        }
+        return hosted
+    }
+
+    private static func hostedClaudes(tabs: [UUID: String], in table: ProcessTable,
+                                      inspect: (pid_t) -> ProcessArguments?)
+        -> [UUID: HostedSession] {
         let sessions = liveSessions(in: table, inspect: inspect)
         var hosted: [UUID: HostedSession] = [:]
-        var background: [String: ClaudeSessionInfo] = [:]
+        var background: [String: AgentSessionInfo] = [:]
         func inFront(_ process: ProcessTable.Entry, of tab: UUID) -> Bool {
             guard let tty = tabs[tab] else { return false }
             return ttyName(process.tdev) == tty && process.pgid > 0 && process.pgid == process.tpgid
@@ -212,6 +267,90 @@ enum SessionDiscovery {
             hosted[tab] = HostedSession(session: session, processGroup: process.pgid)
         }
         return hosted
+    }
+
+    // Every other agent's TUI in front on a terminal, with or without a session file. Claude's
+    // own groups are left out: an agent it runs as a tool is not the tab's.
+    static func runningAgents(in table: ProcessTable, besides claude: [AgentSessionInfo],
+                              inspect: (pid_t) -> ProcessArguments?,
+                              cache: AgentDiscovery.Cache) -> [AgentSessionInfo] {
+        let tuis = agentTUIs(in: table, besides: claude, inspect: inspect)
+        let files = AgentDiscovery.sessionFiles(for: tuis, in: table, inspect: inspect,
+                                                cache: cache)
+        return tuis.map { tui in
+            let tab = tui.environment["SLYTERM_TAB_ID"].flatMap(UUID.init(uuidString:))
+            let fallback = tab.map { "tab:" + $0.uuidString } ?? "tty:" + tui.tty
+            return agentSession(of: tui, file: files[tui.process.pid], fallbackID: fallback,
+                                cache: cache)
+        }
+    }
+
+    // The picker's rows: only a TUI with a session file can be resumed elsewhere.
+    private static func agentSessions(in table: ProcessTable,
+                                      besides claude: [AgentSessionInfo]) -> [AgentSessionInfo] {
+        let cache = AgentDiscovery.Cache()
+        let inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) }
+        let tuis = agentTUIs(in: table, besides: claude, inspect: inspect)
+        let files = AgentDiscovery.sessionFiles(for: tuis, in: table, inspect: inspect,
+                                                cache: cache)
+        return tuis.compactMap { tui in
+            guard let file = files[tui.process.pid] else { return nil }
+            var session = agentSession(of: tui, file: file, fallbackID: "", cache: cache)
+            guard !session.sessionID.isEmpty else { return nil }
+            let head = AgentDiscovery.head(of: file.url, agent: tui.agent, cache: cache)
+            let reading: TranscriptTail.Reading
+            var title: String?
+            switch tui.agent {
+            case .codex:
+                reading = CodexRollout.read(file.url)
+                let home = AgentDiscovery.codexHome(tui.environment)
+                title = AgentDiscovery.threadNames(in: home, cache: cache)[session.sessionID]
+            case .omp, .pi:
+                reading = PiSession.read(file.url)
+                title = head?.title
+            case .claude, .gemini, .qwen:
+                return nil
+            }
+            let text = [title, head?.firstPrompt].compactMap { $0 }.first { !$0.isEmpty }
+            session.label = trimmed(text ?? (session.cwd as NSString).lastPathComponent)
+            session.status = reading.status ?? .unknown
+            return session
+        }
+    }
+
+    private static func agentTUIs(in table: ProcessTable, besides claude: [AgentSessionInfo],
+                                  inspect: (pid_t) -> ProcessArguments?) -> [AgentDiscovery.TUI] {
+        let groups = Set(claude.compactMap { table.entry(pid: $0.pid)?.pgid })
+        return AgentDiscovery.tuis(in: table, inspect: inspect)
+            .filter { !groups.contains($0.process.pgid) }
+    }
+
+    private static func agentSession(of tui: AgentDiscovery.TUI, file: AgentDiscovery.SessionFile?,
+                                     fallbackID: String,
+                                     cache: AgentDiscovery.Cache) -> AgentSessionInfo {
+        let started = startTime(of: tui.process.pid)
+        let head = file.flatMap { AgentDiscovery.head(of: $0.url, agent: tui.agent, cache: cache) }
+        let id = head?.id ?? file.flatMap { AgentDiscovery.fileID(of: $0.url, agent: tui.agent) }
+            ?? fallbackID
+        let cwd = head.map(\.cwd).flatMap { $0.isEmpty ? nil : $0 }
+            ?? workingDirectory(of: tui.process.pid) ?? ""
+        return AgentSessionInfo(pid: tui.process.pid,
+                                sessionID: id,
+                                cwd: cwd,
+                                name: head?.title ?? "",
+                                label: "",
+                                isBackground: false,
+                                attachID: nil,
+                                status: .unknown,
+                                startedAt: started ?? Date(),
+                                procStart: started,
+                                host: host(environment: tui.environment),
+                                tty: tui.tty,
+                                version: nil,
+                                statusUpdatedAt: nil,
+                                agent: tui.agent,
+                                transcript: file?.url,
+                                turnsRunElsewhere: file?.runsElsewhere ?? false)
     }
 
     // Claude Code execs a versioned binary: its kernel name is `claude` or a version (`2.1.278`).
@@ -458,20 +597,31 @@ enum SessionDiscovery {
             length += length / 8
             var buffer = [kinfo_proc](repeating: kinfo_proc(), count: length / MemoryLayout<kinfo_proc>.stride + 1)
             guard sysctl(&mib, 4, &buffer, &length, nil, 0) == 0 else { return [] }
-            return buffer.prefix(length / MemoryLayout<kinfo_proc>.stride).map { process in
-                var name = process.kp_proc.p_comm
-                let capacity = MemoryLayout.size(ofValue: name)
-                let command = withUnsafePointer(to: &name) {
-                    $0.withMemoryRebound(to: CChar.self, capacity: capacity) { String(cString: $0) }
-                }
-                return Entry(pid: process.kp_proc.p_pid,
-                             ppid: process.kp_eproc.e_ppid,
-                             pgid: process.kp_eproc.e_pgid,
-                             tdev: process.kp_eproc.e_tdev,
-                             tpgid: process.kp_eproc.e_tpgid,
-                             command: command,
-                             uid: process.kp_eproc.e_ucred.cr_uid)
+            return buffer.prefix(length / MemoryLayout<kinfo_proc>.stride).map(entry)
+        }
+
+        // One process, cheap enough for the main thread.
+        static func lookup(pid: pid_t) -> Entry? {
+            var mib: [CInt] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+            var process = kinfo_proc()
+            var length = MemoryLayout<kinfo_proc>.stride
+            guard sysctl(&mib, 4, &process, &length, nil, 0) == 0, length > 0 else { return nil }
+            return entry(process)
+        }
+
+        private static func entry(_ process: kinfo_proc) -> Entry {
+            var name = process.kp_proc.p_comm
+            let capacity = MemoryLayout.size(ofValue: name)
+            let command = withUnsafePointer(to: &name) {
+                $0.withMemoryRebound(to: CChar.self, capacity: capacity) { String(cString: $0) }
             }
+            return Entry(pid: process.kp_proc.p_pid,
+                         ppid: process.kp_eproc.e_ppid,
+                         pgid: process.kp_eproc.e_pgid,
+                         tdev: process.kp_eproc.e_tdev,
+                         tpgid: process.kp_eproc.e_tpgid,
+                         command: command,
+                         uid: process.kp_eproc.e_ucred.cr_uid)
         }
     }
 
@@ -547,13 +697,20 @@ enum SessionDiscovery {
         return String(cString: buffer)
     }
 
+    // devname_r walks /dev, most of a millisecond a call, and a device number keeps its name.
+    private static let ttyNames = NSCache<NSNumber, NSString>()
+
     static func ttyName(_ device: dev_t) -> String? {
         guard device != ProcessTable.noDevice else { return nil }
+        let key = NSNumber(value: device)
+        if let known = ttyNames.object(forKey: key) { return known as String }
         var buffer = [CChar](repeating: 0, count: 64)
         guard let named = devname_r(device, mode_t(S_IFCHR), &buffer, Int32(buffer.count)) else { return nil }
         let name = String(cString: named)
         // devname_r names an unknown device like `#C:16:1`.
-        return name.isEmpty || name.hasPrefix("#") ? nil : name
+        guard !name.isEmpty, !name.hasPrefix("#") else { return nil }
+        ttyNames.setObject(name as NSString, forKey: key)
+        return name
     }
 
     static func ttyName(fromArgument argument: String) -> String {

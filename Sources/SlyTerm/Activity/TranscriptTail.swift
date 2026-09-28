@@ -2,13 +2,18 @@ import Foundation
 
 enum TranscriptTail {
     struct Reading: Equatable {
-        var doing: ClaudeDoing?
-        var request: ClaudeRequest?
+        var doing: AgentDoing?
+        var request: AgentRequest?
         var lastMessage: String?
         var lastTurnDuration: TimeInterval?
+        // From the transcript itself, for agents with no registry: Claude's is never set.
+        var status: TeleportStatus?
+        var statusSince: Date?
+        var ended = false
 
         var isEmpty: Bool {
             doing == nil && request == nil && lastMessage == nil && lastTurnDuration == nil
+                && status == nil
         }
     }
 
@@ -84,7 +89,7 @@ enum TranscriptTail {
 
         var reading = Reading()
         if let newest = pending.first {
-            reading.doing = ClaudeDoing(tool: newest.tool,
+            reading.doing = AgentDoing(tool: newest.tool,
                                         label: label(tool: newest.tool, input: newest.input),
                                         startedAt: newest.at)
             // Batched calls ask one at a time and results are written late, so with several pending
@@ -196,7 +201,7 @@ enum TranscriptTail {
 
     // Allow-list: Return answers `.permission` with "Yes", so only tools known to show Claude
     // Code's plain yes/no prompt get one. Anything unrecognised must stay `.unknown`.
-    static func request(tool: String, input: [String: Any]) -> ClaudeRequest {
+    static func request(tool: String, input: [String: Any]) -> AgentRequest {
         let summary: String
         var detail: String?
         switch tool {
@@ -237,7 +242,7 @@ enum TranscriptTail {
         return .permission(tool: tool, summary: summary, detail: detail)
     }
 
-    private static func questions(_ input: [String: Any]) -> [(text: String, options: [String])] {
+    static func questions(_ input: [String: Any]) -> [(text: String, options: [String])] {
         guard let asked = input["questions"] as? [[String: Any]] else { return [] }
         return asked.compactMap { question in
             let text = string(question["question"])
@@ -294,7 +299,7 @@ enum TranscriptTail {
         URL(string: url)?.host ?? url
     }
 
-    private static func firstLine(_ text: String) -> String {
+    static func firstLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
             .trimmingCharacters(in: .whitespaces) ?? ""
     }
@@ -303,7 +308,7 @@ enum TranscriptTail {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    private static func clipped(_ text: String, lines limit: Int, characters: Int) -> String {
+    static func clipped(_ text: String, lines limit: Int, characters: Int) -> String {
         var kept = text.components(separatedBy: .newlines)
         var cut = false
         if kept.count > limit { kept = Array(kept.prefix(limit)); cut = true }

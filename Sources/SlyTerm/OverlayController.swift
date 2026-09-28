@@ -49,6 +49,8 @@ final class OverlayController: NSObject, TabStripDelegate {
     // here is SlyTerm, so no `cd` is ever reported.
     private var directoryPoll: Timer?
     private let activityMonitor = ActivityMonitor()
+    private var firstResponderObservation: NSKeyValueObservation?
+    private var focusSyncQueued = false
 
     static let stripHeight = TabStripView.height
     static let minSize = NSSize(width: 360, height: 200)
@@ -150,6 +152,9 @@ final class OverlayController: NSObject, TabStripDelegate {
         nc.addObserver(self, selector: #selector(mainDidResignKey), name: NSWindow.didResignKeyNotification, object: main)
         nc.addObserver(self, selector: #selector(mainDidBecomeKey), name: NSWindow.didBecomeKeyNotification, object: main)
         nc.addObserver(self, selector: #selector(settingsChanged(_:)), name: Settings.didChange, object: nil)
+        firstResponderObservation = main.observe(\.firstResponder) { [weak self] _, _ in
+            self?.firstResponderChanged()
+        }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(appActivated(_:)),
                                                           name: NSWorkspace.didActivateApplicationNotification, object: nil)
         if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != ProcessInfo.processInfo.processIdentifier {
@@ -391,6 +396,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         main.ignoresMouseEvents = ghost
         applyAlpha()
         stripView.needsDisplay = true
+        syncFocusReports()
         if ghost, hasKeyboard { releaseKeyboard() }
         // Last: `releaseKeyboard()` re-orders the window above the card; `layout()` fixes that.
         Activity.card?.layout()
@@ -467,6 +473,10 @@ final class OverlayController: NSObject, TabStripDelegate {
         switch event {
         case .finished(let id, _), .asks(let id, _):
             guard let tab = terminals.first(where: { $0.id == id }) else { return }
+            if case .finished = event, ActivityAnswer.justRefused(id) {
+                Settings.log("activity: \(tab.title) stopped after a refusal, no card")
+                return
+            }
             requestAttention(tab, quietly: !settings.activityCards)
             Activity.card?.present(event, tab: tab)
         case .answered(let id), .gone(let id):
@@ -475,6 +485,39 @@ final class OverlayController: NSObject, TabStripDelegate {
         case .changed(let id):
             guard let tab = terminals.first(where: { $0.id == id }) else { return }
             Activity.card?.refresh(tab)
+        case .notified:
+            break
+        }
+    }
+
+    // With cards off, an agent SlyTerm reads only marks its tab, whatever it rings or sends. Codex
+    // rings when told the terminal lost focus, which the game taking the keyboard now does.
+    private func ringsQuietly(_ tab: TerminalTab) -> Bool {
+        !settings.activityCards && tab.activity != nil
+    }
+
+    // An agent SlyTerm reads already gets its card from the monitor, with more in it.
+    private func notificationArrived(in tab: TerminalTab, title: String?, body: String) {
+        Settings.log("notification: \(tab.title)" + (title.map { " · \($0)" } ?? ""))
+        requestAttention(tab, quietly: ringsQuietly(tab))
+        guard settings.activityCards, tab.activity == nil else { return }
+        Activity.card?.present(.notified(tab: tab.id, title: title, body: body), tab: tab)
+    }
+
+    private func firstResponderChanged() {
+        for tab in terminals { tab.firstResponderChanged(main.firstResponder === tab.view) }
+        syncFocusReports()
+    }
+
+    // SwiftTerm tells the program it has focus whenever its view is first responder, the game's
+    // turn at the keyboard included. Async: key status and first responder move in several steps.
+    private func syncFocusReports() {
+        guard !focusSyncQueued else { return }
+        focusSyncQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.focusSyncQueued = false
+            for tab in self.terminals { tab.reportFocus(self.isBeingViewed(tab)) }
         }
     }
 
@@ -512,6 +555,7 @@ final class OverlayController: NSObject, TabStripDelegate {
     @objc private func mainDidBecomeKey() {
         let handed = handedKeyNote
         Settings.log("didBecomeKey ghost=\(isGhost)" + (handed.map { ", \($0): ignored" } ?? ""))
+        syncFocusReports()
         guard handed == nil else { return }
         // AppKit hands key status back when a dialog closes; in click-through, take it as typing.
         if isGhost, !isPanic { setGhost(false) }
@@ -520,6 +564,7 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     @objc private func mainDidResignKey() {
         Settings.log("didResignKey autoGhost=\(settings.autoGhost) releasing=\(isReleasingKeyboard) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?")")
+        syncFocusReports()
         ghostIfKeyboardLeft()
     }
 
@@ -568,7 +613,11 @@ final class OverlayController: NSObject, TabStripDelegate {
         tab.onActivityChange = { [weak self] in self?.stripView.needsDisplay = true }
         tab.onBell = { [weak self, weak tab] in
             guard let self, let tab else { return }
-            self.requestAttention(tab)
+            self.requestAttention(tab, quietly: self.ringsQuietly(tab))
+        }
+        tab.onNotification = { [weak self, weak tab] title, body in
+            guard let self, let tab else { return }
+            self.notificationArrived(in: tab, title: title, body: body)
         }
         tab.onExit = { [weak self, weak tab] in
             guard let self, let tab else { return }
@@ -640,6 +689,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         applyAlpha()
         saveSession()
         clearAttentionIfViewed()
+        syncFocusReports()
     }
 
     func close(_ tab: Tab) {
@@ -899,8 +949,8 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     private func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        // Shift/Option+Return: Claude Code reads ESC CR as Meta+Enter (a newline). Not under the
-        // kitty keyboard protocol, where SwiftTerm encodes the modifiers itself.
+        // Shift/Option+Return: Claude Code, Codex, pi and omp read ESC CR as a newline. Not under
+        // the kitty keyboard protocol, where SwiftTerm encodes the modifiers itself.
         if event.keyCode == 36, !flags.contains(.command), !flags.intersection([.shift, .option]).isEmpty,
            let view = (current as? TerminalTab)?.view, view.getTerminal().keyboardEnhancementFlags.isEmpty {
             view.send(txt: "\u{1b}\r")
@@ -1084,11 +1134,12 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     func stripTabToolTip(_ index: Int) -> String? {
         guard terminals.indices.contains(index), let activity = terminals[index].activity else { return nil }
+        let name = activity.agent.name
         switch activity.status {
         case .working:
             let since = activity.since.map { " for \(activityElapsed(since: $0))" } ?? ""
             let doing = activity.doing.map { " · \($0.label)" } ?? ""
-            return "Claude is working\(since)\(doing)"
+            return "\(name) is working\(since)\(doing)"
         case .waiting:
             let what: String?
             switch activity.request {
@@ -1096,12 +1147,12 @@ final class OverlayController: NSObject, TabStripDelegate {
             case .question(let text, _): what = text
             case .unknown, nil: what = nil
             }
-            return "Claude is waiting for you" + (what.map { " · \($0)" } ?? "")
+            return "\(name) is waiting for you" + (what.map { " · \($0)" } ?? "")
         case .idle:
             guard let since = activity.since, let line = firstLine(of: activity.lastMessage) else {
-                return "Claude is idle"
+                return "\(name) is idle"
             }
-            return "Claude finished \(activityElapsed(since: since)) ago · \(line)"
+            return "\(name) finished \(activityElapsed(since: since)) ago · \(line)"
         case .unknown:
             return nil
         }

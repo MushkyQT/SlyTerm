@@ -41,7 +41,8 @@ final class TeleportEngine {
 
         var action = action
         if candidate.isAlreadyHere { action = .switchTo }
-        if action == .move, case .claude(let session) = candidate, session.isBackground { action = .attach }
+        if action == .move, case .agent(let session) = candidate, session.agent == .claude,
+           session.isBackground { action = .attach }
 
         switch action {
         case .switchTo:
@@ -49,19 +50,19 @@ final class TeleportEngine {
         case .openFolder:
             openFolder(candidate, closeSource: closeSource, controller: controller, completion: completion)
         case .move:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: closeSource, controller: controller, completion: completion)
                 return
             }
             move(session, closeSource: closeSource, controller: controller, completion: completion)
         case .copy:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: false, controller: controller, completion: completion)
                 return
             }
             copy(session, controller: controller, completion: completion)
         case .attach:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: false, controller: controller, completion: completion)
                 return
             }
@@ -70,10 +71,16 @@ final class TeleportEngine {
     }
 
     // Stop first: two clients on one session interleave writes into one unlocked transcript.
-    private func move(_ session: ClaudeSessionInfo, closeSource: Bool, controller: OverlayController,
+    private func move(_ session: AgentSessionInfo, closeSource: Bool, controller: OverlayController,
                       completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard let id = Safe.sessionID(session.sessionID) else {
             Settings.log("teleport move: \"\(session.sessionID)\" is not a session id, nothing done")
+            finish(completion, .failure(.notFound(Self.name(of: session))))
+            return
+        }
+        guard let command = session.agent.resumeCommand(id: id) else {
+            Settings.log("teleport move: \(session.agent.name) sessions cannot be resumed, "
+                         + "nothing done")
             finish(completion, .failure(.notFound(Self.name(of: session))))
             return
         }
@@ -82,8 +89,9 @@ final class TeleportEngine {
             finish(completion, .failure(.notFound(Self.name(of: session))))
             return
         }
+        // A Codex whose turns run in its background server keeps working when its window goes.
         guard !session.status.interrupts || !Settings.shared.teleportConfirmBusy
-                || confirmInterrupt(session.status) else {
+                || session.turnsRunElsewhere || confirmInterrupt(session) else {
             Settings.log("teleport move: \(Self.name(of: session)) is mid-turn and the user chose not to interrupt")
             finish(completion, .failure(.declined))
             return
@@ -95,10 +103,11 @@ final class TeleportEngine {
             guard let self else { return }
             guard stopped else {
                 Settings.log("teleport move: \(Self.name(of: session)) (pid \(session.pid)) would not stop, nothing was resumed")
-                self.finish(completion, .failure(.couldNotStop(pid: session.pid)))
+                let failure = TeleportError.couldNotStop(pid: session.pid, agent: session.agent)
+                self.finish(completion, .failure(failure))
                 return
             }
-            controller.newTab(directory: self.directory(session.cwd), typing: "claude --resume \(id)", run: true)
+            controller.newTab(directory: self.directory(session.cwd), typing: command, run: true)
             self.reveal(controller)
             Settings.log("teleport move: resumed \(Self.name(of: session)) (\(id)) here, from \(session.host.displayName)")
             if closeSource { self.closeSourceTab(host: session.host, tty: session.tty) }
@@ -106,22 +115,29 @@ final class TeleportEngine {
         }
     }
 
-    private func copy(_ session: ClaudeSessionInfo, controller: OverlayController,
+    private func copy(_ session: AgentSessionInfo, controller: OverlayController,
                       completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard let id = Safe.sessionID(session.sessionID) else {
             Settings.log("teleport copy: \"\(session.sessionID)\" is not a session id, nothing done")
             finish(completion, .failure(.notFound(Self.name(of: session))))
             return
         }
-        controller.newTab(directory: directory(session.cwd), typing: "claude --resume \(id) --fork-session", run: true)
+        guard let command = session.agent.copyCommand(id: id) else {
+            Settings.log("teleport copy: \(session.agent.name) sessions cannot be copied, "
+                         + "nothing done")
+            finish(completion, .failure(.cannotCopy(session.agent)))
+            return
+        }
+        controller.newTab(directory: directory(session.cwd), typing: command, run: true)
         reveal(controller)
         Settings.log("teleport copy: forked \(Self.name(of: session)) (\(id)) into a new tab, source untouched")
         finish(completion, .success(()))
     }
 
-    private func attach(_ session: ClaudeSessionInfo, controller: OverlayController,
+    private func attach(_ session: AgentSessionInfo, controller: OverlayController,
                         completion: @escaping (Result<Void, TeleportError>) -> Void) {
-        guard let attachID = session.attachID.flatMap(Safe.attachID) else {
+        guard session.agent == .claude,
+              let attachID = session.attachID.flatMap(Safe.attachID) else {
             Settings.log("teleport attach: \(Self.name(of: session)) has no usable attach id")
             finish(completion, .failure(.noAttachID))
             return
@@ -165,12 +181,14 @@ final class TeleportEngine {
         finish(completion, .success(()))
     }
 
-    private func stop(_ session: ClaudeSessionInfo, then done: @escaping (Bool) -> Void) {
+    private func stop(_ session: AgentSessionInfo, then done: @escaping (Bool) -> Void) {
         kill(session.pid, SIGTERM)
         waitForExit(of: session.pid, upTo: Self.sigtermGrace) { [weak self] gone in
             guard let self else { done(false); return }
             if gone { done(true); return }
-            guard case .iTerm2(let raw) = session.host, let itermID = raw.flatMap(Safe.appleScriptID) else {
+            // Only Claude Code is known to quit on a double Ctrl-C; SIGTERM always ends Codex.
+            guard session.agent == .claude, case .iTerm2(let raw) = session.host,
+                  let itermID = raw.flatMap(Safe.appleScriptID) else {
                 Settings.log("teleport: pid \(session.pid) survived SIGTERM and its tab cannot be typed into")
                 done(false)
                 return
@@ -231,12 +249,16 @@ final class TeleportEngine {
         return info.kp_proc.p_stat == SZOMB
     }
 
-    private func confirmInterrupt(_ status: TeleportStatus) -> Bool {
+    private func confirmInterrupt(_ session: AgentSessionInfo) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
+        let name = session.agent.name
         let alert = NSAlert()
-        alert.messageText = status.interruptHeadline
-        alert.informativeText = "Moving it now interrupts the current turn; what Claude has said so far is kept. " +
-            "To move it without interrupting, type /bg in that tab first and attach it here instead."
+        alert.messageText = session.status == .working ? "\(name) is working in that tab"
+            : "\(name) is waiting for your answer in that tab"
+        alert.informativeText = "Moving it now interrupts the current turn; what \(name) has said "
+            + "so far is kept."
+            + (session.agent == .claude ? " To move it without interrupting, type /bg in that tab "
+                + "first and attach it here instead." : "")
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Cancel")
         alert.window.level = Settings.shared.dialogLevel
@@ -319,8 +341,8 @@ final class TeleportEngine {
         }
     }
 
-    // A web page can open this URL: nothing may reach a shell but `claude --resume|attach` with
-    // an id validated character by character.
+    // A web page can open this URL: nothing may reach a shell but an agent's resume, fork or attach
+    // command, with an id validated character by character.
     func handleRemote(_ url: URL) {
         switch Self.request(from: url) {
         case .picker:
@@ -380,8 +402,10 @@ final class TeleportEngine {
 
     private static func resolve(_ subject: RemoteRequest.Subject) -> TeleportCandidate? {
         switch subject {
-        case .session(let id): return SessionDiscovery.claudeSession(id: id).map(TeleportCandidate.claude)
-        case .pid(let pid): return SessionDiscovery.claudeSession(pid: pid).map(TeleportCandidate.claude)
+        case .session(let id):
+            return SessionDiscovery.agentSession(id: id).map(TeleportCandidate.agent)
+        case .pid(let pid):
+            return SessionDiscovery.agentSession(pid: pid).map(TeleportCandidate.agent)
         case .tty(let tty): return SessionDiscovery.shellTab(tty: tty).map(TeleportCandidate.shell)
         case .folder: return nil
         }
@@ -429,7 +453,7 @@ final class TeleportEngine {
         }
     }
 
-    private static func name(of session: ClaudeSessionInfo) -> String {
+    private static func name(of session: AgentSessionInfo) -> String {
         let label = session.label.trimmingCharacters(in: .whitespacesAndNewlines)
         return label.isEmpty ? "That conversation" : "“\(short(label))”"
     }
@@ -445,7 +469,8 @@ final class TeleportEngine {
         }
     }
 
-    // `--resume` finds the id in any folder, so falling back to the default folder is safe.
+    // Every agent finds the id from any folder, so the default folder is a safe fallback; Codex
+    // then asks which folder to use, and pi whether to fork.
     private func directory(_ path: String) -> String {
         TerminalTab.isUsableDirectory(path) ? path : Settings.shared.workingDirectory
     }
@@ -494,8 +519,4 @@ private enum Safe {
 
 private extension TeleportStatus {
     var interrupts: Bool { self == .working || self == .waiting }
-
-    var interruptHeadline: String {
-        self == .working ? "Claude is working in that tab" : "Claude is waiting for your answer in that tab"
-    }
 }
