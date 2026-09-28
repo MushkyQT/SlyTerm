@@ -280,7 +280,7 @@ final class OverlayController: NSObject, TabStripDelegate {
     }
 
     private var mainScreen: NSScreen {
-        NSScreen.screens.first { $0.frame.intersects(main.frame) } ?? NSScreen.main ?? NSScreen.screens[0]
+        FloatingWeb.screen(for: main.frame) ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
     func enterPanic() {
@@ -296,6 +296,8 @@ final class OverlayController: NSObject, TabStripDelegate {
                      + " fullscreen=\(fullscreen.map { "\($0)" } ?? "none")")
         // Suspension pauses the players, so which tabs were a show is noted first.
         panicPaused = webTabs.filter { $0.media.isPlaying }.map(\.id)
+        // Playing again since: no longer paused, and not to end paused as a guide's pause would.
+        playPaused.removeAll { panicPaused.contains($0) }
         webTabs.forEach { $0.setMediaSuspended(true) }
         floating.values.forEach { $0.hide() }
         if fullscreen == .main { fullscreen = nil } else { exitFullscreen() }
@@ -316,7 +318,8 @@ final class OverlayController: NSObject, TabStripDelegate {
         guard let restore = panicRestore else { return }
         panicRestore = nil
         var refill = hidden ? nil : restore.fullscreen
-        if case .floating(let id)? = refill, floating[id] == nil { refill = nil }
+        // A floating window filling the screen again would cover the guide that came meanwhile.
+        if case .floating(let id)? = refill, floating[id] == nil || restore.arrived != nil { refill = nil }
         Settings.log("exitPanic restore=\(restore.frame) ghost=\(restore.ghost) visible=\(restore.visible)"
                      + " hidden=\(hidden) fullscreen=\(refill.map { "\($0)" } ?? "none")")
         if refill == .main {
@@ -1016,6 +1019,11 @@ final class OverlayController: NSObject, TabStripDelegate {
         func names(_ tabs: [GuideTab]) -> String {
             let first = tabs.first?.title ?? ""
             return tabs.count > 1 ? "\(first) and \(tabs.count - 1) more" : first
+        }
+        // Panic holds every web tab; leaving it is what lets them play.
+        guard !isPanic else {
+            Toast.shared.show("Panic mode is on", near: point, tint: .systemOrange)
+            return
         }
         let playing = webTabs.filter { $0.media.isPlaying }
         if !playing.isEmpty {

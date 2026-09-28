@@ -334,7 +334,7 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
         return frame
     }
 
-    private static func screen(for frame: NSRect) -> NSScreen? {
+    static func screen(for frame: NSRect) -> NSScreen? {
         func overlap(_ screen: NSScreen) -> CGFloat {
             let shared = screen.frame.intersection(frame)
             return shared.isNull ? 0 : shared.width * shared.height

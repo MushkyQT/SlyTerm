@@ -69,10 +69,10 @@ Window › Level to "Pop-up menu, highest".
   window, shown if it was hidden, with the tab in front, terminal or web. Unlike panic it changes
   nothing else: no tab switches, nothing pauses, floating windows stay where they are and above it,
   and tabs and web tabs switch as usual. `⌃⌥M` (configurable), `⌘Return` in the SlyTerm window or a
-  floating web tab, the strip's expand button, "Fullscreen" in the menu bar item and
-  `slyterm://fullscreen` toggle it; while it is on, the expand button shows the collapse icon. One
-  window is in Fullscreen at a time, and leaving puts it back at its exact frame and strip edge,
-  with its previous opacity. Click-through, from the hotkey, the eye button, the tap or the
+  floating web tab, the strip's expand button (always the SlyTerm window), "Fullscreen" in the
+  menu bar item and `slyterm://fullscreen` toggle it; while it is on, the expand button shows the
+  collapse icon. One window is in Fullscreen at a time, and leaving puts it back at its exact
+  frame and strip edge, with its previous opacity. Click-through, from the hotkey, the eye button, the tap or the
   keyboard going to another app, first leaves Fullscreen, so the window that ghosts is the one put
   back; `⌃⌥H` leaves it and hides. This is SlyTerm's own mode, not macOS fullscreen: it opens no
   Space and the game stays where it is. A page's own fullscreen button is something else again: it
@@ -961,7 +961,8 @@ hides the floating windows; leaving panic shows them again and lets each tab go 
 tab in front in the SlyTerm window switches to the terminal, as described in
 [Window and modes](#window-and-modes). Until panic ends the web tabs are gone from the strip and no
 key brings one in front; a guide that arrives meanwhile stays out of sight (see
-[The lookup's tab](#the-lookups-tab)). Fullscreen pauses and suspends nothing.
+[The lookup's tab](#the-lookups-tab)), and `⌃⌥V` only says "Panic mode is on". Fullscreen pauses
+and suspends nothing.
 
 ### Pausing on its own
 

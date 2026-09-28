@@ -150,9 +150,9 @@ exactly where it was, with the floating tabs and what was playing.
 
 ### Fullscreen
 
-`⌃⌥M`, `⌘Return` inside SlyTerm or the expand button on the tab strip fills the screen with the
-window you are in: the SlyTerm window with the tab in front, or a floating web tab. It is opaque
-and keeps the keyboard. Nothing pauses or hides, and tabs switch as usual. Press it again, or
+`⌃⌥M` or `⌘Return` inside SlyTerm fills the screen with the window you are in: the SlyTerm
+window with the tab in front, or a floating web tab. The expand button on the tab strip fills it
+with the SlyTerm window. It is opaque and keeps the keyboard. Nothing pauses or hides, and tabs switch as usual. Press it again, or
 switch to click-through, and the window goes back where it was.
 
 ### A real terminal
