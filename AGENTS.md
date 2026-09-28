@@ -97,7 +97,7 @@ A change that breaks one of these is wrong, whatever it fixes.
 - **Match the surrounding code.** Four-space indentation, lines usually within 100 columns.
   Stateless groups are an `enum`, app-wide objects a `final class` with `static let shared`, and a
   multi-part feature declares its shared types in one contract file
-  (`Activity/ClaudeActivity.swift`, `Teleport/TeleportModel.swift`).
+  (`Activity/AgentActivity.swift`, `Teleport/TeleportModel.swift`).
 - **Comments only where the code cannot speak for itself.** No doc comments, no `// MARK:`, no
   narration, nothing aimed at users. Write a comment only for what a reader could not work out from
   the code and might break: a macOS or WebKit quirk, a threading or ordering constraint, the reason

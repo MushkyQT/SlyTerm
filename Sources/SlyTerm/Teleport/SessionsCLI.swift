@@ -17,10 +17,10 @@ enum SessionsCLI {
 
     private static func lookup(in args: [String]) -> [TeleportCandidate]? {
         if let id = value(of: "--session", in: args) {
-            return SessionDiscovery.claudeSession(id: id).map { [.claude($0)] } ?? []
+            return SessionDiscovery.agentSession(id: id).map { [.agent($0)] } ?? []
         }
         if let pid = value(of: "--pid", in: args).flatMap(pid_t.init) {
-            return SessionDiscovery.claudeSession(pid: pid).map { [.claude($0)] } ?? []
+            return SessionDiscovery.agentSession(pid: pid).map { [.agent($0)] } ?? []
         }
         if let tty = value(of: "--tty", in: args) {
             return SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? []
@@ -53,7 +53,7 @@ enum SessionsCLI {
     private static func row(_ candidate: TeleportCandidate) -> [String] {
         let action = TeleportAction.primary(for: candidate).title
         switch candidate {
-        case .claude(let session):
+        case .agent(let session):
             return [session.isBackground ? "bg" : "claude",
                     session.host.displayName,
                     name(session.status),
@@ -101,7 +101,7 @@ enum SessionsCLI {
                 "secondaryAction": TeleportAction.secondary(for: candidate).map { $0.title } ?? NSNull(),
             ]
             switch candidate {
-            case .claude(let session):
+            case .agent(let session):
                 object["kind"] = session.isBackground ? "bg" : "claude"
                 object["pid"] = session.pid
                 object["sessionId"] = session.sessionID

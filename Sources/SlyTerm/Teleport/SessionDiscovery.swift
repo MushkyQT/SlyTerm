@@ -8,14 +8,14 @@ enum SessionDiscovery {
         let sessions = claudeSessions(in: table).sorted { $0.startedAt > $1.startedAt }
         let claimed = Set(sessions.compactMap(\.tty))
         let shells = shellTabs(in: table, ignoringTTYs: claimed).sorted { $0.startedAt > $1.startedAt }
-        return sessions.map(TeleportCandidate.claude) + shells.map(TeleportCandidate.shell)
+        return sessions.map(TeleportCandidate.agent) + shells.map(TeleportCandidate.shell)
     }
 
-    static func claudeSession(id: String) -> ClaudeSessionInfo? {
+    static func agentSession(id: String) -> AgentSessionInfo? {
         claudeSessions(in: ProcessTable()).first { $0.sessionID.caseInsensitiveCompare(id) == .orderedSame }
     }
 
-    static func claudeSession(pid: pid_t) -> ClaudeSessionInfo? {
+    static func agentSession(pid: pid_t) -> AgentSessionInfo? {
         claudeSessions(in: ProcessTable()).first { $0.pid == pid }
     }
 
@@ -24,7 +24,7 @@ enum SessionDiscovery {
         return shellTabs(in: ProcessTable(), ignoringTTYs: []).first { $0.tty == name }
     }
 
-    static func isRunning(_ session: ClaudeSessionInfo) -> Bool {
+    static func isRunning(_ session: AgentSessionInfo) -> Bool {
         guard kill(session.pid, 0) == 0 || errno == EPERM else { return false }
         guard let started = startTime(of: session.pid),
               startAgrees(started, procStart: session.procStart, startedAt: session.startedAt) else { return false }
@@ -123,7 +123,7 @@ enum SessionDiscovery {
         processStartFormat.date(from: raw.split(whereSeparator: \.isWhitespace).joined(separator: " "))
     }
 
-    private static func claudeSessions(in table: ProcessTable) -> [ClaudeSessionInfo] {
+    private static func claudeSessions(in table: ProcessTable) -> [AgentSessionInfo] {
         liveSessions(in: table).map { session in
             var named = session
             named.label = label(sessionID: session.sessionID,
@@ -135,8 +135,8 @@ enum SessionDiscovery {
     }
 
     static func liveSessions(in table: ProcessTable = ProcessTable(),
-                             inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) }) -> [ClaudeSessionInfo] {
-        var sessions: [ClaudeSessionInfo] = []
+                             inspect: (pid_t) -> ProcessArguments? = { arguments(of: $0) }) -> [AgentSessionInfo] {
+        var sessions: [AgentSessionInfo] = []
         for entry in registryEntries() {
             guard let process = table.entry(pid: entry.pid) else { continue }
             guard let started = startTime(of: entry.pid) else { continue }
@@ -155,7 +155,7 @@ enum SessionDiscovery {
             // `jobId` is something `claude attach` can open.
             let background = entry.kind != "interactive" && (entry.kind == "bg" || entry.jobID != nil)
             let environment = inspected?.environment ?? [:]
-            sessions.append(ClaudeSessionInfo(
+            sessions.append(AgentSessionInfo(
                 pid: entry.pid,
                 sessionID: entry.sessionID,
                 cwd: entry.cwd,
@@ -175,7 +175,7 @@ enum SessionDiscovery {
     }
 
     struct HostedSession {
-        var session: ClaudeSessionInfo
+        var session: AgentSessionInfo
         var processGroup: pid_t
     }
 
@@ -186,7 +186,7 @@ enum SessionDiscovery {
         let table = ProcessTable()
         let sessions = liveSessions(in: table, inspect: inspect)
         var hosted: [UUID: HostedSession] = [:]
-        var background: [String: ClaudeSessionInfo] = [:]
+        var background: [String: AgentSessionInfo] = [:]
         func inFront(_ process: ProcessTable.Entry, of tab: UUID) -> Bool {
             guard let tty = tabs[tab] else { return false }
             return ttyName(process.tdev) == tty && process.pgid > 0 && process.pgid == process.tpgid

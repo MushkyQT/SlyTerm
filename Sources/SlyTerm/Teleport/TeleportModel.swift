@@ -83,7 +83,7 @@ enum TeleportHost: Equatable {
 
 enum TeleportStatus: Equatable { case working, waiting, idle, unknown }
 
-struct ClaudeSessionInfo: Equatable {
+struct AgentSessionInfo: Equatable {
     var pid: pid_t
     var sessionID: String
     var cwd: String
@@ -98,6 +98,8 @@ struct ClaudeSessionInfo: Equatable {
     var tty: String?
     var version: String?
     var statusUpdatedAt: Date?
+    var agent: AgentKind = .claude
+    var transcript: URL? = nil
 }
 
 struct ShellTabInfo: Equatable {
@@ -111,36 +113,36 @@ struct ShellTabInfo: Equatable {
 }
 
 enum TeleportCandidate: Equatable {
-    case claude(ClaudeSessionInfo)
+    case agent(AgentSessionInfo)
     case shell(ShellTabInfo)
 
     var id: String {
         switch self {
-        case .claude(let s): return s.sessionID
+        case .agent(let s): return s.sessionID
         case .shell(let t): return "tty:" + t.tty
         }
     }
     var host: TeleportHost {
         switch self {
-        case .claude(let s): return s.host
+        case .agent(let s): return s.host
         case .shell(let t): return t.host
         }
     }
     var cwd: String {
         switch self {
-        case .claude(let s): return s.cwd
+        case .agent(let s): return s.cwd
         case .shell(let t): return t.cwd
         }
     }
     var title: String {
         switch self {
-        case .claude(let s): return s.label
+        case .agent(let s): return s.label
         case .shell(let t): return t.foregroundCommand ?? t.shellName
         }
     }
     var startedAt: Date {
         switch self {
-        case .claude(let s): return s.startedAt
+        case .agent(let s): return s.startedAt
         case .shell(let t): return t.startedAt
         }
     }
@@ -157,13 +159,13 @@ enum TeleportAction: Equatable {
     static func primary(for candidate: TeleportCandidate) -> TeleportAction {
         if candidate.isAlreadyHere { return .switchTo }
         switch candidate {
-        case .claude(let s): return s.isBackground ? .attach : .move
+        case .agent(let s): return s.isBackground ? .attach : .move
         case .shell: return .openFolder
         }
     }
 
     static func secondary(for candidate: TeleportCandidate) -> TeleportAction? {
-        guard case .claude(let s) = candidate, !s.isBackground else { return nil }
+        guard case .agent(let s) = candidate, !s.isBackground else { return nil }
         return .copy
     }
 

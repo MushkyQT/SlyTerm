@@ -28,7 +28,7 @@ enum ActivityCLI {
 
     private static let headings = ["PID", "HOST", "STATUS", "SINCE", "TURN", "DOING", "ASKS", "LAST MESSAGE"]
 
-    private static func table(_ rows: [(session: ClaudeSessionInfo, activity: ClaudeActivity)]) -> String {
+    private static func table(_ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let cells = [headings] + rows.map { row in
             [String(row.session.pid),
              host(row.session.host),
@@ -57,7 +57,7 @@ enum ActivityCLI {
         return host.displayName
     }
 
-    private static func json(_ rows: [(session: ClaudeSessionInfo, activity: ClaudeActivity)]) -> String {
+    private static func json(_ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let formatter = ISO8601DateFormatter()
         let objects: [[String: Any]] = rows.map { session, activity in
             var object: [String: Any] = [
@@ -130,7 +130,7 @@ enum ActivityCLI {
         FileHandle.standardError.write(Data("parsed in \(milliseconds) ms\n".utf8))
     }
 
-    private static func describe(_ request: ClaudeRequest?) -> String {
+    private static func describe(_ request: AgentRequest?) -> String {
         switch request {
         case .permission(let tool, let summary, let detail):
             return "permission(\(tool)) \(summary)" + (detail.map { "\n  detail: " + $0.replacingOccurrences(of: "\n", with: "\n          ") } ?? "")
@@ -161,7 +161,7 @@ enum ActivityCLI {
         }
     }
 
-    private static func summary(_ request: ClaudeRequest?) -> String? {
+    private static func summary(_ request: AgentRequest?) -> String? {
         switch request {
         case .permission(_, let summary, _): return summary
         case .question(let text, _): return "asks: " + text

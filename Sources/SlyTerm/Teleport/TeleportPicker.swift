@@ -463,7 +463,7 @@ private final class TeleportPickerView: NSView, NSTableViewDataSource, NSTableVi
         let visible = query.isEmpty ? all : all.filter { matches($0, query) }
         let before = rows.count
         rows = []
-        let claude = visible.filter { if case .claude = $0 { return true } else { return false } }
+        let claude = visible.filter { if case .agent = $0 { return true } else { return false } }
         let shells = visible.filter { if case .shell = $0 { return true } else { return false } }
         if !claude.isEmpty {
             rows.append(.group("Claude Code"))
@@ -762,7 +762,7 @@ private final class PickerCandidateCell: NSView {
     static func badge(for candidate: TeleportCandidate) -> (text: String, tint: NSColor) {
         if candidate.isAlreadyHere { return ("Already here", .systemGreen) }
         switch candidate {
-        case .claude(let session):
+        case .agent(let session):
             if session.isBackground { return ("Background", NSColor(calibratedRed: 0.36, green: 0.62, blue: 1, alpha: 1)) }
             return badge(for: session.status)
         case .shell(let tab):
@@ -799,7 +799,7 @@ private enum SnapshotSamples {
         let home = NSHomeDirectory()
         func claude(_ label: String, _ folder: String, _ minutes: Double, background: Bool = false,
                     status: TeleportStatus = .idle, host: TeleportHost, pid: pid_t) -> TeleportCandidate {
-            .claude(ClaudeSessionInfo(pid: pid, sessionID: "\(pid)-7f1661d9-1589-4587-9a06-0c273bd86d75",
+            .agent(AgentSessionInfo(pid: pid, sessionID: "\(pid)-7f1661d9-1589-4587-9a06-0c273bd86d75",
                                       cwd: home + folder, name: "slyterm-\(pid)", label: label,
                                       isBackground: background, attachID: background ? "adc5721b" : nil,
                                       status: status, startedAt: Date(timeIntervalSinceNow: -minutes * 60),

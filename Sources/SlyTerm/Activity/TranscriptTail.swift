@@ -2,13 +2,17 @@ import Foundation
 
 enum TranscriptTail {
     struct Reading: Equatable {
-        var doing: ClaudeDoing?
-        var request: ClaudeRequest?
+        var doing: AgentDoing?
+        var request: AgentRequest?
         var lastMessage: String?
         var lastTurnDuration: TimeInterval?
+        // From the transcript itself, for agents with no registry: Claude's is never set.
+        var status: TeleportStatus?
+        var statusSince: Date?
+        var ended = false
 
         var isEmpty: Bool {
-            doing == nil && request == nil && lastMessage == nil && lastTurnDuration == nil
+            doing == nil && request == nil && lastMessage == nil && lastTurnDuration == nil && status == nil
         }
     }
 
@@ -84,7 +88,7 @@ enum TranscriptTail {
 
         var reading = Reading()
         if let newest = pending.first {
-            reading.doing = ClaudeDoing(tool: newest.tool,
+            reading.doing = AgentDoing(tool: newest.tool,
                                         label: label(tool: newest.tool, input: newest.input),
                                         startedAt: newest.at)
             // Batched calls ask one at a time and results are written late, so with several pending
@@ -196,7 +200,7 @@ enum TranscriptTail {
 
     // Allow-list: Return answers `.permission` with "Yes", so only tools known to show Claude
     // Code's plain yes/no prompt get one. Anything unrecognised must stay `.unknown`.
-    static func request(tool: String, input: [String: Any]) -> ClaudeRequest {
+    static func request(tool: String, input: [String: Any]) -> AgentRequest {
         let summary: String
         var detail: String?
         switch tool {

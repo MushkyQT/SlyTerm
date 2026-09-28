@@ -29,7 +29,7 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
     var onAttentionChange: (() -> Void)?
     var onBell: (() -> Void)?
     var onExit: (() -> Void)?
-    var activity: ClaudeActivity? { didSet { if activity != oldValue { onActivityChange?() } } }
+    var activity: AgentActivity? { didSet { if activity != oldValue { onActivityChange?() } } }
     var onActivityChange: (() -> Void)?
 
     private var shellTitle: String?

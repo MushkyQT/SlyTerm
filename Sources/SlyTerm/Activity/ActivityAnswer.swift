@@ -11,7 +11,7 @@ enum ActivityAnswer {
 
     // Claude Code records nothing until it acts on an answer, so a second press would find the same
     // prompt and type into whatever comes up next. Unstamped prompts are cleared by `forget`.
-    private static var answered: [UUID: ClaudePrompt] = [:]
+    private static var answered: [UUID: AgentPrompt] = [:]
 
     static func forget(tab: UUID) {
         answered[tab] = nil
@@ -64,7 +64,7 @@ enum ActivityAnswer {
     }
 
     @MainActor
-    private static func apply(_ answer: Answer, in tab: TerminalTab, seen: ClaudePrompt?) {
+    private static func apply(_ answer: Answer, in tab: TerminalTab, seen: AgentPrompt?) {
         guard let activity = tab.activity, let prompt = activity.prompt else {
             Settings.log("answer: \(answer.verb) ignored, nothing is waiting in \(tab.title)")
             toast("Nothing is waiting", tint: .systemOrange)

@@ -1238,7 +1238,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `GuideFindBar.swift` | A web tab's find bar |
 | `WebMedia.swift` | The fullscreen shim and the media controller every page gets, as scripts; `WebMediaFrames`, the frames' reports merged into a tab's media state; `WebIcons`, the favicons; `--drm-check` |
 | `FloatingWebPanel.swift` | `FloatingWeb`, a web tab's floating window: the page panel, the toolbar panel over it, its frames, dragging and the kept aspect |
-| `Activity/ClaudeActivity.swift` | The types the monitor, strip, card and answer share |
+| `Activity/AgentActivity.swift` | The types the monitor, strip, card and answer share |
 | `Activity/ActivityMonitor.swift` | The poll of Claude Code's registry and transcripts |
 | `Activity/TranscriptTail.swift` | The transcript parser, pure over lines of bytes |
 | `Activity/ActivityCard.swift` | The card; `--card-snapshot` |

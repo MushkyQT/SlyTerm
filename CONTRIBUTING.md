@@ -123,7 +123,7 @@ Match the code around you. In particular:
 - **Layout.** Four-space indentation, lines usually within 100 columns.
 - **Shapes.** Stateless groups of functions are an `enum`; app-wide objects are a `final class`
   with `static let shared`. When a feature has several parts, the types they share live in one file
-  (`Activity/ClaudeActivity.swift`, `Teleport/TeleportModel.swift`).
+  (`Activity/AgentActivity.swift`, `Teleport/TeleportModel.swift`).
 - **Threads.** UI on the main thread only. Anything that reads the process table, files, the
   network or runs OCR goes off it, and only its result comes back. Never block the main thread on
   an Apple event: the first one can wait for a permission dialog.

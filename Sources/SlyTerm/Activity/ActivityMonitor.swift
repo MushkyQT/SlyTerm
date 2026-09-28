@@ -15,7 +15,7 @@ final class ActivityMonitor: ActivityMonitoring {
     private var scanning = false
     private var rescan = false
     private var completions: [() -> Void] = []
-    private var seen: [UUID: ClaudeActivity] = [:]
+    private var seen: [UUID: AgentActivity] = [:]
 
     // Keyed with start time because pids are reused; `KERN_PROCARGS2` costs a megabyte per call.
     private var inspected: [pid_t: (started: Date?, arguments: SessionDiscovery.ProcessArguments?)] = [:]
@@ -94,14 +94,14 @@ final class ActivityMonitor: ActivityMonitoring {
         for completion in waiting { completion() }
     }
 
-    private func scan(tabs: [UUID: String]) -> [UUID: ClaudeActivity] {
+    private func scan(tabs: [UUID: String]) -> [UUID: AgentActivity] {
         reads = 0
         var touched: Set<pid_t> = []
         let hosted = SessionDiscovery.hostedSessions(tabs: tabs) { pid in
             touched.insert(pid)
             return inspect(pid)
         }
-        var activities: [UUID: ClaudeActivity] = [:]
+        var activities: [UUID: AgentActivity] = [:]
         for (tab, found) in hosted {
             activities[tab] = ActivityMonitor.activity(for: found.session, reading: reading(for: found.session),
                                                        processGroup: found.processGroup)
@@ -113,7 +113,7 @@ final class ActivityMonitor: ActivityMonitoring {
     }
 
     // Touches the poll's caches off its queue: safe only with no poll running (the CLI).
-    func scanEverything() -> [(session: ClaudeSessionInfo, activity: ClaudeActivity)] {
+    func scanEverything() -> [(session: AgentSessionInfo, activity: AgentActivity)] {
         reads = 0
         var touched: Set<pid_t> = []
         let sessions = SessionDiscovery.liveSessions(inspect: { pid in
@@ -135,7 +135,7 @@ final class ActivityMonitor: ActivityMonitoring {
         return arguments
     }
 
-    private func reading(for session: ClaudeSessionInfo) -> TranscriptTail.Reading? {
+    private func reading(for session: AgentSessionInfo) -> TranscriptTail.Reading? {
         guard let url = SessionDiscovery.transcriptURL(cwd: session.cwd, sessionID: session.sessionID) else {
             return nil
         }
@@ -151,9 +151,10 @@ final class ActivityMonitor: ActivityMonitoring {
         return reading
     }
 
-    static func activity(for session: ClaudeSessionInfo, reading: TranscriptTail.Reading?,
-                         processGroup: pid_t? = nil) -> ClaudeActivity {
-        ClaudeActivity(status: session.status,
+    static func activity(for session: AgentSessionInfo, reading: TranscriptTail.Reading?,
+                         processGroup: pid_t? = nil) -> AgentActivity {
+        AgentActivity(agent: session.agent,
+                      status: session.status,
                        since: session.statusUpdatedAt,
                        sessionID: session.sessionID,
                        pid: session.pid,
@@ -165,7 +166,7 @@ final class ActivityMonitor: ActivityMonitoring {
                        lastTurnDuration: reading?.lastTurnDuration)
     }
 
-    private func apply(_ found: [UUID: ClaudeActivity]) {
+    private func apply(_ found: [UUID: AgentActivity]) {
         let terminals = tabs?() ?? []
         var events: [ActivityEvent] = []
         for tab in terminals {
@@ -188,8 +189,8 @@ final class ActivityMonitor: ActivityMonitoring {
     }
 
     private func transition(tab: TerminalTab,
-                            from before: ClaudeActivity?,
-                            to after: ClaudeActivity?) -> [ActivityEvent] {
+                            from before: AgentActivity?,
+                            to after: AgentActivity?) -> [ActivityEvent] {
         switch (before, after) {
         case (nil, nil):
             return []
@@ -224,13 +225,13 @@ final class ActivityMonitor: ActivityMonitoring {
         }
     }
 
-    private func isNewPrompt(from was: ClaudeActivity, to now: ClaudeActivity) -> Bool {
+    private func isNewPrompt(from was: AgentActivity, to now: AgentActivity) -> Bool {
         guard let before = was.prompt, let after = now.prompt else { return false }
         return !after.isSame(as: before)
     }
 
     // Needs the transcript to agree with the stamp: the registry is also rewritten without a turn.
-    private func isUnseenTurn(from was: ClaudeActivity, to now: ClaudeActivity) -> Bool {
+    private func isUnseenTurn(from was: AgentActivity, to now: AgentActivity) -> Bool {
         guard was.sessionID == now.sessionID, let from = was.since, let to = now.since, to > from else { return false }
         if was.lastMessage != now.lastMessage { return true }
         // Only Claude Code's own record: `was`'s duration may be computed from stamps and differ.

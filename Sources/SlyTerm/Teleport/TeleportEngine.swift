@@ -41,7 +41,7 @@ final class TeleportEngine {
 
         var action = action
         if candidate.isAlreadyHere { action = .switchTo }
-        if action == .move, case .claude(let session) = candidate, session.isBackground { action = .attach }
+        if action == .move, case .agent(let session) = candidate, session.isBackground { action = .attach }
 
         switch action {
         case .switchTo:
@@ -49,19 +49,19 @@ final class TeleportEngine {
         case .openFolder:
             openFolder(candidate, closeSource: closeSource, controller: controller, completion: completion)
         case .move:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: closeSource, controller: controller, completion: completion)
                 return
             }
             move(session, closeSource: closeSource, controller: controller, completion: completion)
         case .copy:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: false, controller: controller, completion: completion)
                 return
             }
             copy(session, controller: controller, completion: completion)
         case .attach:
-            guard case .claude(let session) = candidate else {
+            guard case .agent(let session) = candidate else {
                 openFolder(candidate, closeSource: false, controller: controller, completion: completion)
                 return
             }
@@ -70,7 +70,7 @@ final class TeleportEngine {
     }
 
     // Stop first: two clients on one session interleave writes into one unlocked transcript.
-    private func move(_ session: ClaudeSessionInfo, closeSource: Bool, controller: OverlayController,
+    private func move(_ session: AgentSessionInfo, closeSource: Bool, controller: OverlayController,
                       completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard let id = Safe.sessionID(session.sessionID) else {
             Settings.log("teleport move: \"\(session.sessionID)\" is not a session id, nothing done")
@@ -106,7 +106,7 @@ final class TeleportEngine {
         }
     }
 
-    private func copy(_ session: ClaudeSessionInfo, controller: OverlayController,
+    private func copy(_ session: AgentSessionInfo, controller: OverlayController,
                       completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard let id = Safe.sessionID(session.sessionID) else {
             Settings.log("teleport copy: \"\(session.sessionID)\" is not a session id, nothing done")
@@ -119,7 +119,7 @@ final class TeleportEngine {
         finish(completion, .success(()))
     }
 
-    private func attach(_ session: ClaudeSessionInfo, controller: OverlayController,
+    private func attach(_ session: AgentSessionInfo, controller: OverlayController,
                         completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard let attachID = session.attachID.flatMap(Safe.attachID) else {
             Settings.log("teleport attach: \(Self.name(of: session)) has no usable attach id")
@@ -165,7 +165,7 @@ final class TeleportEngine {
         finish(completion, .success(()))
     }
 
-    private func stop(_ session: ClaudeSessionInfo, then done: @escaping (Bool) -> Void) {
+    private func stop(_ session: AgentSessionInfo, then done: @escaping (Bool) -> Void) {
         kill(session.pid, SIGTERM)
         waitForExit(of: session.pid, upTo: Self.sigtermGrace) { [weak self] gone in
             guard let self else { done(false); return }
@@ -380,8 +380,8 @@ final class TeleportEngine {
 
     private static func resolve(_ subject: RemoteRequest.Subject) -> TeleportCandidate? {
         switch subject {
-        case .session(let id): return SessionDiscovery.claudeSession(id: id).map(TeleportCandidate.claude)
-        case .pid(let pid): return SessionDiscovery.claudeSession(pid: pid).map(TeleportCandidate.claude)
+        case .session(let id): return SessionDiscovery.agentSession(id: id).map(TeleportCandidate.agent)
+        case .pid(let pid): return SessionDiscovery.agentSession(pid: pid).map(TeleportCandidate.agent)
         case .tty(let tty): return SessionDiscovery.shellTab(tty: tty).map(TeleportCandidate.shell)
         case .folder: return nil
         }
@@ -429,7 +429,7 @@ final class TeleportEngine {
         }
     }
 
-    private static func name(of session: ClaudeSessionInfo) -> String {
+    private static func name(of session: AgentSessionInfo) -> String {
         let label = session.label.trimmingCharacters(in: .whitespacesAndNewlines)
         return label.isEmpty ? "That conversation" : "“\(short(label))”"
     }

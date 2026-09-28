@@ -475,6 +475,8 @@ final class OverlayController: NSObject, TabStripDelegate {
         case .changed(let id):
             guard let tab = terminals.first(where: { $0.id == id }) else { return }
             Activity.card?.refresh(tab)
+        case .notified:
+            break
         }
     }
 

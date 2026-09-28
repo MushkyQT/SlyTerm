@@ -1,6 +1,61 @@
 import AppKit
 
-struct ClaudeActivity: Equatable {
+enum AgentKind: String, CaseIterable, Equatable {
+    case claude, codex, omp, pi, gemini, qwen
+
+    var name: String {
+        switch self {
+        case .claude: return "Claude"
+        case .codex: return "Codex"
+        case .omp: return "omp"
+        case .pi: return "pi"
+        case .gemini: return "Gemini"
+        case .qwen: return "Qwen"
+        }
+    }
+
+    var productName: String {
+        switch self {
+        case .claude: return "Claude Code"
+        case .gemini: return "Gemini CLI"
+        case .qwen: return "Qwen Code"
+        default: return name
+        }
+    }
+
+    // Only ever given an id `Safe.sessionID` has validated: this text reaches a shell.
+    func resumeCommand(id: String) -> String? {
+        switch self {
+        case .claude: return "claude --resume \(id)"
+        case .codex: return "codex resume \(id)"
+        case .omp: return "omp --resume=\(id)"
+        case .pi: return "pi --session \(id)"
+        case .gemini, .qwen: return nil
+        }
+    }
+
+    func copyCommand(id: String) -> String? {
+        switch self {
+        case .claude: return "claude --resume \(id) --fork-session"
+        case .codex: return "codex fork \(id)"
+        case .pi: return "pi --fork \(id)"
+        case .omp, .gemini, .qwen: return nil
+        }
+    }
+
+    // Claude Code's prompt has "Yes" first and highlighted. Codex's own letters: if its prompt
+    // went away meanwhile, a letter lands in the input box where Return would submit a draft.
+    var answerKeys: (allow: String, refuse: String)? {
+        switch self {
+        case .claude: return ("\r", "\u{1b}")
+        case .codex: return ("y", "n")
+        default: return nil
+        }
+    }
+}
+
+struct AgentActivity: Equatable {
+    var agent: AgentKind
     var status: TeleportStatus
     var since: Date?
     var sessionID: String
@@ -10,41 +65,41 @@ struct ClaudeActivity: Equatable {
     // The pty's foreground group when matched (the attach client for a background session); the
     // answer checks it is still in front before typing.
     var processGroup: pid_t?
-    var doing: ClaudeDoing?
-    var request: ClaudeRequest?
+    var doing: AgentDoing?
+    var request: AgentRequest?
     var lastMessage: String?
     var lastTurnDuration: TimeInterval?
 
     var isWorking: Bool { status == .working }
     var isWaiting: Bool { status == .waiting }
 
-    var prompt: ClaudePrompt? {
-        isWaiting ? ClaudePrompt(sessionID: sessionID, since: since, request: request) : nil
+    var prompt: AgentPrompt? {
+        isWaiting ? AgentPrompt(sessionID: sessionID, since: since, request: request) : nil
     }
 }
 
 // Claude Code's status goes back to busy between two prompts, so each prompt gets a new `since`.
-struct ClaudePrompt: Equatable {
+struct AgentPrompt: Equatable {
     var sessionID: String
     var since: Date?
-    var request: ClaudeRequest?
+    var request: AgentRequest?
 
     // The stamp decides; the request only for a Claude too old to stamp its status.
     // `==` is stricter on purpose: it compares what the user saw.
-    func isSame(as other: ClaudePrompt) -> Bool {
+    func isSame(as other: AgentPrompt) -> Bool {
         guard sessionID == other.sessionID else { return false }
         if let since, let then = other.since { return since == then }
         return request == other.request
     }
 }
 
-struct ClaudeDoing: Equatable {
+struct AgentDoing: Equatable {
     var tool: String
     var label: String
     var startedAt: Date?
 }
 
-enum ClaudeRequest: Equatable {
+enum AgentRequest: Equatable {
     case permission(tool: String, summary: String, detail: String?)
     case question(text: String, options: [String])
     case unknown
@@ -56,17 +111,40 @@ enum ClaudeRequest: Equatable {
 }
 
 enum ActivityEvent: Equatable {
-    case finished(tab: UUID, activity: ClaudeActivity)
-    case asks(tab: UUID, activity: ClaudeActivity)
+    case finished(tab: UUID, activity: AgentActivity)
+    case asks(tab: UUID, activity: AgentActivity)
     case answered(tab: UUID)
     case gone(tab: UUID)
     case changed(tab: UUID)
+    // An OSC 9 or OSC 777 notification from whatever runs in the tab.
+    case notified(tab: UUID, title: String?, body: String)
 
     var tab: UUID {
         switch self {
-        case .finished(let tab, _), .asks(let tab, _), .answered(let tab), .gone(let tab), .changed(let tab): return tab
+        case .finished(let tab, _), .asks(let tab, _), .answered(let tab), .gone(let tab), .changed(let tab),
+             .notified(let tab, _, _): return tab
         }
     }
+}
+
+// A tab as the main thread sees it when a scan starts. The title and the screen live in
+// SwiftTerm and `ptsname` uses a shared buffer, so all of it is read there.
+struct TabProbe: Equatable {
+    var tty: String
+    var foregroundGroup: pid_t?
+    var titles: [AgentKind: TitleState]
+    // The visible lines, read only while some title says its agent is waiting.
+    var screen: [String]?
+}
+
+// What one agent's title protocol makes of the tab's title, stamped when the status changed.
+struct TitleState: Equatable {
+    var status: TeleportStatus
+    var since: Date
+    var name: String
+    // Last time the title carried one of the agent's own state marks. Codex's idle title has
+    // none, so its title is only trusted after a mark since the agent started.
+    var markedAt: Date?
 }
 
 protocol ActivityMonitoring: AnyObject {
@@ -83,7 +161,7 @@ protocol ActivityCardPresenting: AnyObject {
     func refresh(_ tab: TerminalTab)
     func dismiss(tab: UUID?)
     var presentedTab: UUID? { get }
-    var presentedPrompt: ClaudePrompt? { get }
+    var presentedPrompt: AgentPrompt? { get }
     var presentedAt: Date? { get }
     func layout()
 }
