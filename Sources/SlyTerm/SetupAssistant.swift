@@ -27,7 +27,6 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private static let width: CGFloat = 560
     private static let height: CGFloat = 500
     private static let margin: CGFloat = 40
-    private static let indent: CGFloat = 20
 
     private let window: NSWindow
     private var level: NSWindow.Level = .normal
@@ -59,11 +58,12 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private let gamesDocument = FlippedView()
     private var noGames = NSButton()
     private var yesGames = NSButton()
-    private var presetBoxes: [LookupPresets.Preset: NSButton] = [:]
+    private var presetSwitches: [LookupPresets.Preset: NSSwitch] = [:]
     private var presetDetails: [LookupPresets.Preset: NSTextField] = [:]
-    private var groupLabels: [NSTextField] = []
-    private var groupDetails: [NSTextField] = []
-    private let customList = NSStackView()
+    private var versionPickers: [(control: NSSegmentedControl, presets: [LookupPresets.Preset])] = []
+    private let gameList = NSStackView()
+    private let gameListBox = NSBox()
+    private var presetRowCount = 0
     private var addAnother = NSButton()
     private let form = NSBox()
     private let nameField = NSTextField(string: "")
@@ -199,7 +199,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     }
 
     private func welcomePage() -> NSView {
-        icon.image = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage
+        icon.image = NSImage(named: "AppIcon") ?? Self.sourceTreeIcon ?? NSApp.applicationIconImage
         icon.imageScaling = .scaleProportionallyUpOrDown
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.widthAnchor.constraint(equalToConstant: 96).isActive = true
@@ -220,6 +220,11 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         return centered(stack)
     }
 
+    // A build run from .build has no bundle to find AppIcon in; the file it was built from does.
+    private static let sourceTreeIcon: NSImage? = NSImage(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Resources/AppIcon.icns"))
+
     private func bullet(_ symbol: String, _ text: String) -> NSView {
         let image = NSImageView()
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
@@ -239,41 +244,30 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         yesGames = NSButton(radioButtonWithTitle: "Yes, these:", target: self,
                             action: #selector(setPlaysGames(_:)))
 
-        var presetRows: [NSView] = []
+        gameList.orientation = .vertical
+        gameList.alignment = .centerX
+        gameList.spacing = 0
         var grouped: Set<String> = []
         for preset in LookupPresets.Preset.allCases {
             guard let family = preset.family else {
-                presetRows.append(presetRow(preset, title: preset.title, detail: preset.siteName))
+                addToList(presetRow(preset))
                 continue
             }
             guard grouped.insert(family).inserted else { continue }
-            let members = LookupPresets.Preset.allCases.filter { $0.family == family }
-            let siteNames = Set(members.map { $0.siteName })
-            let name = label(family, size: 13)
-            groupLabels.append(name)
-            var header: [NSView] = [name]
-            if siteNames.count == 1, let site = siteNames.first {
-                let detail = label(site, size: 13, color: .secondaryLabelColor)
-                groupDetails.append(detail)
-                header.append(detail)
-            }
-            presetRows.append(indented(row(header), Self.indent))
-            for member in members {
-                let detail = siteNames.count == 1 ? nil : member.siteName
-                presetRows.append(indented(presetRow(member, title: member.variant, detail: detail),
-                                           Self.indent))
-            }
+            addToList(versionRow(family, LookupPresets.Preset.allCases.filter { $0.family == family }))
         }
-        let presets = column(presetRows, spacing: 6)
-
-        customList.orientation = .vertical
-        customList.alignment = .leading
-        customList.spacing = 6
+        presetRowCount = gameList.arrangedSubviews.count
+        gameListBox.boxType = .custom
+        gameListBox.cornerRadius = 8
+        gameListBox.borderColor = .separatorColor
+        gameListBox.fillColor = .controlBackgroundColor
+        gameListBox.contentViewMargins = .zero
+        gameListBox.contentView = gameList
         addAnother = button("Add Another Game…", #selector(revealForm))
 
-        let games = indented(column([presets, customList, addAnother], spacing: 10), Self.indent)
+        let games = column([gameListBox, addAnother], spacing: 10)
         buildForm()
-        let formRow = indented(form, Self.indent)
+        let formRow = form
 
         allowCapture = button("Allow…", #selector(requestCapture))
         allowCapture.controlSize = .small
@@ -293,8 +287,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         stack.setCustomSpacing(18, after: formRow)
         stack.edgeInsets = NSEdgeInsets(top: 16, left: Self.margin, bottom: 20, right: Self.margin)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        form.widthAnchor.constraint(equalToConstant: Self.width - Self.margin * 2 - Self.indent)
-            .isActive = true
+        form.widthAnchor.constraint(equalToConstant: Self.width - Self.margin * 2).isActive = true
+        gameListBox.widthAnchor.constraint(equalToConstant: Self.width - Self.margin * 2).isActive = true
 
         gamesDocument.translatesAutoresizingMaskIntoConstraints = false
         gamesDocument.addSubview(stack)
@@ -316,14 +310,69 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         return gamesScroll
     }
 
-    private func presetRow(_ preset: LookupPresets.Preset, title: String, detail: String?) -> NSView {
-        let box = NSButton(checkboxWithTitle: title, target: self, action: #selector(togglePreset(_:)))
-        box.identifier = NSUserInterfaceItemIdentifier(preset.rawValue)
-        let note = label(detail ?? "", size: 13, color: .secondaryLabelColor)
-        note.identifier = NSUserInterfaceItemIdentifier(detail ?? "")
-        presetBoxes[preset] = box
-        presetDetails[preset] = note
-        return row([box, note])
+    private func presetRow(_ preset: LookupPresets.Preset) -> NSView {
+        let toggle = NSSwitch()
+        toggle.controlSize = .small
+        toggle.target = self
+        toggle.action = #selector(togglePreset(_:))
+        toggle.identifier = NSUserInterfaceItemIdentifier(preset.rawValue)
+        presetSwitches[preset] = toggle
+        let row = listRow(preset.title, preset.siteName, trailing: toggle)
+        presetDetails[preset] = row.detail
+        return row.view
+    }
+
+    // A game with versions gets one row and a segment per version, rather than a row each.
+    private func versionRow(_ family: String, _ members: [LookupPresets.Preset]) -> NSView {
+        let picker = NSSegmentedControl(labels: members.map(Self.shortName), trackingMode: .selectAny,
+                                        target: self, action: #selector(toggleVersion(_:)))
+        picker.segmentStyle = .rounded
+        for (i, member) in members.enumerated() { picker.setToolTip(member.variant, forSegment: i) }
+        versionPickers.append((picker, members))
+        var sites: [String] = []
+        for member in members where !sites.contains(member.siteName) { sites.append(member.siteName) }
+        return listRow(family, sites.joined(separator: ", "), trailing: nil, below: picker).view
+    }
+
+    private static func shortName(_ preset: LookupPresets.Preset) -> String {
+        switch preset {
+        case .dofus: return "Dofus 3"
+        case .dofusRetro: return "Retro"
+        case .wow: return "Retail"
+        case .wowClassic: return "Classic"
+        case .wowTBC: return "TBC"
+        case .wowMoP: return "MoP"
+        case .wowForever: return "Forever"
+        case .osrs, .rs3: return preset.variant
+        }
+    }
+
+    private func listRow(_ title: String, _ detail: String, trailing: NSView?,
+                         below: NSView? = nil) -> (view: NSView, detail: NSTextField) {
+        let name = label(title, size: 13, weight: .medium)
+        let sites = label(detail, size: 11, color: .secondaryLabelColor)
+        sites.lineBreakMode = .byTruncatingTail
+        sites.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let text = column([name, sites] + (below.map { [$0] } ?? []), spacing: 2)
+        if below != nil { text.setCustomSpacing(8, after: sites) }
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.edgeInsets = NSEdgeInsets(top: 9, left: 14, bottom: 9, right: 14)
+        row.addView(text, in: .leading)
+        if let trailing { row.addView(trailing, in: .trailing) }
+        return (row, sites)
+    }
+
+    private func addToList(_ row: NSView) {
+        if !gameList.arrangedSubviews.isEmpty {
+            let line = NSBox()
+            line.boxType = .separator
+            gameList.addArrangedSubview(line)
+            line.widthAnchor.constraint(equalTo: gameList.widthAnchor, constant: -28).isActive = true
+        }
+        gameList.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: gameList.widthAnchor).isActive = true
     }
 
     private func buildForm() {
@@ -533,20 +582,22 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private func refreshGames() {
         noGames.state = playsGames ? .off : .on
         yesGames.state = playsGames ? .on : .off
-        for (preset, box) in presetBoxes {
+        for (preset, toggle) in presetSwitches {
             let added = isAdded(preset)
-            box.state = added || chosen.contains(preset) ? .on : .off
-            box.isEnabled = playsGames && !added
-            if let note = presetDetails[preset] {
-                note.stringValue = added ? "already added" : note.identifier?.rawValue ?? ""
-                note.isHidden = note.stringValue.isEmpty
-                note.textColor = playsGames ? .secondaryLabelColor : .disabledControlTextColor
+            toggle.state = added || chosen.contains(preset) ? .on : .off
+            toggle.isEnabled = playsGames && !added
+            presetDetails[preset]?.stringValue = preset.siteName + (added ? " · already added" : "")
+        }
+        for (picker, presets) in versionPickers {
+            for (i, preset) in presets.enumerated() {
+                let added = isAdded(preset)
+                picker.setSelected(added || chosen.contains(preset), forSegment: i)
+                picker.setEnabled(!added, forSegment: i)
+                picker.setToolTip(preset.variant + (added ? ", already added" : ""), forSegment: i)
             }
+            picker.isEnabled = playsGames
         }
-        for name in groupLabels { name.textColor = playsGames ? .labelColor : .disabledControlTextColor }
-        for detail in groupDetails {
-            detail.textColor = playsGames ? .secondaryLabelColor : .disabledControlTextColor
-        }
+        gameListBox.alphaValue = playsGames ? 1 : 0.5
         refreshCustomList()
         addAnother.isEnabled = playsGames
         addAnother.isHidden = formShown
@@ -560,33 +611,21 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     }
 
     private func refreshCustomList() {
-        for view in customList.arrangedSubviews { view.removeFromSuperview() }
-        let others = existing.filter { $0.preset == nil }
-        for game in others {
-            customList.addArrangedSubview(gameRow(game.name, game.sources, removal: nil))
+        for view in gameList.arrangedSubviews.dropFirst(presetRowCount) { view.removeFromSuperview() }
+        for game in existing where game.preset == nil {
+            addToList(gameRow(game.name, game.sources, removal: nil))
         }
         for game in customGames {
-            customList.addArrangedSubview(gameRow(game.name, game.sources, removal: game.id))
+            addToList(gameRow(game.name, game.sources, removal: game.id))
         }
-        customList.isHidden = customList.arrangedSubviews.isEmpty
     }
 
     private func gameRow(_ name: String, _ sources: [LookupSource], removal: UUID?) -> NSView {
-        let title = label(name, size: 13, weight: .medium)
-        let hosts = label(sources.map { $0.host }.joined(separator: ", "), size: 13,
-                          color: .secondaryLabelColor)
-        hosts.lineBreakMode = .byTruncatingTail
-        hosts.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        var views: [NSView] = [title, hosts]
-        if let removal {
-            let remove = removeButton(#selector(removeGame(_:)), removal)
-            remove.isEnabled = playsGames
-            views.append(remove)
-        } else {
-            views.append(label("already added", size: 13, color: .secondaryLabelColor))
-        }
-        if !playsGames { title.textColor = .disabledControlTextColor }
-        return row(views)
+        let hosts = sources.map { $0.host }.joined(separator: ", ")
+        guard let removal else { return listRow(name, hosts + " · already added", trailing: nil).view }
+        let remove = removeButton(#selector(removeGame(_:)), removal)
+        remove.isEnabled = playsGames
+        return listRow(name, hosts, trailing: remove).view
     }
 
     private func refreshForm() {
@@ -644,10 +683,17 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         refreshGames()
     }
 
-    @objc private func togglePreset(_ sender: NSButton) {
+    @objc private func togglePreset(_ sender: NSSwitch) {
         guard let raw = sender.identifier?.rawValue, let preset = LookupPresets.Preset(rawValue: raw)
         else { return }
         if sender.state == .on { chosen.insert(preset) } else { chosen.remove(preset) }
+    }
+
+    @objc private func toggleVersion(_ sender: NSSegmentedControl) {
+        guard let presets = versionPickers.first(where: { $0.control === sender })?.presets else { return }
+        for (i, preset) in presets.enumerated() where !isAdded(preset) {
+            if sender.isSelected(forSegment: i) { chosen.insert(preset) } else { chosen.remove(preset) }
+        }
     }
 
     @objc private func revealForm() {
@@ -911,12 +957,6 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         return stack
     }
 
-    private func indented(_ view: NSView, _ points: CGFloat) -> NSView {
-        let stack = NSStackView(views: [view])
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: points, bottom: 0, right: 0)
-        return stack
-    }
-
     @discardableResult
     private func width<V: NSView>(_ view: V, _ points: CGFloat) -> V {
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -999,8 +1039,6 @@ extension SetupAssistant {
             guard only == nil || only == step.rawValue + 1 else { return }
             let assistant = SetupAssistant(snapshot: true)
             assistant.captureAllowed = { false }
-            // The debug binary is not a bundle, so its icon is the generic one.
-            if let icon = NSImage(contentsOfFile: "Resources/AppIcon.icns") { assistant.icon.image = icon }
             var combos: [HotkeyAction: String] = [:]
             for action in HotkeyAction.allCases { combos[action] = action.defaultCombo }
             assistant.reset(existing: [], firstRun: true, combos: combos, activityCards: true)

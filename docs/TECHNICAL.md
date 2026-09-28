@@ -1106,8 +1106,9 @@ Nothing there is modal: the terminal stays where it is and every change applies 
 A fresh install opens a four-step window, and the terminal first appears when it closes:
 
 1. **Welcome**: what SlyTerm does. **Use Defaults** closes it and changes nothing.
-2. **Games**: "No, skip game lookup" or a check box per [preset](#the-presets), and **Add Another
-   Game…**, a short form: a name, one or more site addresses, and optionally the app the game runs
+2. **Games**: "No, skip game lookup", or a list of the [presets](#the-presets): a switch for a game
+   with one version, and for Dofus and World of Warcraft one row with a segment per version (its
+   full name in the segment's tooltip). **Add Another Game…** opens a short form: a name, one or more site addresses, and optionally the app the game runs
    in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
    own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
    site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it
