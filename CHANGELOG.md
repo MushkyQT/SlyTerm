@@ -7,6 +7,8 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-28
+
 ### Added
 
 - Send Back returns a session to the terminal it was brought in from, and Ghostty (1.3 or later)
@@ -15,7 +17,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   ([#8](https://github.com/MushkyQT/slyterm/pull/8))
 - While Settings or the setup assistant is open, SlyTerm shows in the Dock and in `⌘Tab`, with an
   app menu, so switching to another app no longer leaves the window out of reach behind it.
-
+  ([#7](https://github.com/MushkyQT/slyterm/pull/7))
 - Send a session back: right-click a tab and choose "Send Back to iTerm2" to stop its agent here
   and resume it in a new iTerm2 tab, or "Copy to iTerm2" for a fork. The menu bar item has "Send Tab
   Back to iTerm2", the quit dialog has "Send Back and Quit" whenever a tab runs an agent, and
@@ -58,8 +60,10 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 - The quit confirmation could open behind the Settings window or the terminal and stay out of
   sight; the same went for the confirmation before interrupting an agent. Both now open in front.
+  ([#7](https://github.com/MushkyQT/slyterm/pull/7))
 - `⌘C`, `⌘V`, `⌘X`, `⌘A` and `⌘Z` work in the text fields of Settings and the setup assistant, and
   `⌘W` closes them.
+  ([#7](https://github.com/MushkyQT/slyterm/pull/7))
 - Closing a terminal tab ends its shell and whatever is running in it, as closing a terminal window
   does. They used to keep running, out of sight, until SlyTerm quit.
   ([#5](https://github.com/MushkyQT/slyterm/pull/5))
@@ -109,6 +113,7 @@ hotkeys, Claude Code's state on the tab strip with cards answered by `⌃⌥Y` a
 that opens a game's wiki page for what is under the pointer, web tabs that float over the game, and
 Bring In a Session for Claude Code and plain shell tabs.
 
-[Unreleased]: https://github.com/MushkyQT/slyterm/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/MushkyQT/slyterm/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/MushkyQT/slyterm/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/MushkyQT/slyterm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MushkyQT/slyterm/releases/tag/v1.0.0
