@@ -400,7 +400,7 @@ enum LookupPresets {
             switch self {
             case .dofus, .dofusRetro: return "Dofus"
             case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever: return "World of Warcraft"
-            case .osrs, .rs3: return nil
+            case .osrs, .rs3: return "RuneScape"
             }
         }
 
@@ -413,7 +413,8 @@ enum LookupPresets {
             case .wowForever: return "Forever"
             case .dofus: return "Dofus 3"
             case .dofusRetro: return "Dofus Retro"
-            case .osrs, .rs3: return title
+            case .osrs: return "Old School"
+            case .rs3: return "RuneScape 3"
             }
         }
 

@@ -343,7 +343,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         case .wowTBC: return "TBC"
         case .wowMoP: return "MoP"
         case .wowForever: return "Forever"
-        case .osrs, .rs3: return preset.variant
+        case .osrs: return "Old School"
+        case .rs3: return "RuneScape 3"
         }
     }
 
@@ -394,6 +395,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         siteList.spacing = 4
         width(appPopup, 220)
         addGameButton = button("Add Game", #selector(addGame))
+        let cancel = button("Cancel", #selector(cancelForm))
+        cancel.keyEquivalent = "\u{1b}"
 
         let grid = NSGridView(views: [
             [label("Name", size: 13), nameField],
@@ -403,7 +406,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
             [label("Game app", size: 13), appPopup],
             [NSGridCell.emptyContentView,
              caption("Optional. SlyTerm switches to this game when that app is in front.")],
-            [NSGridCell.emptyContentView, addGameButton],
+            [NSGridCell.emptyContentView, row([cancel, addGameButton])],
         ])
         grid.rowSpacing = 8
         grid.columnSpacing = 8
@@ -703,6 +706,15 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         window.makeFirstResponder(nameField)
         gamesDocument.layoutSubtreeIfNeeded()
         form.scrollToVisible(form.bounds)
+    }
+
+    // Drops the half-made game; a check still running for one of its sites is ignored.
+    @objc private func cancelForm() {
+        generation += 1
+        clearForm()
+        formShown = false
+        window.makeFirstResponder(nil)
+        refreshGames()
     }
 
     @objc private func addSite() {

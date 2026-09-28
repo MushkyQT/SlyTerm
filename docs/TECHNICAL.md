@@ -784,12 +784,13 @@ A fresh install starts with the first of them, Dofus, configured.
   item, the NPC, the zone, the achievement and the spell. Every version is the same app to macOS, so
   with several of them configured the one picked by hand answers when World of Warcraft is in
   front.
-- **Old School RuneScape** (OSRS Wiki). A MediaWiki: every article title is listed through its API
-  and matched offline, and `opensearch` catches what the recognition misspelled. Point at an item
-  and the mouseover text names it at the top left of the game, which is a tooltip wherever the
-  pointer is.
-- **RuneScape** (RuneScape Wiki), the modern game, RS3 to its players. The OSRS wiki's sibling, read
-  the same way; at some 92 000 articles it is the largest index the app builds.
+- **RuneScape**, two presets in a submenu of their own:
+  - **Old School RuneScape** (OSRS Wiki). A MediaWiki: every article title is listed through its
+    API and matched offline, and `opensearch` catches what the recognition misspelled. Point at an
+    item and the mouseover text names it at the top left of the game, which is a tooltip wherever
+    the pointer is.
+  - **RuneScape** (RuneScape Wiki), the modern game, RS3 to its players. The OSRS wiki's sibling,
+    read the same way; at some 92 000 articles it is the largest index the app builds.
 
 ### Any other site
 
@@ -1106,9 +1107,10 @@ Nothing there is modal: the terminal stays where it is and every change applies 
 A fresh install opens a four-step window, and the terminal first appears when it closes:
 
 1. **Welcome**: what SlyTerm does. **Use Defaults** closes it and changes nothing.
-2. **Games**: "No, skip game lookup", or a list of the [presets](#the-presets): a switch for a game
-   with one version, and for Dofus and World of Warcraft one row with a segment per version (its
-   full name in the segment's tooltip). **Add Another Game…** opens a short form: a name, one or more site addresses, and optionally the app the game runs
+2. **Games**: "No, skip game lookup", or a list of the [presets](#the-presets): one row per game,
+   Dofus, World of Warcraft and RuneScape, with a segment per version (its full name in the
+   segment's tooltip). **Add Another Game…** opens a short form, which **Cancel** (or `Esc`)
+   closes without adding anything: a name, one or more site addresses, and optionally the app the game runs
    in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
    own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
    site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it

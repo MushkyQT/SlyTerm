@@ -93,8 +93,7 @@ Presets are included for:
   English
 - **World of Warcraft**, every version Wowhead covers: Retail, Classic, Burning Crusade Classic,
   Mists of Pandaria Classic and WoW: Forever
-- **Old School RuneScape**: the OSRS Wiki
-- **RuneScape**: the RuneScape Wiki
+- **RuneScape**: Old School with the OSRS Wiki, and RuneScape 3 with the RuneScape Wiki
 
 Other games work too: add a site by pasting its search URL. SlyTerm indexes MediaWiki sites,
 including Fandom and wiki.gg wikis, and any site with a sitemap, so a name opens its exact page.
