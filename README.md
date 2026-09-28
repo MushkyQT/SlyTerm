@@ -27,7 +27,7 @@ while the agent works. When it finishes or asks for permission, a card tells you
 answers it without leaving the game. Point at a quest, an item or a spell, press a key, and its wiki
 page opens in a tab next to your terminals.
 
-https://github.com/user-attachments/assets/420bb480-98c7-4931-8162-4ad74fbe23a5
+https://github.com/user-attachments/assets/b203d4ae-e3b4-426d-8685-bfc97ce9af88
 
 ## Features
 
