@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var hotkeyOK: [String: Bool] = [:]
     private var pendingURLs: [URL] = []
+    private var quitPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.shared.decideSetup()
@@ -49,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let s = Settings.shared
+        // A second ⌘Q while tabs are being sent back.
+        guard !quitPending else { return .terminateCancel }
         guard s.confirmQuit, !isSystemInitiatedQuit else { return .terminateNow }
         let busy = controller.terminals.filter { $0.isRunningForegroundJob }.count
         if controller.terminals.count <= 1, busy == 0 { return .terminateNow }
@@ -63,15 +66,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         default: text += ", \(busy) are running a command."
         }
         if s.restoreSession { text += " Tabs and their folders come back at next launch." }
+        let agents = controller.terminals.filter(TeleportEngine.sendsBackAgent)
+        let terminal = SendBackTerminal.current.name
+        if !agents.isEmpty {
+            text += agents.count == 1 ? " Send Back and Quit resumes the agent in 1 tab in \(terminal)."
+                : " Send Back and Quit resumes the agents in \(agents.count) tabs in \(terminal)."
+            if agents.contains(where: { $0.activity?.isWorking == true || $0.activity?.isWaiting == true }) {
+                text += " A turn under way is interrupted; what the agent has said so far is kept."
+            }
+            alert.addButton(withTitle: "Send Back and Quit")
+        }
         alert.informativeText = text
         alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = "Don't ask again"
         alert.window.level = s.dialogLevel
-        let quit = alert.runModal() == .alertFirstButtonReturn
-        if quit, alert.suppressionButton?.state == .on { s.confirmQuit = false }
-        return quit ? .terminateNow : .terminateCancel
+        let response = alert.runModal()
+        let sendBack = !agents.isEmpty && response == .alertFirstButtonReturn
+        let quit = sendBack || response == (agents.isEmpty ? .alertFirstButtonReturn : .alertSecondButtonReturn)
+        let suppress = alert.suppressionButton?.state == .on
+        guard sendBack else {
+            if quit, suppress { s.confirmQuit = false }
+            return quit ? .terminateNow : .terminateCancel
+        }
+        quitPending = true
+        TeleportEngine.shared.sendBack(agents, copy: false, confirm: false) { [weak self] stayed in
+            self?.quitPending = false
+            guard let first = stayed.first else {
+                // Only now: the dialog is the only place Send Back and Quit is offered.
+                if suppress { s.confirmQuit = false }
+                NSApp.reply(toApplicationShouldTerminate: true)
+                return
+            }
+            Settings.log("quit: \(stayed.count) tab(s) could not be sent back, not quitting")
+            let lead = stayed.count == 1 ? "1 tab stayed" : "\(stayed.count) tabs stayed"
+            MainActor.assumeIsolated {
+                Toast.shared.show("\(lead): \(first.error.message)", near: NSEvent.mouseLocation,
+                                  tint: .systemOrange, duration: 4)
+            }
+            NSApp.reply(toApplicationShouldTerminate: false)
+        }
+        return .terminateLater
     }
 
     // A modal alert during logout, restart or shutdown stalls it, and Cancel or its timeout
@@ -205,6 +241,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(controller.isVisible ? "Hide Terminal" : "Show Terminal", #selector(toggleVisible), hotkey: .toggle))
         menu.addItem(item("New Tab", #selector(newTab), key: "t", modifiers: .command))
         menu.addItem(item("Bring In a Session…", #selector(bringIn), key: "t", modifiers: [.command, .shift]))
+        let sendBack = item("Send Tab Back to \(SendBackTerminal.current.name)", #selector(sendTabBack))
+        sendBack.isEnabled = controller.selectedTerminal != nil
+        menu.addItem(sendBack)
         menu.addItem(.separator())
 
         let ghost = item("Click-Through", #selector(toggleGhost), hotkey: .ghost)
@@ -328,6 +367,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func newWebTab() { controller.newWebTab() }
     @objc private func playPause() { MainActor.assumeIsolated { controller.playPause() } }
     @objc private func bringIn() { TeleportPicker.shared.show() }
+    @objc private func sendTabBack() {
+        if let tab = controller.selectedTerminal { TeleportEngine.shared.sendBack(tab) }
+    }
     @objc private func setOpacity(_ sender: NSMenuItem) { Settings.shared.opacity = Double(sender.tag) / 100 }
     @objc private func setGhostOpacity(_ sender: NSMenuItem) { Settings.shared.ghostOpacity = Double(sender.tag) / 100 }
     @objc private func setVideoOpacity(_ sender: NSMenuItem) { Settings.shared.videoOpacity = Double(sender.tag) / 100 }

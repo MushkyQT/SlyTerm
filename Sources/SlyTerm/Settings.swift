@@ -54,6 +54,7 @@ final class Settings {
             "startupAnimation": true,
             "teleportClosesSource": true,
             "teleportConfirmBusy": true,
+            "sendBackTerminal": "iterm2",
             "activityCards": true,
             "activityAnswerURLs": false,  // keep off: any local process, a Claude too, can open them
             "activityCardSeconds": 10.0,
@@ -132,6 +133,7 @@ final class Settings {
     var attentionSound: Bool { get { d.bool(forKey: "attentionSound") } set { set(newValue, "attentionSound") } }
     var teleportClosesSource: Bool { get { d.bool(forKey: "teleportClosesSource") } set { set(newValue, "teleportClosesSource") } }
     var teleportConfirmBusy: Bool { get { d.bool(forKey: "teleportConfirmBusy") } set { set(newValue, "teleportConfirmBusy") } }
+    var sendBackTerminal: String { get { d.string(forKey: "sendBackTerminal") ?? "iterm2" } set { set(newValue, "sendBackTerminal") } }
     var activityCards: Bool { get { d.bool(forKey: "activityCards") } set { set(newValue, "activityCards") } }
     var activityAnswerURLs: Bool { get { d.bool(forKey: "activityAnswerURLs") } set { set(newValue, "activityAnswerURLs") } }
     var setupDone: Bool { get { d.bool(forKey: "setupDone") } set { set(newValue, "setupDone") } }

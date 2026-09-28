@@ -28,7 +28,7 @@ offscreen and never type into anything:
 | Web tabs | `--guide-snapshot <url> <out.png> [--full] [--fill] [--width N] [--height N] [--scroll N] [--eval <js>] [--find <text>]`, `--float-snapshot <out.png>`, `--drm-check` |
 | Tab strip | `--strip-snapshot <out.png>` |
 | Activity | `--activity [--json]`, `--activity --transcript <file.jsonl> [--status waiting]`, `--activity --title <text>`, `--activity --screen <file>`, the last three with `[--agent <name>]`, `--activity --poll [--times N]`, `--card-snapshot <out.png>`; fixtures from `swift Tools/make-agent-fixtures.swift <dir>` |
-| Bring In a Session | `--sessions [--json] [--session <uuid> \| --pid <pid> \| --tty <tty>]`, `--picker-snapshot <out.png>` |
+| Bring In a Session | `--sessions [--json] [--session <uuid> \| --pid <pid> \| --tty <tty>] [--send-back [--copy]]`, `--picker-snapshot <out.png>` |
 | Setup assistant | `--setup-snapshot <out.png> [--step N]` |
 
 `swift Tools/make-lookup-fixtures.swift <dir>` draws synthetic game screenshots and prints the

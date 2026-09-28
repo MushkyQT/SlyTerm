@@ -135,6 +135,10 @@ it does by default. Otherwise moving an agent in the middle of a turn interrupts
 first. Claude Code, Codex and pi can also be copied, with the original left running, and a plain
 shell tab comes across with its folder and its command.
 
+To send one back, right-click its tab and choose Send Back to iTerm2, or quit with Send Back and
+Quit: the conversation opens in a new iTerm2 tab where it left off. Terminal works too, set in
+Settings.
+
 <img src="docs/features/bring-in.gif" width="600"
      alt="⌘⇧T opens Bring In a Session over Old School RuneScape, and Return resumes an iTerm2 Claude session in a new tab">
 
@@ -232,6 +236,7 @@ Option, ⌘ is Command and ⇧ is Shift.
 | Allow or refuse an agent's permission prompt | `⌃⌥Y` / `⌃⌥N` |
 | Pause the web tabs that are playing, or play them again | `⌃⌥V` |
 | Bring in a session from another terminal | `⌘⇧T` in a terminal |
+| Send a session back to iTerm2 or Terminal | Right-click its tab |
 | Web tab ↔ terminal | `⌘G` |
 | New web tab from a terminal, or the address bar of the web tab in front | `⌘L` |
 | New tab (a web tab from a web tab), close tab, switch tabs | `⌘T`, `⌘W`, `⌘1`…`⌘9` |

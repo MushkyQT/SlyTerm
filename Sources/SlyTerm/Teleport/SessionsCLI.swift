@@ -6,7 +6,9 @@ enum SessionsCLI {
         let started = Date()
         let candidates = lookup(in: args) ?? SessionDiscovery.scan()
         let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
-        if args.contains("--json") {
+        if args.contains("--send-back") {
+            print(candidates.map { sendBack($0, copy: args.contains("--copy")) }.joined(separator: "\n\n"))
+        } else if args.contains("--json") {
             print(json(candidates))
         } else {
             print(table(candidates))
@@ -27,6 +29,44 @@ enum SessionsCLI {
             return agents + (SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? [])
         }
         return nil
+    }
+
+    // What the app would do with this candidate's SlyTerm tab; nothing is stopped or opened.
+    private static func sendBack(_ candidate: TeleportCandidate, copy: Bool) -> String {
+        var lines = ["\(candidate.id)  \(candidate.title)"]
+        if !candidate.isAlreadyHere {
+            lines.append("  in \(candidate.host.displayName), not a SlyTerm tab: the app would not offer this")
+        }
+        let session: AgentSessionInfo?
+        let busy: Bool
+        switch candidate {
+        case .agent(let s): session = s; busy = true
+        case .shell(let tab): session = nil; busy = tab.foregroundCommand != nil
+        }
+        let terminal = SendBackTerminal.current
+        let line: String
+        switch TeleportEngine.sendBackPlan(session: session, folder: candidate.cwd, busy: busy, copy: copy) {
+        case .failure(let error):
+            lines.append("  stays: \(error.message)")
+            return lines.joined(separator: "\n")
+        case .success(.resume(let s, let typed, let command)):
+            lines.append("  stop pid \(s.pid) with SIGTERM" + (s.agent == .claude ? ", then Ctrl-C twice in its tab" : ""))
+            lines.append("  if \(terminal.name) fails, type here again: \(command)")
+            line = typed
+        case .success(.fork(let typed)):
+            lines.append("  leave pid \(session?.pid ?? 0) running")
+            line = typed
+        case .success(.attach(let typed, _, _)):
+            lines.append("  close the tab, which detaches it")
+            line = typed
+        case .success(.folder(let typed, let closes)):
+            lines.append(closes ? "  close the tab" : "  keep the tab, it is running something")
+            line = typed
+        }
+        lines.append("  open a tab in \(terminal.name) and type: \(line)")
+        lines.append(TeleportEngine.openScript(typing: line, in: terminal)
+            .split(separator: "\n").map { "    " + $0 }.joined(separator: "\n"))
+        return lines.joined(separator: "\n")
     }
 
     private static func value(of flag: String, in args: [String]) -> String? {

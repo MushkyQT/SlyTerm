@@ -828,7 +828,8 @@ final class OverlayController: NSObject, TabStripDelegate {
         syncFocusReports()
     }
 
-    func close(_ tab: Tab) {
+    // A tab sent elsewhere is not replaced by a fresh `claude` from the startup command.
+    func close(_ tab: Tab, replacementRunsStartup: Bool = true) {
         if let web = tab as? GuideTab { closeWebTab(web); return }
         guard let index = terminals.firstIndex(where: { $0.id == tab.id }) else { return }
         // Read before terminate(): a killed shell has no cwd left.
@@ -842,7 +843,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         ActivityAnswer.forget(tab: tab.id)
         attentionDidChange()
         if terminals.isEmpty {
-            newTab(directory: replacement)
+            newTab(directory: replacement, runStartupCommand: replacementRunsStartup)
         } else if webInFront != nil {
             selectedIndex = min(selectedIndex > index ? selectedIndex - 1 : selectedIndex, terminals.count - 1)
         } else {
@@ -1315,6 +1316,36 @@ final class OverlayController: NSObject, TabStripDelegate {
             .trimmingCharacters(in: .whitespaces), !line.isEmpty else { return nil }
         guard line.count > limit else { return line }
         return line.prefix(limit).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
+    func stripTabMenu(_ index: Int) -> NSMenu? {
+        guard terminals.indices.contains(index) else { return nil }
+        let tab = terminals[index]
+        let app = SendBackTerminal.current.name
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        var items = [("Send Back to \(app)", #selector(sendTabBack(_:)))]
+        if let activity = tab.activity, !activity.isBackground,
+           activity.agent.copyCommand(id: activity.sessionID) != nil {
+            items.append(("Copy to \(app)", #selector(copyTabBack(_:))))
+        }
+        for (title, action) in items {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.representedObject = tab.id
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc private func sendTabBack(_ sender: NSMenuItem) {
+        guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
+        TeleportEngine.shared.sendBack(tab)
+    }
+
+    @objc private func copyTabBack(_ sender: NSMenuItem) {
+        guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
+        TeleportEngine.shared.sendBack(tab, copy: true)
     }
 
     func stripSelectTab(_ index: Int) { select(index); focusTerminalUnlessGhost() }
