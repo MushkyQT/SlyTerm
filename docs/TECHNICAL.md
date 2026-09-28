@@ -120,7 +120,8 @@ start six `claude` sessions at once. Quitting with several tabs or a running com
 (tick "Don't ask again", untick it in Settings › General, or `defaults write
 com.charlesmelki.slyterm confirmQuit -bool false`); logging out, restarting and shutting down are
 never held up by that prompt. When the shell sets no title, the tab shows its folder name and
-follows `cd`.
+follows `cd`. Closing a tab hangs up its shell and what runs in it (`SIGHUP`), as closing a terminal
+window does.
 
 Every tab exports `SLYTERM_TAB_ID` to its shell, which the activity monitor, `slyterm://notify`
 and "Bring In a Session" use to tell tabs apart.

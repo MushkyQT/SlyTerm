@@ -48,6 +48,8 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Fixed
 
+- Closing a terminal tab ends its shell and whatever is running in it, as closing a terminal window
+  does. They used to keep running, out of sight, until SlyTerm quit.
 - Clicking a shortcut field in Settings › Shortcuts started recording and stopped it at once on
   macOS 26, so no new shortcut could be typed.
   ([#4](https://github.com/MushkyQT/slyterm/pull/4))

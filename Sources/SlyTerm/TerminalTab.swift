@@ -126,7 +126,32 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         view.feed(text: "\u{1b}[2m\(line)\u{1b}[0m\r\n")
     }
 
-    func terminate() { view.terminate() }
+    // SwiftTerm only sends SIGTERM, which an interactive shell ignores, and the pty is not hung
+    // up: send SIGHUP as a closed terminal window would, to the foreground job and the shell.
+    func terminate() {
+        if let process = view.process, process.running, process.shellPid > 0 {
+            let pid = process.shellPid
+            if let group = foregroundProcessGroup, group != pid { kill(-group, SIGHUP) }
+            kill(pid, SIGHUP)
+            TerminalTab.reap(pid)
+        }
+        view.terminate()
+    }
+
+    // SwiftTerm's terminate() cancels its own exit watch, which would leave the shell a zombie
+    // until SlyTerm quits. Tried once at once too: an exit before the source exists is not reported.
+    private static func reap(_ pid: pid_t) {
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit,
+                                                      queue: .global(qos: .utility))
+        source.setEventHandler {
+            var status: Int32 = 0
+            waitpid(pid, &status, WNOHANG)
+            source.cancel()
+        }
+        source.resume()
+        var status: Int32 = 0
+        if waitpid(pid, &status, WNOHANG) == pid { source.cancel() }
+    }
 
     var currentDirectory: String {
         if let live = liveWorkingDirectory(), TerminalTab.isUsableDirectory(live) { return live }
