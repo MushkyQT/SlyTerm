@@ -9,6 +9,11 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Added
 
+- A setup assistant on the first launch of a fresh install: whether you play games with SlyTerm
+  open and which presets to add, a short form for another game (a name and a wiki or site
+  address, probed for its search and index), and the main shortcuts. Settings › General › Run Setup
+  Assistant… opens it again. Existing installs do not see it.
+
 - Fullscreen: `⌃⌥M` fills the screen with the window that has the keyboard, the SlyTerm window with
   the tab in front or a floating web tab, opaque and in interact mode. Nothing pauses, hides or
   switches. `⌘Return` in the SlyTerm window or a floating web tab, the strip's expand button,

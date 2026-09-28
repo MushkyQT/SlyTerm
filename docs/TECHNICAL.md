@@ -1067,7 +1067,8 @@ lookup and which game it asks, a new web tab, play / pause, opacity (terminal, c
 resetting the window position, quitting.
 Everything that configures the app is behind **Settings…** in it, in five tabs:
 
-- **General**: restoring the last session's tabs at launch, the logo animation, the quit
+- **General**: restoring the last session's tabs at launch, the logo animation, **Run Setup
+  Assistant…** (see [The setup assistant](#the-setup-assistant)), the quit
   confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
   or asks, what bringing a session in from another terminal does about the tab it came from and
   about interrupting an agent mid-turn, and, under Web tabs, "Search with": the address that words
@@ -1085,6 +1086,32 @@ Everything that configures the app is behind **Settings…** in it, in five tabs
   Recording has been granted, and importing or exporting a game.
 
 Nothing there is modal: the terminal stays where it is and every change applies as you make it.
+
+### The setup assistant
+
+A fresh install opens a four-step window, and the terminal first appears when it closes:
+
+1. **Welcome**: what SlyTerm does. **Use Defaults** closes it and changes nothing.
+2. **Games**: "No, skip game lookup" or a check box per [preset](#the-presets), and **Add Another
+   Game…**, a short form: a name, one or more site addresses, and optionally the app the game runs
+   in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
+   own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
+   site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it
+   has one. Under the list, whether Screen Recording is granted and a button that asks macOS for it;
+   nothing is captured.
+3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
+   on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
+4. **Done**: the main shortcuts as chosen, **Open Settings** and **Start**.
+
+Nothing is saved until **Start** or **Open Settings** on the last step; closing the window keeps
+everything as it was. A new game list starts with the Dofus preset: on the first run it stays only
+if Dofus is checked, so "No" leaves no game at all. The games already there show as checked and
+stay, and a preset or a name that is already in the list is not added twice. Run again from
+Settings › General, it only adds. Closing it sets `setupDone`, and it does not open by itself
+again; quitting SlyTerm while it is open brings it back at the next launch. The first launch of a
+version that has it stores `setupDone` as false on a fresh install and as true on one that already
+ran an earlier version (it has `frameEdge`, `sessionDirectories` or `lookupGamesVersion` stored), so
+existing installs never see it.
 
 ### Shortcuts
 
@@ -1176,6 +1203,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
 | `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
+| `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
 
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
@@ -1301,6 +1329,8 @@ $B --sessions                             # what "Bring In a Session" would offe
 $B --sessions --json                      # the same, for scripts
 $B --picker-snapshot picker.png           # draw the picker offscreen with sample rows, plus a
                                           # second PNG with an `-empty` suffix for the empty state
+$B --setup-snapshot setup.png             # draw every step of the setup assistant offscreen, in one
+                                          # PNG; `--step 1`…`4` draws one. Saves nothing, no network
 $B --activity                             # every running agent, in any terminal: agent, status, how
                                           # long, what it is doing, what it asks, the last thing it said
 $B --activity --json                      # the same, for scripts
@@ -1485,6 +1515,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source |
 | `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
 | `Teleport/SessionsCLI.swift` | `--sessions` |
+| `SetupAssistant.swift` | The first-launch setup window: its steps, the short game form, applying the choices; `--setup-snapshot` |
 
 `Tools/` holds scripts run by hand: `make-icon.swift` rebuilds `Resources/AppIcon.icns` from
 `Resources/StatusItemIcon.pdf`, `make-lookup-fixtures.swift` draws synthetic game screenshots for

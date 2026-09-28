@@ -29,14 +29,15 @@ offscreen and never type into anything:
 | Tab strip | `--strip-snapshot <out.png>` |
 | Activity | `--activity [--json]`, `--activity --transcript <file.jsonl> [--status waiting]`, `--activity --title <text>`, `--activity --screen <file>`, the last three with `[--agent <name>]`, `--activity --poll [--times N]`, `--card-snapshot <out.png>`; fixtures from `swift Tools/make-agent-fixtures.swift <dir>` |
 | Bring In a Session | `--sessions [--json] [--session <uuid> \| --pid <pid> \| --tty <tty>]`, `--picker-snapshot <out.png>` |
+| Setup assistant | `--setup-snapshot <out.png> [--step N]` |
 
 `swift Tools/make-lookup-fixtures.swift <dir>` draws synthetic game screenshots and prints the
 `--at` coordinates and the expected first candidate for each. When a mode writes a PNG, open it
 and look at it: for drawing changes that is the test.
 
-CI (`.github/workflows/ci.yml`) runs `swift build`, the strip, float, card and picker snapshots,
-and pick mode over every lookup fixture on each pull request, and attaches the PNGs to the run as
-`snapshots`. It checks that they were written, not what they show.
+CI (`.github/workflows/ci.yml`) runs `swift build`, the strip, float, card, picker and setup
+snapshots, and pick mode over every lookup fixture on each pull request, and attaches the PNGs to
+the run as `snapshots`. It checks that they were written, not what they show.
 
 ## Hazards
 

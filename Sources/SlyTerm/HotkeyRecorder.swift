@@ -46,6 +46,17 @@ enum HotkeyAction: String, CaseIterable {
     }
 
     var needsActivityCards: Bool { self == .allow || self == .refuse }
+
+    // `combos` holds every action's combo, including ones not on screen.
+    func warning(among combos: [(HotkeyAction, String)]) -> String? {
+        guard let combo = combos.first(where: { $0.0 == self })?.1, !combo.isEmpty else { return nil }
+        if KeyCombo.parse(combo) == nil { return "Cannot be used" }
+        if let other = combos.first(where: { $0.0 != self && $0.1 == combo }) {
+            return "Also used by “\(other.0.title)”"
+        }
+        if KeyCombo.isMacOSShortcut(combo) { return "Also a macOS shortcut" }
+        return nil
+    }
 }
 
 final class HotkeyRecorderView: NSView {

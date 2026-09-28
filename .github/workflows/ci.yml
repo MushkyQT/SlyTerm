@@ -31,7 +31,7 @@ jobs:
           out="$RUNNER_TEMP/snapshots"
           mkdir -p "$out"
           written() { test -s "$1" || { echo "::error::$(basename "$1") was not written"; exit 1; }; }
-          for mode in strip float card picker; do
+          for mode in strip float card picker setup; do
             $bin --$mode-snapshot "$out/$mode.png"
             written "$out/$mode.png"
           done

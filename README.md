@@ -199,6 +199,11 @@ it.
 
 ## Getting started
 
+The first time SlyTerm opens, a short setup asks whether you play games with it open and which
+ones, so the lookup knows where to search, and shows the main shortcuts so you can change them.
+Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
+which can run the setup again.
+
 1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide
    the overlay.
 2. Press `⌃⌥H` to show the terminal and run `claude` or `codex`. To start your agent in every new

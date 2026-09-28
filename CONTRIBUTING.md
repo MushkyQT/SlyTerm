@@ -90,6 +90,7 @@ the running app when it involves windows, focus or hotkeys.
    | Agent status and the session file readers | `--activity`, `--activity --transcript <file>`, `--activity --title <text>`, `--activity --screen <file>`; `swift Tools/make-agent-fixtures.swift <dir>` writes files to try them on |
    | Bring In a Session | `--sessions`, `--picker-snapshot out.png` |
    | Pick mode | `--pick-snapshot shot.png X Y out.png --scale 2` |
+   | Setup assistant | `--setup-snapshot out.png`, or `--step 1`…`4` for one step |
    | Startup animation | `Tools/preview-startup-animation.swift` (its header says how to run it) |
 
    Look at the PNGs a snapshot writes: they are the review for any drawing change. Keep test
