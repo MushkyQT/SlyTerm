@@ -114,10 +114,12 @@ A change that breaks one of these is wrong, whatever it fixes.
 - **Two kinds of documentation.** README.md is the product page: what a feature does for a player,
   in a few plain sentences, with no setting keys or internals. docs/TECHNICAL.md holds everything
   else. Update both in the same change as the behaviour.
-- **Versions.** A pull request that changes the app raises the semantic version in
-  `Resources/Info.plist` (patch for a fix, minor for something new, major for something taken
-  away; `CFBundleVersion` up by one) and adds that version's section to
-  [CHANGELOG.md](CHANGELOG.md). The Tag workflow tags `main` with `vX.Y.Z` after the merge.
+- **Versions.** A pull request that changes the app adds its lines under `## [Unreleased]` in
+  [CHANGELOG.md](CHANGELOG.md) and leaves the version alone. A release is its own change: it
+  raises the semantic version in `Resources/Info.plist` (patch if only fixes are unreleased, minor
+  for something new, major for something taken away; `CFBundleVersion` up by one) and renames
+  `[Unreleased]` to that version with the date. The Tag workflow tags `main` with `vX.Y.Z` once
+  the release is merged. Release only when asked.
 - **Plain words.** UI strings and docs are short statements of what happens, with no marketing
   tone, rhetorical questions or punchlines.
 - **Commits.** The subject is a plain imperative sentence saying what the change does, with no
@@ -129,8 +131,8 @@ A change that breaks one of these is wrong, whatever it fixes.
 
 - `swift build` passes.
 - The modes for the area you touched have been run and their output read, PNGs included.
-- README.md and docs/TECHNICAL.md describe the new behaviour; the version is raised and
-  CHANGELOG.md has its section.
+- README.md and docs/TECHNICAL.md describe the new behaviour, and CHANGELOG.md has its lines
+  under `[Unreleased]`.
 - Your summary or pull request lists what was verified offline, what was verified in the running
   app, and what was not verified at all. Hotkeys, focus, click-through and window placement can
   only be verified in the running app; if you could not run it, say so.
