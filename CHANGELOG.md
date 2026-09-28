@@ -13,8 +13,10 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   open and which presets to add, a short form for another game (a name and a wiki or site
   address, probed for its search and index), and the main shortcuts. Settings › General › Run Setup
   Assistant… opens it again. Existing installs do not see it.
+  ([#4](https://github.com/MushkyQT/slyterm/pull/4))
 - A Dofus Retro lookup preset, with the English 129Dofus Wiki. It sits next to Dofus 3 in a Dofus
   submenu under `+` in Settings › Lookup.
+  ([#4](https://github.com/MushkyQT/slyterm/pull/4))
 - Fullscreen: `⌃⌥M` fills the screen with the window that has the keyboard, the SlyTerm window with
   the tab in front or a floating web tab, opaque and in interact mode. Nothing pauses, hides or
   switches. `⌘Return` in the SlyTerm window or a floating web tab, the strip's expand button,
@@ -27,8 +29,10 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - The Dofus preset is now Dofus 3 in English: the Dofus Wiki for quests, items and monsters, then
   DofusDB in English for items, reading English then French text. Dofus games already stored keep
   their sources.
+  ([#4](https://github.com/MushkyQT/slyterm/pull/4))
 - Web tabs hide a Fandom wiki's navigation, cover image, featured video, ads and consent banner, and
   leave a dark Fandom theme as it is.
+  ([#4](https://github.com/MushkyQT/slyterm/pull/4))
 - Panic hides the web tabs from the tab strip, and `⌘G`, `⌥⌘1`…`⌥⌘9`, `⌘L` and "New Web Tab" do
   nothing until it ends. A guide that arrives during panic loads out of sight and is in front when
   panic ends.
@@ -41,6 +45,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 - Clicking a shortcut field in Settings › Shortcuts started recording and stopped it at once on
   macOS 26, so no new shortcut could be typed.
+  ([#4](https://github.com/MushkyQT/slyterm/pull/4))
 
 ## [1.1.0] - 2026-09-28
 
