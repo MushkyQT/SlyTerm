@@ -33,13 +33,16 @@ enum PiSession {
             default: continue
             }
         }
-        let slot = objects.first.flatMap { $0["type"] as? String == "title" ? $0["title"] as? String : nil }
+        let slot = objects.first.flatMap {
+            $0["type"] as? String == "title" ? $0["title"] as? String : nil
+        }
         head.title = nonBlank(slot) ?? name
         return head
     }
 
     static func read(_ url: URL) -> TranscriptTail.Reading {
-        guard let (records, whole) = TranscriptTail.tail(of: url, bytes: TranscriptTail.window) else {
+        let tail = TranscriptTail.tail(of: url, bytes: TranscriptTail.window)
+        guard let (records, whole) = tail else {
             return TranscriptTail.Reading()
         }
         let reading = parse(records)
@@ -56,7 +59,9 @@ enum PiSession {
         var at: Date?
 
         var stop: String? { message["stopReason"] as? String }
-        var endsTurn: Bool { role == "assistant" && ["stop", "aborted", "error", "length"].contains(stop) }
+        var endsTurn: Bool {
+            role == "assistant" && ["stop", "aborted", "error", "length"].contains(stop)
+        }
     }
 
     // One line per finished message: while a reply streams, the last line is the user message or
@@ -69,7 +74,8 @@ enum PiSession {
             guard let object = object(line) else { continue }
             switch object["type"] as? String {
             case "message":
-                guard let message = object["message"] as? [String: Any], let role = message["role"] as? String,
+                guard let message = object["message"] as? [String: Any],
+                      let role = message["role"] as? String,
                       ["user", "assistant", "toolResult"].contains(role) else { continue }
                 let at = TranscriptTail.date(object["timestamp"])
                 entries.append(Entry(role: role, message: message, at: at))
@@ -119,7 +125,8 @@ enum PiSession {
     }
 
     // The newest reply that ended a turn, timed from the prompt the user typed for it.
-    private static func finalMessage(in entries: [Entry], into reading: inout TranscriptTail.Reading) {
+    private static func finalMessage(in entries: [Entry],
+                                     into reading: inout TranscriptTail.Reading) {
         guard let index = entries.lastIndex(where: { $0.stop == "stop" && $0.role == "assistant"
             && nonBlank(text(of: $0.message).joined(separator: "\n")) != nil }) else { return }
         let final = entries[index]
@@ -143,16 +150,19 @@ enum PiSession {
             guard block["type"] as? String == "toolCall", let id = block["id"] as? String,
                   let name = block["name"] as? String, !name.isEmpty else { return nil }
             let arguments = block["arguments"] as? [String: Any] ?? [:]
-            return Call(id: id, name: name, arguments: arguments,
-                        intent: nonBlank(block["intent"] as? String) ?? nonBlank(arguments["i"] as? String))
+            let intent = nonBlank(block["intent"] as? String) ?? nonBlank(arguments["i"] as? String)
+            return Call(id: id, name: name, arguments: arguments, intent: intent)
         }
     }
 
     // omp has the model state its intent with every call.
     private static func label(_ call: Call) -> String {
-        if let intent = call.intent { return SessionDiscovery.trimmed(intent, to: TranscriptTail.labelLimit) }
-        let tools = ["bash": "Bash", "read": "Read", "edit": "Edit", "write": "Write", "grep": "Grep",
-                     "find": "Glob", "ask": "AskUserQuestion", "todo_write": "TodoWrite"]
+        if let intent = call.intent {
+            return SessionDiscovery.trimmed(intent, to: TranscriptTail.labelLimit)
+        }
+        let tools = ["bash": "Bash", "read": "Read", "edit": "Edit", "write": "Write",
+                     "grep": "Grep", "find": "Glob", "ask": "AskUserQuestion",
+                     "todo_write": "TodoWrite"]
         return TranscriptTail.label(tool: tools[call.name] ?? call.name, input: call.arguments)
     }
 

@@ -61,20 +61,22 @@ enum AgentDiscovery {
     // npm installs, by the package in the script's path when the bin link's name is not there.
     // omp's package name contains pi's, so it comes first.
     private static let packages: [(marker: String, agent: AgentKind)] = [
-        ("/@openai/codex/", .codex), ("/@oh-my-pi/pi-coding-agent/", .omp), ("/pi-coding-agent/", .pi),
+        ("/@openai/codex/", .codex), ("/@oh-my-pi/pi-coding-agent/", .omp),
+        ("/pi-coding-agent/", .pi),
         ("/@google/gemini-cli/", .gemini), ("/@qwen-code/qwen-code/", .qwen),
     ]
 
-    private static let interpreterValueFlags: Set<String> = ["-r", "--require", "--import", "--loader",
-                                                             "--experimental-loader"]
+    private static let interpreterValueFlags: Set<String> = [
+        "-r", "--require", "--import", "--loader", "--experimental-loader",
+    ]
 
     // Codex 0.158's subcommands that are not a conversation's TUI (`resume` and `fork` are).
     private static let codexCommands: Set<String> = [
         "exec", "e", "review", "login", "logout", "mcp", "mcp-server", "plugin", "app-server",
         "remote-control", "app", "completion", "update", "doctor", "sandbox", "debug", "execpolicy",
-        "apply", "a", "agents", "queue", "archive", "delete", "unarchive", "migrate-rollouts", "cloud",
-        "cloud-tasks", "responses-api-proxy", "stdio-to-uds", "exec-server", "tcp-tunnel", "features",
-        "help",
+        "apply", "a", "agents", "queue", "archive", "delete", "unarchive", "migrate-rollouts",
+        "cloud", "cloud-tasks", "responses-api-proxy", "stdio-to-uds", "exec-server", "tcp-tunnel",
+        "features", "help",
     ]
 
     private static let codexValueFlags: Set<String> = [
@@ -122,7 +124,9 @@ enum AgentDiscovery {
     }
 
     private static func script(_ path: String) -> AgentKind? {
-        if let package = packages.first(where: { path.contains($0.marker) }) { return package.agent }
+        if let package = packages.first(where: { path.contains($0.marker) }) {
+            return package.agent
+        }
         let name = (path as NSString).lastPathComponent
         return natives[name] ?? natives[(name as NSString).deletingPathExtension]
     }
@@ -149,16 +153,18 @@ enum AgentDiscovery {
 
     // A TUI is the job in front on its tty. One per process group: the outermost agent in it,
     // except npm's Codex, a `node codex.js` whose native child is the one holding the files.
-    static func tuis(in table: SessionDiscovery.ProcessTable, on ttys: Set<String>? = nil,
+    static func tuis(in table: SessionDiscovery.ProcessTable,
                      inspect: (pid_t) -> Arguments?) -> [TUI] {
         let user = getuid()
         var groups: [pid_t: [TUI]] = [:]
-        for process in table.entries where process.uid == user && process.pgid > 0 && process.pgid == process.tpgid {
+        for process in table.entries
+        where process.uid == user && process.pgid > 0 && process.pgid == process.tpgid {
             guard natives[process.command] != nil || interpreters.contains(process.command),
-                  let tty = SessionDiscovery.ttyName(process.tdev), ttys?.contains(tty) ?? true else { continue }
+                  let tty = SessionDiscovery.ttyName(process.tdev) else { continue }
             let arguments = inspect(process.pid)
             guard let found = identify(process, arguments: arguments) else { continue }
-            let tui = TUI(process: process, agent: found.agent, arguments: arguments, words: found.words, tty: tty)
+            let tui = TUI(process: process, agent: found.agent, arguments: arguments,
+                          words: found.words, tty: tty)
             groups[process.pgid, default: []].append(tui)
         }
         return groups.values.compactMap { members in
@@ -167,7 +173,8 @@ enum AgentDiscovery {
                 .min(by: { $0.process.pid < $1.process.pid }) else { return nil }
             guard outer.agent == .codex, outer.process.command != "codex" else { return outer }
             return members.first {
-                $0.process.command == "codex" && $0.agent == .codex && $0.process.ppid == outer.process.pid
+                $0.process.command == "codex" && $0.agent == .codex
+                    && $0.process.ppid == outer.process.pid
             } ?? outer
         }
     }
@@ -179,8 +186,10 @@ enum AgentDiscovery {
                              inspect: (pid_t) -> Arguments?,
                              cache: Cache) -> [pid_t: SessionFile] {
         var files: [pid_t: SessionFile] = [:]
+        var resumed: [pid_t: SessionFile] = [:]
         var guessed: [pid_t: SessionFile] = [:]
-        let servers = tuis.contains { $0.agent == .codex } ? codexServers(in: table, inspect: inspect) : []
+        let servers = tuis.contains { $0.agent == .codex }
+            ? codexServers(in: table, inspect: inspect) : []
         let piFolders = tuis.filter { $0.agent == .pi }
             .map { SessionDiscovery.workingDirectory(of: $0.process.pid).map(realPath) }
         for tui in tuis {
@@ -189,26 +198,33 @@ enum AgentDiscovery {
             case .codex:
                 guard let found = codexRollout(for: tui, cwd: cwd, titleName: titleNames[tui.tty],
                                                servers: servers, cache: cache) else { continue }
-                if found.guessed {
-                    guessed[tui.process.pid] = found.file
-                } else {
-                    files[tui.process.pid] = found.file
+                switch found.claim {
+                case .held: files[tui.process.pid] = found.file
+                case .resumed: resumed[tui.process.pid] = found.file
+                case .guessed: guessed[tui.process.pid] = found.file
                 }
             case .omp:
                 files[tui.process.pid] = ompSession(for: tui, cwd: cwd, cache: cache)
                     .map { SessionFile(url: $0, runsElsewhere: false) }
             case .pi:
-                let alone = cwd.map { folder in piFolders.filter { $0 == realPath(folder) }.count == 1 } ?? false
+                let alone = cwd.map { folder in
+                    piFolders.filter { $0 == realPath(folder) }.count == 1
+                } ?? false
                 files[tui.process.pid] = piSession(for: tui, cwd: cwd, alone: alone, cache: cache)
                     .map { SessionFile(url: $0, runsElsewhere: false) }
             case .claude, .gemini, .qwen:
                 continue
             }
         }
-        // Two TUIs in one folder that were both open when a thread began cannot tell whose it is.
-        let certain = Set(files.values.map(\.url))
-        for (url, claims) in Dictionary(grouping: guessed, by: { $0.value.url }) where !certain.contains(url) {
-            if claims.count == 1, let claim = claims.first { files[claim.key] = claim.value }
+        // Two TUIs naming one thread on their command lines, or both open in its folder when it
+        // began, cannot tell whose it is.
+        var taken = Set(files.values.map(\.url))
+        for claims in [resumed, guessed] {
+            let byFile = Dictionary(grouping: claims, by: { $0.value.url })
+            for (url, claims) in byFile where !taken.contains(url) {
+                if claims.count == 1, let claim = claims.first { files[claim.key] = claim.value }
+            }
+            taken.formUnion(byFile.keys)
         }
         return files
     }
@@ -223,11 +239,13 @@ enum AgentDiscovery {
         switch agent {
         case .codex:
             head = CodexRollout.head(url).map {
-                Head(id: $0.id, cwd: $0.cwd, startedAt: $0.startedAt, title: nil, firstPrompt: $0.firstPrompt)
+                Head(id: $0.id, cwd: $0.cwd, startedAt: $0.startedAt, title: nil,
+                     firstPrompt: $0.firstPrompt)
             }
         case .omp, .pi:
             head = PiSession.head(url).map {
-                Head(id: $0.id, cwd: $0.cwd, startedAt: $0.startedAt, title: $0.title, firstPrompt: $0.firstPrompt)
+                Head(id: $0.id, cwd: $0.cwd, startedAt: $0.startedAt, title: $0.title,
+                     firstPrompt: $0.firstPrompt)
             }
         case .claude, .gemini, .qwen:
             head = nil
@@ -236,13 +254,15 @@ enum AgentDiscovery {
         return head
     }
 
-    // The id the file name carries, for a head that cannot be read: Codex's `rollout-<time>-<uuid>`,
-    // pi's and omp's `<time>_<uuid>`.
+    // The id the file name carries, for a head that cannot be read: Codex's
+    // `rollout-<time>-<uuid>`, pi's and omp's `<time>_<uuid>`.
     static func fileID(of url: URL, agent: AgentKind) -> String? {
         let stem = url.deletingPathExtension().lastPathComponent
         switch agent {
         case .codex:
-            guard stem.count > 36, UUID(uuidString: String(stem.suffix(36))) != nil else { return nil }
+            guard stem.count > 36, UUID(uuidString: String(stem.suffix(36))) != nil else {
+                return nil
+            }
             return String(stem.suffix(36))
         case .omp, .pi:
             guard let bar = stem.lastIndex(of: "_") else { return nil }
@@ -270,42 +290,55 @@ enum AgentDiscovery {
         return names
     }
 
-    // Codex's title is "<activity> <thread> | <project>" by default: the thread is before the last bar.
+    // Codex's title is "<activity> <thread> | <project>" by default: the thread is before the
+    // last bar.
     static func threadName(inTitle name: String?) -> String? {
         guard let name, let bar = name.range(of: " | ", options: .backwards) else { return nil }
         let thread = name[..<bar.lowerBound].trimmingCharacters(in: .whitespaces)
         return thread.isEmpty ? nil : thread
     }
 
+    // `held`: the TUI has it open, `resumed`: its command line names it, `guessed`: by folder.
+    private enum Claim {
+        case held, resumed, guessed
+    }
+
     // Codex since 0.157 runs turns in a machine-wide `codex app-server`: the TUI is then a client
-    // holding no rollout, and the server holds every loaded thread's. `guessed`: matched by folder.
-    private static func codexRollout(for tui: TUI, cwd: String?, titleName: String?, servers: [Server],
-                                     cache: Cache) -> (file: SessionFile, guessed: Bool)? {
+    // holding no rollout, and the server holds every loaded thread's.
+    private static func codexRollout(for tui: TUI, cwd: String?, titleName: String?,
+                                     servers: [Server],
+                                     cache: Cache) -> (file: SessionFile, claim: Claim)? {
         let home = codexHome(tui.environment)
         let sessions = realPath(home.appendingPathComponent("sessions").path) + "/"
         let own = openFiles(of: tui.process.pid)
         let held = own.paths.filter { isRollout($0, under: sessions) }
         if let path = newest(held) {
-            return (SessionFile(url: URL(fileURLWithPath: path), runsElsewhere: false), false)
+            return (SessionFile(url: URL(fileURLWithPath: path), runsElsewhere: false), .held)
         }
         let connected = servers.filter { !$0.listening.isDisjoint(with: own.peers) }
         let positionals = codexPositionals(tui.words[...])
-        if positionals.first == "resume", positionals.count > 1, UUID(uuidString: positionals[1]) != nil,
-           let url = rollout(id: positionals[1].lowercased(), under: sessions, cache: cache) {
-            return (SessionFile(url: url, runsElsewhere: !connected.isEmpty), false)
+        // `/new` or `/resume` in that TUI leaves the thread its command line names, and the server
+        // lets go of a thread no TUI shows.
+        if positionals.first == "resume", positionals.count > 1,
+           UUID(uuidString: positionals[1]) != nil,
+           let url = rollout(id: positionals[1].lowercased(), under: sessions, cache: cache),
+           connected.isEmpty || connected.contains(where: { $0.paths.contains(url.path) }) {
+            return (SessionFile(url: url, runsElsewhere: !connected.isEmpty), .resumed)
         }
-        guard !connected.isEmpty, let cwd, let started = SessionDiscovery.startTime(of: tui.process.pid) else {
-            return nil
-        }
+        guard !connected.isEmpty, let cwd,
+              let started = SessionDiscovery.startTime(of: tui.process.pid) else { return nil }
         let folder = realPath(codexFolder(tui.words, cwd: cwd) ?? cwd)
-        // Only a thread begun since the TUI started: the server also holds other TUIs' threads, and
-        // keeps a thread loaded for a minute after its TUI quits. One resumed from a picker is missed.
+        // Only a thread begun since the TUI started: the server also holds other TUIs' threads,
+        // and keeps a thread loaded for a minute after its TUI quits. One resumed from a picker
+        // is missed.
         var candidates: [String] = []
         for server in connected {
-            for path in server.paths where isRollout(path, under: server.sessions) && !candidates.contains(path) {
+            for path in server.paths
+            where isRollout(path, under: server.sessions) && !candidates.contains(path) {
                 guard (stamp(path)?.modified ?? .distantPast) >= started,
                       let head = head(of: URL(fileURLWithPath: path), agent: .codex, cache: cache),
-                      (head.startedAt ?? .distantPast) >= started, realPath(head.cwd) == folder else { continue }
+                      (head.startedAt ?? .distantPast) >= started,
+                      realPath(head.cwd) == folder else { continue }
                 candidates.append(path)
             }
         }
@@ -313,13 +346,14 @@ enum AgentDiscovery {
             let names = threadNames(in: home, cache: cache)
             let named = candidates.filter { path in
                 let url = URL(fileURLWithPath: path)
-                let id = head(of: url, agent: .codex, cache: cache)?.id ?? fileID(of: url, agent: .codex)
+                let id = head(of: url, agent: .codex, cache: cache)?.id
+                    ?? fileID(of: url, agent: .codex)
                 return id.flatMap { names[$0] } == titleName
             }
             if !named.isEmpty { candidates = named }
         }
         guard candidates.count == 1, let path = candidates.first else { return nil }
-        return (SessionFile(url: URL(fileURLWithPath: path), runsElsewhere: true), true)
+        return (SessionFile(url: URL(fileURLWithPath: path), runsElsewhere: true), .guessed)
     }
 
     private static func isRollout(_ path: String, under sessions: String) -> Bool {
@@ -329,7 +363,9 @@ enum AgentDiscovery {
 
     private static func newest(_ paths: [String]) -> String? {
         guard paths.count > 1 else { return paths.first }
-        return paths.max { (stamp($0)?.modified ?? .distantPast) < (stamp($1)?.modified ?? .distantPast) }
+        return paths.max {
+            (stamp($0)?.modified ?? .distantPast) < (stamp($1)?.modified ?? .distantPast)
+        }
     }
 
     private static func codexFolder(_ words: [String], cwd: String) -> String? {
@@ -343,7 +379,8 @@ enum AgentDiscovery {
         }
         guard let folder else { return nil }
         let expanded = (folder as NSString).expandingTildeInPath
-        return expanded.hasPrefix("/") ? expanded : (cwd as NSString).appendingPathComponent(expanded)
+        return expanded.hasPrefix("/")
+            ? expanded : (cwd as NSString).appendingPathComponent(expanded)
     }
 
     // Rollouts sit in sessions/YYYY/MM/DD: newest days first, a bounded walk, kept per id.
@@ -353,7 +390,8 @@ enum AgentDiscovery {
         if let known = cache.resumed[key] { return known }
         let manager = FileManager.default
         func children(_ path: String) -> [String] {
-            ((try? manager.contentsOfDirectory(atPath: path)) ?? []).sorted(by: >).map { path + "/" + $0 }
+            ((try? manager.contentsOfDirectory(atPath: path)) ?? []).sorted(by: >)
+                .map { path + "/" + $0 }
         }
         var found: URL?
         var days = 0
@@ -364,7 +402,8 @@ enum AgentDiscovery {
                     guard days <= rolloutDaysSearched else { break search }
                     let names = (try? manager.contentsOfDirectory(atPath: day)) ?? []
                     let suffix = "-\(id).jsonl"
-                    if let name = names.first(where: { $0.hasPrefix("rollout-") && $0.hasSuffix(suffix) }) {
+                    let name = names.first { $0.hasPrefix("rollout-") && $0.hasSuffix(suffix) }
+                    if let name {
                         found = URL(fileURLWithPath: day + "/" + name)
                         break search
                     }
@@ -391,13 +430,14 @@ enum AgentDiscovery {
         var servers: [Server] = []
         for process in table.entries where process.uid == user && process.command == "codex" {
             guard let arguments = inspect(process.pid),
-                  codexPositionals(arguments.arguments.dropFirst()).first == "app-server" else { continue }
+                  codexPositionals(arguments.arguments.dropFirst()).first == "app-server" else {
+                continue
+            }
             let open = openFiles(of: process.pid)
             guard !open.bound.isEmpty else { continue }
             let home = codexHome(arguments.environment)
-            servers.append(Server(sessions: realPath(home.appendingPathComponent("sessions").path) + "/",
-                                  paths: open.paths,
-                                  listening: open.bound))
+            let sessions = realPath(home.appendingPathComponent("sessions").path) + "/"
+            servers.append(Server(sessions: sessions, paths: open.paths, listening: open.bound))
         }
         return servers
     }
@@ -406,10 +446,13 @@ enum AgentDiscovery {
         guard let cwd else { return nil }
         let crumb = ompStateDirectory(tui.environment, cwd: cwd)
             .appendingPathComponent("terminal-sessions/\(tui.tty)").path
-        // Written at start, resume and switch, never removed: only the omp in front makes it current.
+        // Written at start, resume and switch, never removed: only the omp in front makes it
+        // current.
         guard let lines = lines(of: crumb, cache: cache), lines.count >= 2, !lines[1].isEmpty,
-              !lines.dropFirst(2).contains("fresh"), realPath(lines[0]) == realPath(cwd) else { return nil }
-        let file = lines[1].hasPrefix("/") ? lines[1] : (lines[0] as NSString).appendingPathComponent(lines[1])
+              !lines.dropFirst(2).contains("fresh"),
+              realPath(lines[0]) == realPath(cwd) else { return nil }
+        let file = lines[1].hasPrefix("/")
+            ? lines[1] : (lines[0] as NSString).appendingPathComponent(lines[1])
         return stamp(file) == nil ? nil : URL(fileURLWithPath: file)
     }
 
@@ -422,8 +465,11 @@ enum AgentDiscovery {
         if let profile { root = root.appendingPathComponent("profiles/\(profile)") }
         if profile == nil, let custom = nonEmpty(environment["PI_CODING_AGENT_DIR"]) {
             let expanded = (custom as NSString).expandingTildeInPath
-            let agent = expanded.hasPrefix("/") ? expanded : (cwd as NSString).appendingPathComponent(expanded)
-            if agent != root.appendingPathComponent("agent").path { return URL(fileURLWithPath: agent) }
+            let agent = expanded.hasPrefix("/")
+                ? expanded : (cwd as NSString).appendingPathComponent(expanded)
+            if agent != root.appendingPathComponent("agent").path {
+                return URL(fileURLWithPath: agent)
+            }
         }
         if let state = nonEmpty(environment["XDG_STATE_HOME"]) {
             var app = URL(fileURLWithPath: state).appendingPathComponent("omp")
@@ -433,13 +479,16 @@ enum AgentDiscovery {
         return root.appendingPathComponent("agent")
     }
 
-    // Under node, pi's `process.title` blanks these flags: the folder's newest file is the fallback.
+    // Under node, pi's `process.title` blanks these flags: the folder's newest file is the
+    // fallback.
     private static func piSession(for tui: TUI, cwd: String?, alone: Bool, cache: Cache) -> URL? {
         guard let cwd else { return nil }
         let environment = tui.environment
         let words = tui.words
         func value(_ flag: String) -> String? {
-            guard let index = words.firstIndex(of: flag), index + 1 < words.count else { return nil }
+            guard let index = words.firstIndex(of: flag), index + 1 < words.count else {
+                return nil
+            }
             return nonEmpty(words[index + 1])
         }
         if words.contains("--no-session") { return nil }
@@ -447,7 +496,8 @@ enum AgentDiscovery {
         if let session = value("--session") {
             if session.contains("/") || session.hasSuffix(".jsonl") {
                 let expanded = (session as NSString).expandingTildeInPath
-                let path = expanded.hasPrefix("/") ? expanded : (cwd as NSString).appendingPathComponent(expanded)
+                let path = expanded.hasPrefix("/")
+                    ? expanded : (cwd as NSString).appendingPathComponent(expanded)
                 if stamp(path) != nil { return URL(fileURLWithPath: path) }
             } else if let path = piFile(in: folder, id: session, cache: cache) {
                 return URL(fileURLWithPath: path)
@@ -456,8 +506,11 @@ enum AgentDiscovery {
         if let id = value("--session-id"), let path = piFile(in: folder, id: id, cache: cache) {
             return URL(fileURLWithPath: path)
         }
-        guard alone, let started = SessionDiscovery.startTime(of: tui.process.pid) else { return nil }
-        let recent = listing(of: folder, cache: cache).filter { $0.hasSuffix(".jsonl") }.prefix(piFilesChecked)
+        guard alone, let started = SessionDiscovery.startTime(of: tui.process.pid) else {
+            return nil
+        }
+        let recent = listing(of: folder, cache: cache).filter { $0.hasSuffix(".jsonl") }
+            .prefix(piFilesChecked)
         let written = recent.compactMap { name -> (path: String, modified: Date)? in
             let path = folder + "/" + name
             guard let modified = stamp(path)?.modified, modified >= started else { return nil }
@@ -466,17 +519,22 @@ enum AgentDiscovery {
         return written.max { $0.modified < $1.modified }.map { URL(fileURLWithPath: $0.path) }
     }
 
-    // Names start with the creation time, so the newest sort first; `--continue` picks one of those.
+    // Names start with the creation time, so the newest sort first; `--continue` picks one of
+    // those.
     private static let piFilesChecked = 64
 
     // pi's session-manager.ts: `--<cwd without its leading slash, / \ : as ->--`.
-    private static func piFolder(_ environment: [String: String], sessionDir: String?, cwd: String) -> String {
+    private static func piFolder(_ environment: [String: String], sessionDir: String?,
+                                 cwd: String) -> String {
         if let custom = sessionDir ?? nonEmpty(environment["PI_CODING_AGENT_SESSION_DIR"]) {
             let expanded = (custom as NSString).expandingTildeInPath
-            return expanded.hasPrefix("/") ? expanded : (cwd as NSString).appendingPathComponent(expanded)
+            return expanded.hasPrefix("/")
+                ? expanded : (cwd as NSString).appendingPathComponent(expanded)
         }
-        let agent = nonEmpty(environment["PI_CODING_AGENT_DIR"]).map { ($0 as NSString).expandingTildeInPath }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pi/agent").path
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let agent = nonEmpty(environment["PI_CODING_AGENT_DIR"])
+            .map { ($0 as NSString).expandingTildeInPath }
+            ?? home.appendingPathComponent(".pi/agent").path
         let trimmed = cwd.hasPrefix("/") ? String(cwd.dropFirst()) : cwd
         let slug = String(trimmed.map { "/\\:".contains($0) ? "-" : $0 })
         return agent + "/sessions/--\(slug)--"
@@ -510,7 +568,8 @@ enum AgentDiscovery {
         cache.touch(folder)
         guard let now = stamp(folder) else { return [] }
         if let known = cache.listings[folder], known.stamp == now { return known.names }
-        let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []).sorted(by: >)
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? [])
+            .sorted(by: >)
         cache.listings[folder] = (now, names)
         return names
     }
@@ -526,7 +585,8 @@ enum AgentDiscovery {
         guard stat(path, &info) == 0 else { return nil }
         let modified = Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec)
                             + TimeInterval(info.st_mtimespec.tv_nsec) / 1_000_000_000)
-        return Stamp(size: Int64(info.st_size), modified: modified, isDirectory: info.st_mode & S_IFMT == S_IFDIR)
+        return Stamp(size: Int64(info.st_size), modified: modified,
+                     isDirectory: info.st_mode & S_IFMT == S_IFDIR)
     }
 
     private struct OpenFiles {
@@ -553,17 +613,19 @@ enum AgentDiscovery {
             if descriptor.proc_fdtype == UInt32(PROX_FDTYPE_VNODE) {
                 var info = vnode_fdinfowithpath()
                 let size = Int32(MemoryLayout<vnode_fdinfowithpath>.size)
-                guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDVNODEPATHINFO, &info, size) == size else {
-                    continue
-                }
+                guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDVNODEPATHINFO,
+                                     &info, size) == size else { continue }
                 let path = withUnsafePointer(to: &info.pvip.vip_path) {
-                    $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
+                    $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                        String(cString: $0)
+                    }
                 }
                 if !path.isEmpty { open.paths.append(path) }
             } else if descriptor.proc_fdtype == UInt32(PROX_FDTYPE_SOCKET) {
                 var info = socket_fdinfo()
                 let size = Int32(MemoryLayout<socket_fdinfo>.size)
-                guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDSOCKETINFO, &info, size) == size,
+                guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDSOCKETINFO,
+                                     &info, size) == size,
                       info.psi.soi_family == AF_UNIX else { continue }
                 var local = info.psi.soi_proto.pri_un.unsi_addr.ua_sun
                 var peer = info.psi.soi_proto.pri_un.unsi_caddr.ua_sun

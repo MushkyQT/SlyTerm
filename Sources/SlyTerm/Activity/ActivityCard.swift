@@ -108,7 +108,8 @@ final class ActivityCard: ActivityCardPresenting {
         return true
     }
 
-    private func standingActivity(of id: UUID, host: ActivityHost) -> (tab: TerminalTab, activity: AgentActivity)? {
+    private func standingActivity(of id: UUID, host: ActivityHost)
+        -> (tab: TerminalTab, activity: AgentActivity)? {
         guard let prompt = standing[id], let tab = host.terminals.first(where: { $0.id == id }),
               let activity = tab.activity, let now = activity.prompt, now.isSame(as: prompt),
               !host.isBeingViewed(tab) else { return nil }
@@ -225,7 +226,8 @@ final class ActivityCard: ActivityCardPresenting {
         return chosen
     }
 
-    private func finishedContent(tab: TerminalTab, activity: AgentActivity) -> ActivityCardView.Content {
+    private func finishedContent(tab: TerminalTab,
+                                 activity: AgentActivity) -> ActivityCardView.Content {
         var title = "\(tab.title) · finished"
         if let duration = activity.lastTurnDuration { title += " · \(activityDuration(duration))" }
         let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
@@ -248,7 +250,8 @@ final class ActivityCard: ActivityCardPresenting {
             footer: footer([ghost.map { "\($0) to read" }]))
     }
 
-    private func asksContent(tab: TerminalTab, activity: AgentActivity) -> ActivityCardView.Content {
+    private func asksContent(tab: TerminalTab,
+                             activity: AgentActivity) -> ActivityCardView.Content {
         let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
         switch activity.request {
         case .permission(_, let summary, let detail):
@@ -258,7 +261,7 @@ final class ActivityCard: ActivityCardPresenting {
                 accent: .systemOrange,
                 title: "\(tab.title) · needs an answer",
                 body: "Wants to \(summary)",
-                mono: detail.map { Self.clampLines($0, max: 6) },
+                mono: detail.map { Self.clampCharacters(Self.clampLines($0, max: 6), to: 600) },
                 footer: footer([allow.map { "\($0) allow" }, refuse.map { "\($0) refuse" },
                                 ghost.map { "\($0) to look" }]))
         case .question(let text, let options):

@@ -83,14 +83,16 @@ enum ActivityAnswer {
         switch activity.request {
         case .permission(_, let summary, _):
             guard let keys = activity.agent.answerKeys else {
-                Settings.log("answer: \(answer.verb) ignored, \(name) takes no yes or no in \(tab.title)")
+                Settings.log("answer: \(answer.verb) ignored, \(name) takes no yes or no "
+                             + "in \(tab.title)")
                 toast("\(name) is waiting, but not for a yes or no", tint: .systemOrange)
                 return
             }
             // The agent may have been suspended or exited to a shell with half a command typed,
             // which a Return would run.
             guard let group = activity.processGroup, tab.foregroundProcessGroup == group else {
-                Settings.log("answer: \(answer.verb) ignored, \(name) is not in front in \(tab.title)")
+                Settings.log("answer: \(answer.verb) ignored, \(name) is not in front "
+                             + "in \(tab.title)")
                 toast("\(name) is not in front in \(tab.title)", tint: .systemOrange)
                 return
             }
@@ -100,8 +102,8 @@ enum ActivityAnswer {
                 let onScreen = AgentScreen.request(lines: tab.visibleLines(), agent: .codex)
                 guard tab.titleStates[.codex]?.status == .waiting, let onScreen,
                       onScreen.isAnswerableByKey, onScreen == seen?.request else {
-                    Settings.log("answer: \(answer.verb) ignored, \(name)'s screen does not show that prompt "
-                                 + "in \(tab.title)")
+                    Settings.log("answer: \(answer.verb) ignored, \(name)'s screen does not show "
+                                 + "that prompt in \(tab.title)")
                     toast(ghost.map { "\(name)'s prompt is not on screen: \($0) to look" }
                           ?? "\(name)'s prompt is not on screen", tint: .systemOrange)
                     return

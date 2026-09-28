@@ -17,13 +17,16 @@ enum CodexRollout {
         defer { try? handle.close() }
         let records = SessionDiscovery.lines(in: (try? handle.read(upToCount: window)) ?? Data())
         guard let first = records.first, let meta = object(first),
-              meta["type"] as? String == "session_meta", let payload = meta["payload"] as? [String: Any],
+              meta["type"] as? String == "session_meta",
+              let payload = meta["payload"] as? [String: Any],
               let id = payload["id"] as? String, !id.isEmpty else { return nil }
         var head = Head(id: id, cwd: payload["cwd"] as? String ?? "",
                         startedAt: TranscriptTail.date(payload["timestamp"]),
                         originator: payload["originator"] as? String)
-        let markers = ["\"user_message\"", "\"UserMessage\"", "\"role\":\"user\""].map { Data($0.utf8) }
-        for line in records.dropFirst() where markers.contains(where: { line.range(of: $0) != nil }) {
+        let markers = ["\"user_message\"", "\"UserMessage\"", "\"role\":\"user\""]
+            .map { Data($0.utf8) }
+        for line in records.dropFirst()
+        where markers.contains(where: { line.range(of: $0) != nil }) {
             guard let record = object(line), let text = typedPrompt(record) else { continue }
             head.firstPrompt = text
             break
@@ -32,7 +35,8 @@ enum CodexRollout {
     }
 
     static func read(_ url: URL) -> TranscriptTail.Reading {
-        guard let (records, whole) = TranscriptTail.tail(of: url, bytes: TranscriptTail.window) else {
+        let tail = TranscriptTail.tail(of: url, bytes: TranscriptTail.window)
+        guard let (records, whole) = tail else {
             return TranscriptTail.Reading()
         }
         let reading = parse(records)
@@ -50,7 +54,8 @@ enum CodexRollout {
         guard let (records, _) = TranscriptTail.tail(of: url, bytes: window) else { return [:] }
         var names: [String: String] = [:]
         for line in records {
-            guard let record = object(line), let id = record["id"] as? String, !id.isEmpty else { continue }
+            guard let record = object(line), let id = record["id"] as? String,
+                  !id.isEmpty else { continue }
             let name = (record["thread_name"] as? String) ?? ""
             names[id] = blank(name) ? nil : name.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -68,8 +73,9 @@ enum CodexRollout {
     // the newest turn record says whether a turn is open, and only its calls can be in flight.
     // Approval prompts are never written: a call waiting for one looks like a running call.
     private static func parse(_ records: [Data]) -> TranscriptTail.Reading {
-        let markers = ["task_started", "turn_started", "task_complete", "turn_complete", "turn_aborted",
-                       "custom_tool_call", "function_call", "local_shell_call", "final_answer", "agent_message"]
+        let markers = ["task_started", "turn_started", "task_complete", "turn_complete",
+                       "turn_aborted", "custom_tool_call", "function_call", "local_shell_call",
+                       "final_answer", "agent_message"]
             .map { Data("\"\($0)".utf8) }
         var reading = TranscriptTail.Reading()
         var answered: Set<String> = []
@@ -78,8 +84,10 @@ enum CodexRollout {
         var closing: TimeInterval?
         var messageFound = false
 
-        for line in records.reversed() where markers.contains(where: { line.range(of: $0) != nil }) {
-            guard let record = object(line), let payload = record["payload"] as? [String: Any] else { continue }
+        for line in records.reversed()
+        where markers.contains(where: { line.range(of: $0) != nil }) {
+            guard let record = object(line),
+                  let payload = record["payload"] as? [String: Any] else { continue }
             let at = TranscriptTail.date(record["timestamp"])
             let type = record["type"] as? String ?? ""
             let kind = payload["type"] as? String ?? ""
@@ -92,25 +100,28 @@ enum CodexRollout {
                 if reading.status == nil { (reading.status, reading.statusSince) = (.idle, at) }
                 inTurn = false
                 closing = (payload["duration_ms"] as? NSNumber).map { $0.doubleValue / 1000 }
-                if !messageFound, let text = payload["last_agent_message"] as? String, !blank(text) {
-                    (reading.lastMessage, reading.lastTurnDuration, messageFound) = (text, closing, true)
+                if !messageFound, let text = payload["last_agent_message"] as? String,
+                   !blank(text) {
+                    (reading.lastMessage, reading.lastTurnDuration) = (text, closing)
+                    messageFound = true
                 }
             case ("event_msg", "turn_aborted"):
                 if reading.status == nil { (reading.status, reading.statusSince) = (.idle, at) }
                 inTurn = false
                 closing = nil
-            case ("response_item", "custom_tool_call_output"), ("response_item", "function_call_output"):
+            case ("response_item", "custom_tool_call_output"),
+                 ("response_item", "function_call_output"):
                 if let id = payload["call_id"] as? String { answered.insert(id) }
             case ("response_item", "custom_tool_call"), ("response_item", "function_call"),
                  ("response_item", "local_shell_call"):
-                guard inTurn, !isAnswered(payload, answered), var call = call(payload, kind: kind) else {
-                    continue
-                }
+                guard inTurn, !isAnswered(payload, answered),
+                      var call = call(payload, kind: kind) else { continue }
                 call.at = at
                 pending.append(call)
             default:
                 guard !messageFound, let text = finalAnswer(type, payload) else { continue }
-                (reading.lastMessage, reading.lastTurnDuration, messageFound) = (text, closing, true)
+                (reading.lastMessage, reading.lastTurnDuration) = (text, closing)
+                messageFound = true
             }
         }
 
@@ -120,7 +131,8 @@ enum CodexRollout {
             if pending.count == 1, let command = newest.command {
                 let line = SessionDiscovery.trimmed(TranscriptTail.firstLine(command), to: 60)
                 let detail = TranscriptTail.clipped(command, lines: 8, characters: 600)
-                reading.request = .permission(tool: "exec", summary: "run `\(line)`", detail: detail)
+                reading.request = .permission(tool: "exec", summary: "run `\(line)`",
+                                              detail: detail)
             } else {
                 reading.request = .unknown
             }
@@ -147,7 +159,9 @@ enum CodexRollout {
             let name = payload["name"] as? String ?? ""
             let input = payload["input"] as? String ?? ""
             if name == "apply_patch" { return patch(input) }
-            guard name == "exec" else { return named(name, namespace: payload["namespace"] as? String) }
+            guard name == "exec" else {
+                return named(name, namespace: payload["namespace"] as? String)
+            }
             return codeMode(input)
         default:
             let name = payload["name"] as? String ?? ""
@@ -189,7 +203,9 @@ enum CodexRollout {
             let rest = after.dropFirst(name.count).drop { $0 == " " }
             let standalone = range.lowerBound == input.startIndex
                 || !isIdentifier(input[input.index(before: range.lowerBound)])
-            if standalone, !name.isEmpty, rest.first == "(" { calls.append((String(name), rest.dropFirst())) }
+            if standalone, !name.isEmpty, rest.first == "(" {
+                calls.append((String(name), rest.dropFirst()))
+            }
             search = after
         }
         return calls
@@ -235,7 +251,8 @@ enum CodexRollout {
         for line in text.components(separatedBy: .newlines) {
             for (marker, tool) in markers where line.hasPrefix(marker) {
                 let path = line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
-                return Call(tool: "apply_patch", label: TranscriptTail.label(tool: tool, input: ["path": path]))
+                let label = TranscriptTail.label(tool: tool, input: ["path": path])
+                return Call(tool: "apply_patch", label: label)
             }
         }
         return Call(tool: "apply_patch", label: "editing files")
@@ -277,18 +294,24 @@ enum CodexRollout {
         var parts: [String] = []
         switch (type, payload["type"] as? String) {
         case ("response_item", "message"):
-            guard payload["role"] as? String == "assistant", payload["phase"] as? String == "final_answer",
+            guard payload["role"] as? String == "assistant",
+                  payload["phase"] as? String == "final_answer",
                   let blocks = payload["content"] as? [[String: Any]] else { return nil }
-            parts = blocks.compactMap { $0["type"] as? String == "output_text" ? $0["text"] as? String : nil }
+            parts = blocks.compactMap {
+                $0["type"] as? String == "output_text" ? $0["text"] as? String : nil
+            }
         case ("event_msg", "item_completed"):
-            guard let item = payload["item"] as? [String: Any], item["type"] as? String == "AgentMessage",
+            guard let item = payload["item"] as? [String: Any],
+                  item["type"] as? String == "AgentMessage",
                   item["phase"] as? String == "final_answer",
                   let blocks = item["content"] as? [[String: Any]] else { return nil }
             parts = blocks.compactMap { $0["text"] as? String }
         // Legacy threads; the oldest wrote no phase at all.
         case ("event_msg", "agent_message"):
             guard let text = payload["message"] as? String,
-                  (payload["phase"] as? String).map({ $0 == "final_answer" }) ?? true else { return nil }
+                  (payload["phase"] as? String).map({ $0 == "final_answer" }) ?? true else {
+                return nil
+            }
             parts = [text]
         default: return nil
         }
@@ -304,9 +327,8 @@ enum CodexRollout {
         case ("event_msg", "user_message"):
             text = payload["message"] as? String
         case ("event_msg", "item_completed"):
-            guard let item = payload["item"] as? [String: Any], item["type"] as? String == "UserMessage" else {
-                return nil
-            }
+            guard let item = payload["item"] as? [String: Any],
+                  item["type"] as? String == "UserMessage" else { return nil }
             text = texts(item["content"])
         case ("response_item", "message"):
             guard payload["role"] as? String == "user" else { return nil }

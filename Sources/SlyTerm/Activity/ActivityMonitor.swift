@@ -24,7 +24,8 @@ final class ActivityMonitor: ActivityMonitoring {
 
     // Keyed with start time because pids are reused; `KERN_PROCARGS2` costs a megabyte per call.
     private var inspected: [pid_t: (started: Date?, arguments: SessionDiscovery.ProcessArguments?)] = [:]
-    private var tails: [String: (url: URL, size: UInt64, modified: Date?, reading: TranscriptTail.Reading)] = [:]
+    private var tails: [String: (url: URL, size: UInt64, modified: Date?,
+                                 reading: TranscriptTail.Reading)] = [:]
     private let files = AgentDiscovery.Cache()
     private(set) var reads = 0
 
@@ -81,8 +82,9 @@ final class ActivityMonitor: ActivityMonitoring {
         let probes = Dictionary(terminals.compactMap { tab in
             tab.ttyName.map { tty in
                 let titles = tab.titleStates
-                let waiting = tab.activity.map { titles[$0.agent]?.status == .waiting }
-                    ?? titles.values.contains { $0.status == .waiting }
+                // Only for the agent the last scan found in front: a title left behind by a
+                // program that has gone must not cost a screen read every scan.
+                let waiting = tab.activity.map { titles[$0.agent]?.status == .waiting } ?? false
                 let screen = waiting ? tab.visibleLines() : nil
                 return (tab.id, TabProbe(tty: tty, foregroundGroup: tab.foregroundProcessGroup,
                                          titles: titles, screen: screen))
@@ -138,7 +140,8 @@ final class ActivityMonitor: ActivityMonitoring {
         for (tab, found) in hosted {
             let reading = reading(for: found.session)
             activities[tab] = ActivityMonitor.found(for: found.session, reading: reading,
-                                                    processGroup: found.processGroup, probe: tabs[tab])
+                                                    processGroup: found.processGroup,
+                                                    probe: tabs[tab])
         }
         inspected = inspected.filter { touched.contains($0.key) }
         let live = Set(hosted.values.map(\.session.sessionID))
@@ -157,7 +160,8 @@ final class ActivityMonitor: ActivityMonitoring {
         }
         let claude = SessionDiscovery.liveSessions(in: table, inspect: inspect)
             .sorted { $0.startedAt > $1.startedAt }
-        let agents = SessionDiscovery.runningAgents(in: table, besides: claude, inspect: inspect, cache: files)
+        let agents = SessionDiscovery.runningAgents(in: table, besides: claude, inspect: inspect,
+                                                    cache: files)
             .sorted { $0.startedAt > $1.startedAt }
         files.prune()
         let sessions = claude + agents
@@ -258,7 +262,8 @@ final class ActivityMonitor: ActivityMonitoring {
             let before = seen[tab.id]
             var after = found[tab.id]?.activity
             if var activity = after {
-                stampCodexPrompt(&activity, tab: tab.id, onScreen: found[tab.id]?.fromScreen ?? false)
+                let onScreen = found[tab.id]?.fromScreen ?? false
+                stampCodexPrompt(&activity, tab: tab.id, onScreen: onScreen)
                 after = activity
             } else {
                 codexPrompts[tab.id] = nil

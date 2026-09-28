@@ -7,7 +7,8 @@ enum ActivityCLI {
         if let name = value(of: "--agent", in: args) {
             guard let kind = AgentKind(rawValue: name.lowercased()) else {
                 let names = AgentKind.allCases.map(\.rawValue).joined(separator: ", ")
-                FileHandle.standardError.write(Data("unknown agent \(name); one of \(names)\n".utf8))
+                let text = "unknown agent \(name); one of \(names)\n"
+                FileHandle.standardError.write(Data(text.utf8))
                 return true
             }
             agent = kind
@@ -39,10 +40,11 @@ enum ActivityCLI {
         FileHandle.standardError.write(Data("scanned \(rows.count) sessions in \(milliseconds) ms\n".utf8))
     }
 
-    private static let headings = ["PID", "AGENT", "HOST", "STATUS", "SINCE", "TURN", "DOING", "ASKS",
-                                   "LAST MESSAGE"]
+    private static let headings = ["PID", "AGENT", "HOST", "STATUS", "SINCE", "TURN", "DOING",
+                                   "ASKS", "LAST MESSAGE"]
 
-    private static func table(_ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
+    private static func table(
+        _ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let cells = [headings] + rows.map { row in
             [String(row.session.pid),
              row.session.agent.rawValue,
@@ -72,7 +74,8 @@ enum ActivityCLI {
         return host.displayName
     }
 
-    private static func json(_ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
+    private static func json(
+        _ rows: [(session: AgentSessionInfo, activity: AgentActivity)]) -> String {
         let formatter = ISO8601DateFormatter()
         let objects: [[String: Any]] = rows.map { session, activity in
             var object: [String: Any] = [
@@ -160,8 +163,10 @@ enum ActivityCLI {
         defer { try? handle.close() }
         let start = (try? handle.read(upToCount: 512)) ?? Data()
         let line = start.prefix { $0 != UInt8(ascii: "\n") }
-        let markers: [(String, AgentKind)] = [("session_meta", .codex), ("title", .omp), ("session", .pi)]
-        for (marker, agent) in markers where line.range(of: Data("\"type\":\"\(marker)\"".utf8)) != nil {
+        let markers: [(String, AgentKind)] = [("session_meta", .codex), ("title", .omp),
+                                              ("session", .pi)]
+        for (marker, agent) in markers
+        where line.range(of: Data("\"type\":\"\(marker)\"".utf8)) != nil {
             return agent
         }
         return .claude
@@ -175,19 +180,22 @@ enum ActivityCLI {
             // its index.
             let folder = url.deletingLastPathComponent()
             let home = (0..<4).reduce(folder) { dir, _ in dir.deletingLastPathComponent() }
-            let names = CodexRollout.threadNames(in: folder).merging(CodexRollout.threadNames(in: home)) { $1 }
+            let names = CodexRollout.threadNames(in: folder)
+                .merging(CodexRollout.threadNames(in: home)) { $1 }
             print("id:        \(head.id)")
             print("cwd:       \(head.cwd)")
             print("started:   \(head.startedAt.map(formatter.string(from:)) ?? "-")")
             print("origin:    \(head.originator ?? "-")")
             print("thread:    \(names[head.id] ?? "-")")
-            print("prompt:    \(head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) } ?? "-")")
+            let prompt = head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) }
+            print("prompt:    \(prompt ?? "-")")
         } else if agent != .codex, let head = PiSession.head(url) {
             print("id:        \(head.id)")
             print("cwd:       \(head.cwd)")
             print("started:   \(head.startedAt.map(formatter.string(from:)) ?? "-")")
             print("title:     \(head.title ?? "-")")
-            print("prompt:    \(head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) } ?? "-")")
+            let prompt = head.firstPrompt.map { SessionDiscovery.trimmed($0, to: 80) }
+            print("prompt:    \(prompt ?? "-")")
         } else {
             print("head:      -")
         }
@@ -202,11 +210,12 @@ enum ActivityCLI {
             let shown = AgentTitle.parse(text, agent: agent).map { parsed in
                 "\(name(parsed.status)) \(parsed.marked ? "marked" : "unmarked") \"\(parsed.name)\""
             }
-            print(agent.rawValue.padding(toLength: 11, withPad: " ", startingAt: 0) + (shown ?? "-"))
+            let column = agent.rawValue.padding(toLength: 11, withPad: " ", startingAt: 0)
+            print(column + (shown ?? "-"))
         }
     }
 
-    // A capture may start with a `# title: '…'` line, as the pty driver writes them.
+    // A capture may start with a `# title: '…'` line: the tab's title when the screen was taken.
     private static func screen(at path: String, agents: [AgentKind]) {
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         guard let handle = try? FileHandle(forReadingFrom: url) else {
@@ -220,7 +229,8 @@ enum ActivityCLI {
         var title: String?
         if let first = lines.first, first.hasPrefix("# title: ") {
             lines.removeFirst()
-            title = first.dropFirst("# title: ".count).trimmingCharacters(in: CharacterSet(charactersIn: "'"))
+            title = first.dropFirst("# title: ".count)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "'"))
         }
         print("file:      \(url.path) (\(lines.count) rows)")
         for agent in agents {
@@ -228,7 +238,8 @@ enum ActivityCLI {
                 let status = AgentTitle.parse(title, agent: agent).map { name($0.status) } ?? "-"
                 print("title:     \(agent.rawValue) \(status) \"\(title)\"")
             }
-            print("request:   \(agent.rawValue) \(describe(AgentScreen.request(lines: lines, agent: agent)))")
+            let request = AgentScreen.request(lines: lines, agent: agent)
+            print("request:   \(agent.rawValue) \(describe(request))")
         }
     }
 

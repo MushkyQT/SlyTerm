@@ -79,7 +79,8 @@ final class TeleportEngine {
             return
         }
         guard let command = session.agent.resumeCommand(id: id) else {
-            Settings.log("teleport move: \(session.agent.name) sessions cannot be resumed, nothing done")
+            Settings.log("teleport move: \(session.agent.name) sessions cannot be resumed, "
+                         + "nothing done")
             finish(completion, .failure(.notFound(Self.name(of: session))))
             return
         }
@@ -102,7 +103,8 @@ final class TeleportEngine {
             guard let self else { return }
             guard stopped else {
                 Settings.log("teleport move: \(Self.name(of: session)) (pid \(session.pid)) would not stop, nothing was resumed")
-                self.finish(completion, .failure(.couldNotStop(pid: session.pid, agent: session.agent)))
+                let failure = TeleportError.couldNotStop(pid: session.pid, agent: session.agent)
+                self.finish(completion, .failure(failure))
                 return
             }
             controller.newTab(directory: self.directory(session.cwd), typing: command, run: true)
@@ -121,7 +123,8 @@ final class TeleportEngine {
             return
         }
         guard let command = session.agent.copyCommand(id: id) else {
-            Settings.log("teleport copy: \(session.agent.name) sessions cannot be copied, nothing done")
+            Settings.log("teleport copy: \(session.agent.name) sessions cannot be copied, "
+                         + "nothing done")
             finish(completion, .failure(.cannotCopy(session.agent)))
             return
         }
@@ -133,7 +136,8 @@ final class TeleportEngine {
 
     private func attach(_ session: AgentSessionInfo, controller: OverlayController,
                         completion: @escaping (Result<Void, TeleportError>) -> Void) {
-        guard session.agent == .claude, let attachID = session.attachID.flatMap(Safe.attachID) else {
+        guard session.agent == .claude,
+              let attachID = session.attachID.flatMap(Safe.attachID) else {
             Settings.log("teleport attach: \(Self.name(of: session)) has no usable attach id")
             finish(completion, .failure(.noAttachID))
             return
@@ -251,9 +255,10 @@ final class TeleportEngine {
         let alert = NSAlert()
         alert.messageText = session.status == .working ? "\(name) is working in that tab"
             : "\(name) is waiting for your answer in that tab"
-        alert.informativeText = "Moving it now interrupts the current turn; what \(name) has said so far is kept."
-            + (session.agent == .claude ? " To move it without interrupting, type /bg in that tab first and "
-                + "attach it here instead." : "")
+        alert.informativeText = "Moving it now interrupts the current turn; what \(name) has said "
+            + "so far is kept."
+            + (session.agent == .claude ? " To move it without interrupting, type /bg in that tab "
+                + "first and attach it here instead." : "")
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Cancel")
         alert.window.level = Settings.shared.dialogLevel
@@ -397,8 +402,10 @@ final class TeleportEngine {
 
     private static func resolve(_ subject: RemoteRequest.Subject) -> TeleportCandidate? {
         switch subject {
-        case .session(let id): return SessionDiscovery.agentSession(id: id).map(TeleportCandidate.agent)
-        case .pid(let pid): return SessionDiscovery.agentSession(pid: pid).map(TeleportCandidate.agent)
+        case .session(let id):
+            return SessionDiscovery.agentSession(id: id).map(TeleportCandidate.agent)
+        case .pid(let pid):
+            return SessionDiscovery.agentSession(pid: pid).map(TeleportCandidate.agent)
         case .tty(let tty): return SessionDiscovery.shellTab(tty: tty).map(TeleportCandidate.shell)
         case .folder: return nil
         }

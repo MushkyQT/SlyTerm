@@ -488,7 +488,9 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     // With cards off, an agent SlyTerm reads only marks its tab, whatever it rings or sends. Codex
     // rings when told the terminal lost focus, which the game taking the keyboard now does.
-    private func ringsQuietly(_ tab: TerminalTab) -> Bool { !settings.activityCards && tab.activity != nil }
+    private func ringsQuietly(_ tab: TerminalTab) -> Bool {
+        !settings.activityCards && tab.activity != nil
+    }
 
     // An agent SlyTerm reads already gets its card from the monitor, with more in it.
     private func notificationArrived(in tab: TerminalTab, title: String?, body: String) {

@@ -222,7 +222,8 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
                 continue
             }
             let old = titleStates[agent]
-            var state = old ?? TitleState(status: parsed.status, since: now, name: "", markedAt: nil)
+            var state = old
+                ?? TitleState(status: parsed.status, since: now, name: "", markedAt: nil)
             if state.status != parsed.status { (state.status, state.since) = (parsed.status, now) }
             state.name = parsed.name
             if parsed.marked { state.markedAt = now }
@@ -247,7 +248,11 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         }
         while low < high {
             let middle = (low + high) / 2
-            if terminal.getScrollInvariantLine(row: middle) == nil { high = middle } else { low = middle + 1 }
+            if terminal.getScrollInvariantLine(row: middle) == nil {
+                high = middle
+            } else {
+                low = middle + 1
+            }
         }
         return (max(top, low - terminal.rows)..<low).map { row in
             // Cells never written hold NUL.

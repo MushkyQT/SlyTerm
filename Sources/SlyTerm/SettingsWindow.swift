@@ -271,8 +271,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
                                  #selector(setActivityCards(_:)))
         teleportClosesSource = checkbox("Close the tab a session came from after moving it (iTerm2, Terminal)",
                                         #selector(setTeleportClosesSource(_:)))
-        teleportConfirmBusy = checkbox("Ask before interrupting an agent that is working or waiting for an answer",
-                                       #selector(setTeleportConfirmBusy(_:)))
+        teleportConfirmBusy = checkbox(
+            "Ask before interrupting an agent that is working or waiting for an answer",
+            #selector(setTeleportConfirmBusy(_:)))
         autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
                                   #selector(setAutoPauseVideo(_:)))
         return grid([
@@ -281,8 +282,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
             section("Alerts", [
                 attentionSound,
                 activityCards,
-                caption("Off, an agent finishing or asking only marks its tab: no card, no sound, and a hidden "
-                        + "terminal stays hidden. The Allow and Refuse shortcuts go with it."),
+                caption("Off, an agent finishing or asking only marks its tab: no card, no sound, "
+                        + "and a hidden terminal stays hidden. The Allow and Refuse shortcuts go "
+                        + "with it."),
             ]),
             section("Bring In", [teleportClosesSource, teleportConfirmBusy]),
             section("Web tabs", [

@@ -69,7 +69,8 @@ other program that sends terminal notifications gets a mark and a card with its 
 When an agent finishes a turn or asks for permission, a card appears by the tab strip with the end
 of its answer or the command it wants to run. For Claude Code and Codex, `⌃⌥Y` allows the request
 and `⌃⌥N` refuses it, and the game keeps the keyboard throughout. SlyTerm types the answer only
-after it has checked that the prompt on screen is the one the card showed. Anything it cannot answer
+after it has checked that the prompt on screen is the one the card showed; for Codex, only its usual
+prompt to run a command or edit files, with its default keys, is answered. Anything it cannot answer
 safely, such as a question with several options, waits for you in the terminal.
 
 <img src="docs/features/claude.gif" width="600"
@@ -129,9 +130,10 @@ setting sends the lookup's pages there instead.
 If you started Claude Code, Codex, omp or pi in iTerm2, Terminal or another terminal app before
 launching the game, press `⌘⇧T` in a terminal tab to bring it into SlyTerm. The conversation carries
 on from the same session. A background Claude (`claude --bg`) is attached without being
-interrupted, and Codex keeps working through the move. Claude Code, Codex and pi can also be
-copied, with the original left running, and a plain shell tab comes across with its folder and its
-command.
+interrupted, and Codex keeps working through the move when it runs in its background server, as
+it does by default. Otherwise moving an agent in the middle of a turn interrupts it, so SlyTerm asks
+first. Claude Code, Codex and pi can also be copied, with the original left running, and a plain
+shell tab comes across with its folder and its command.
 
 <img src="docs/features/bring-in.gif" width="600"
      alt="⌘⇧T opens Bring In a Session over Old School RuneScape, and Return resumes an iTerm2 Claude session in a new tab">

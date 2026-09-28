@@ -278,7 +278,8 @@ private final class TeleportPickerView: NSView, NSTableViewDataSource, NSTableVi
 
     let searchField = NSSearchField()
     private let titleLabel = NSTextField(labelWithString: "Bring In a Session")
-    private let subtitleLabel = NSTextField(labelWithString: "Coding agent sessions and terminal tabs open in other apps")
+    private let subtitleLabel = NSTextField(
+        labelWithString: "Coding agent sessions and terminal tabs open in other apps")
     private let scrollView = NSScrollView()
     private let table = NSTableView()
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
@@ -299,7 +300,7 @@ private final class TeleportPickerView: NSView, NSTableViewDataSource, NSTableVi
     private static let padding: CGFloat = 16
     private static let rowHeight: CGFloat = 46
     private static let groupHeight: CGFloat = 26
-    private static let maxListHeight = rowHeight * 8 + groupHeight * 4
+    private static let maxListHeight = rowHeight * 8 + groupHeight * 5
     private static let minListHeight: CGFloat = 132
 
     override init(frame frameRect: NSRect) {
@@ -492,7 +493,8 @@ private final class TeleportPickerView: NSView, NSTableViewDataSource, NSTableVi
             statusLabel.stringValue = loading
                 ? "Looking…"
                 : (query.isEmpty
-                    ? "Nothing to bring in. Coding agent sessions and shell tabs running in other terminals appear here."
+                    ? "Nothing to bring in. Coding agent sessions and shell tabs running in other "
+                        + "terminals appear here."
                     : "Nothing matches “\(searchField.stringValue)”.")
         }
         refreshFooter()
@@ -803,25 +805,30 @@ private enum SnapshotSamples {
         func session(_ label: String, _ folder: String, _ minutes: Double, background: Bool = false,
                      status: TeleportStatus = .idle, host: TeleportHost, pid: pid_t,
                      agent: AgentKind = .claude) -> TeleportCandidate {
-            .agent(AgentSessionInfo(pid: pid, sessionID: "\(pid)-7f1661d9-1589-4587-9a06-0c273bd86d75",
+            .agent(AgentSessionInfo(pid: pid,
+                                      sessionID: "\(pid)-7f1661d9-1589-4587-9a06-0c273bd86d75",
                                       cwd: home + folder, name: "slyterm-\(pid)", label: label,
                                       isBackground: background, attachID: background ? "adc5721b" : nil,
                                       status: status, startedAt: Date(timeIntervalSinceNow: -minutes * 60),
-                                      host: host, tty: "ttys00\(pid % 9)", version: "2.1.278", agent: agent))
+                                      host: host, tty: "ttys00\(pid % 9)", version: "2.1.278",
+                                      agent: agent))
         }
         return [
             session("Add rate limiting to the login endpoint", "/Projects/api", 14,
-                    status: .working, host: .iTerm2(sessionID: "648BA0E4-3F1C-4C6E-9C2B-1B0A9E1D7A21"), pid: 3745),
+                    status: .working,
+                    host: .iTerm2(sessionID: "648BA0E4-3F1C-4C6E-9C2B-1B0A9E1D7A21"), pid: 3745),
             session("Fix the flaky date test in the invoice export", "/Projects/billing", 55,
-                    status: .waiting, host: .iTerm2(sessionID: "3B7D9E21-4C5A-4F60-8A1B-2C3D4E5F6071"), pid: 4149),
-            session("Draft the release notes", "/Projects/site/.claude/worktrees/release-notes", 372,
-                    background: true, status: .idle, host: .unknown, pid: 79439),
+                    status: .waiting,
+                    host: .iTerm2(sessionID: "3B7D9E21-4C5A-4F60-8A1B-2C3D4E5F6071"), pid: 4149),
+            session("Draft the release notes", "/Projects/site/.claude/worktrees/release-notes",
+                    372, background: true, status: .idle, host: .unknown, pid: 79439),
             session("Bring a session in from another terminal", "/Projects/slyterm", 41,
                     status: .working, host: .slyTerm(tabID: UUID()), pid: 4110),
-            session("Port the export job to the new queue", "/Projects/billing", 23, status: .working,
-                    host: .other(program: "ghostty"), pid: 5312, agent: .codex),
-            session("Find why the strip loses its rounded corners in panic mode", "/Projects/slyterm", 128,
-                    status: .idle, host: .iTerm2(sessionID: "9C0F2A71-55B4-41D2-8E77-2D3C4E5F6A70"),
+            session("Port the export job to the new queue", "/Projects/billing", 23,
+                    status: .working, host: .other(program: "ghostty"), pid: 5312, agent: .codex),
+            session("Find why the strip loses its rounded corners in panic mode",
+                    "/Projects/slyterm", 128, status: .idle,
+                    host: .iTerm2(sessionID: "9C0F2A71-55B4-41D2-8E77-2D3C4E5F6A70"),
                     pid: 20728, agent: .omp),
             .shell(ShellTabInfo(shellPid: 6621, tty: "ttys004", cwd: home + "/Projects/site",
                                 shellName: "zsh", foregroundCommand: "npm run dev",

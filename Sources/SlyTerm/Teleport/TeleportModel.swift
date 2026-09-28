@@ -167,9 +167,8 @@ enum TeleportAction: Equatable {
     }
 
     static func secondary(for candidate: TeleportCandidate) -> TeleportAction? {
-        guard case .agent(let s) = candidate, !s.isBackground, s.agent.copyCommand(id: s.sessionID) != nil else {
-            return nil
-        }
+        guard case .agent(let s) = candidate, !s.isBackground,
+              s.agent.copyCommand(id: s.sessionID) != nil else { return nil }
         return .copy
     }
 

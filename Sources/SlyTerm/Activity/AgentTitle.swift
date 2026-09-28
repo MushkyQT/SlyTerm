@@ -6,7 +6,8 @@ enum AgentTitle {
     private typealias Parsed = (status: TeleportStatus, name: String, marked: Bool)
 
     // nil when `agent` has no title protocol or the title is not one of its own.
-    static func parse(_ title: String, agent: AgentKind) -> (status: TeleportStatus, name: String, marked: Bool)? {
+    static func parse(_ title: String, agent: AgentKind)
+        -> (status: TeleportStatus, name: String, marked: Bool)? {
         // Gemini CLI and Qwen Code pad their titles to 80 columns.
         let title = title.trimmingCharacters(in: .whitespaces)
         switch agent {
@@ -24,7 +25,8 @@ enum AgentTitle {
         var rest = Substring(title)
         // Its realtime voice mode puts a dot in front of everything else.
         if rest.hasPrefix("● ") { rest = rest.dropFirst(2) }
-        for prefix in ["[ ! ] Action Required", "[ . ] Action Required"] where rest.hasPrefix(prefix) {
+        for prefix in ["[ ! ] Action Required", "[ . ] Action Required"]
+        where rest.hasPrefix(prefix) {
             return (.waiting, codexName(rest.dropFirst(prefix.count)), true)
         }
         if let first = rest.unicodeScalars.first, isBraille(first),
@@ -54,7 +56,9 @@ enum AgentTitle {
         case "!": return (.waiting, name, true)
         default:
             guard mark.unicodeScalars.count == 1, let scalar = mark.unicodeScalars.first,
-                  isBraille(scalar) || "○◔◑◕●-\\|/:".unicodeScalars.contains(scalar) else { return nil }
+                  isBraille(scalar) || "○◔◑◕●-\\|/:".unicodeScalars.contains(scalar) else {
+                return nil
+            }
             return (.working, name, true)
         }
     }
@@ -68,7 +72,9 @@ enum AgentTitle {
         ]
         for form in forms where title.hasPrefix(form.icon + " ") {
             let rest = title.dropFirst(form.icon.count).trimmingCharacters(in: .whitespaces)
-            guard let word = form.word else { return (form.status, folder(Substring(rest), last: true), true) }
+            guard let word = form.word else {
+                return (form.status, folder(Substring(rest), last: true), true)
+            }
             guard rest.hasPrefix(word) else { return nil }
             return (form.status, folder(rest.dropFirst(word.count), last: false), true)
         }
@@ -87,7 +93,9 @@ enum AgentTitle {
     // idle has no mark, as with Codex.
     private static func qwen(_ title: String) -> Parsed {
         var scalars = Substring(title).unicodeScalars
-        guard let first = scalars.first, first == "◐" || first == "✳" else { return (.idle, title, false) }
+        guard let first = scalars.first, first == "◐" || first == "✳" else {
+            return (.idle, title, false)
+        }
         scalars = scalars.dropFirst()
         if let selector = scalars.first, selector == "\u{FE0E}" || selector == "\u{FE0F}" {
             scalars = scalars.dropFirst()

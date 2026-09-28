@@ -121,8 +121,8 @@ enum ActivityEvent: Equatable {
 
     var tab: UUID {
         switch self {
-        case .finished(let tab, _), .asks(let tab, _), .answered(let tab), .gone(let tab), .changed(let tab),
-             .notified(let tab, _, _): return tab
+        case .finished(let tab, _), .asks(let tab, _), .answered(let tab), .gone(let tab),
+             .changed(let tab), .notified(let tab, _, _): return tab
         }
     }
 }
@@ -133,7 +133,7 @@ struct TabProbe: Equatable {
     var tty: String
     var foregroundGroup: pid_t?
     var titles: [AgentKind: TitleState]
-    // The visible lines, read only while some title says its agent is waiting.
+    // The visible lines, read only while the title says the tab's agent is waiting.
     var screen: [String]?
 }
 

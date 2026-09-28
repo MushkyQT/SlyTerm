@@ -259,8 +259,10 @@ says so ("omp is waiting, but not for a yes or no").
 Turn the card off in Settings › General ("Show a card when an agent finishes or asks you
 something", key `activityCards`) and an agent finishing or asking only marks its tab: the marks on
 the strip and the yellow tab stay, but there is no card, no sound, and a hidden overlay stays
-hidden. The allow and refuse shortcuts go with it, `slyterm://allow` and `slyterm://refuse`
-included. A terminal notification then marks its tab as a bell does, with no card.
+hidden. The same goes for a bell or a terminal notification from a tab whose agent SlyTerm reads,
+such as Claude Code's terminal bell or omp's: it marks the tab and nothing more. From any other
+tab, a bell or a notification still plays the sound and brings a hidden overlay back, with no card.
+The allow and refuse shortcuts go with the card, `slyterm://allow` and `slyterm://refuse` included.
 
 Those two URLs are off anyway until you turn them on, since any program of yours can open a URL,
 and an agent that can run `open` could approve its own next request:
@@ -278,8 +280,8 @@ status still shows, only the label does not.
 
 The poll notices a change within a second; a Claude Code hook calling `slyterm://notify` (see
 [Claude Code hooks](#claude-code-hooks)) makes it instant, and a terminal bell
-(`preferredNotifChannel` set to `terminal_bell` in Claude Code's settings) marks the tab like any
-other bell. A session brought in with Attach runs in Claude's daemon rather than in the tab, so its
+(`preferredNotifChannel` set to `terminal_bell` in Claude Code's settings) marks the tab too. A
+session brought in with Attach runs in Claude's daemon rather than in the tab, so its
 status is read through the `claude attach` client in the tab and its registry entry, when both can
 be seen.
 
@@ -300,29 +302,38 @@ and, while it asks for something, the text on the tab.
 - **The rollout.** `sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl` under `$CODEX_HOME` (`~/.codex`
   by default) records each turn's start and end, the call it is making (a command, the file an edit
   touches, a plan, an MCP tool), its final answer and how long it took; `session_index.jsonl` beside
-  it holds the names threads were given. A Codex started as `codex resume <id>` is read from that
-  thread's rollout, and one that runs its turns itself, as with `--no-daemon`, from the rollout it
-  holds open.
+  it holds the names threads were given. A Codex that runs its turns itself, as with `--no-daemon`,
+  is read from the rollout it holds open. One started as `codex resume <id>` is read from that
+  thread's rollout while its server still has it open: after `/new` or `/resume` inside it, the
+  server lets go of the old thread within a minute or so, and the folder rule below takes over. Two
+  Codex sessions started with the same id both go without.
 - **The background server.** Since 0.157 Codex by default runs its turns in one machine-wide
   `codex app-server`, which writes the rollouts, while the Codex in the tab only shows them. SlyTerm
   finds the server the tab's Codex is connected to and the rollouts it has open, from the kernel's
   list of their open files and sockets, without connecting to anything. It takes the one in the
   same folder that began and was written since the tab's Codex started, with the thread name in the
   title deciding between several; two Codex sessions in one folder that were both open when a thread
-  began cannot tell whose it is, and neither gets it. A thread reopened from Codex's own resume
-  picker is missed: its status still comes from the title, its card has no text, and Bring In lists
-  its tab as a shell tab. The server also runs Codex's commands and hooks, with its own environment,
-  so `SLYTERM_TAB_ID` never reaches them and a Codex hook cannot say which tab to mark. The title
-  does that job.
+  began cannot tell whose it is, and neither gets it, wherever the other one runs. A thread reopened
+  from Codex's own resume picker is missed: its status still comes from the title, its card has no
+  text, and Bring In lists its tab as a shell tab. The server also runs Codex's commands and hooks,
+  with its own environment, so `SLYTERM_TAB_ID` never reaches them and a Codex hook cannot say which
+  tab to mark. The title does that job.
 - **The prompt on the tab.** Codex never writes an approval prompt to disk: in the rollout, a call
   that waits for approval looks like one that runs. So while its title says Action Required,
   SlyTerm reads the lines the tab shows (the text SlyTerm itself holds for that terminal, not a
-  capture of the screen) and looks at the prompt at the bottom: `Would you like to run the following
-  command?` with its `$` line, or `Would you like to make the following edits?` with its
-  destinations, each with the options `1. Yes, proceed (y)` and `No, and tell Codex what to do
-  differently (esc)`. The card shows the command or the files. Any other prompt (network access,
-  permissions, an MCP server's request, a question, a plan) is a Codex waiting for you, left to the
-  terminal; with no prompt on the tab, the rollout's pending call is the card's text.
+  capture of the screen), from the bottom up. Only a prompt shaped exactly like Codex's approval to
+  run a command or make an edit, with its default keys, counts: `Press enter to confirm or esc to
+  cancel` on the last line; right above it the options, `1. Yes, proceed (y)` first, `No, and tell
+  Codex what to do differently (esc)` last and between them only Codex's own `(p)` or `(a)` option,
+  none of them taking `n`; above those, `Would you like to run the following command?` or `Would you
+  like to make the following edits?`, the only such title on the tab. The paragraphs Codex puts
+  before a command (`Environment:`, `Reason:` and the like, each ending at a blank line) are skipped
+  whole, and the command is everything from the `$` line after them to the options, blank lines
+  included; an edit shows its `Destination:` paths. A command too long for the card ends there
+  with `…`, so the card never looks complete when it is not. Anything else is a Codex waiting for
+  you, left to the terminal: a command Codex itself cut short (`[… 24 lines]`), network access,
+  permissions, an MCP server's request, a question, a plan. With no prompt on the tab, the
+  rollout's pending call is the card's text.
 
 Allow types `y` and refuse types `n`, Codex's own keys for those two options. Refusing is "No, and
 tell Codex what to do differently": the call is refused and the turn stops, waiting for what you
@@ -330,7 +341,9 @@ type next. Letters rather than Return and Escape, because if the prompt went awa
 lands in the input box, where Return would send a draft and Escape would interrupt the turn. Right
 before the key, in the same turn of the main thread, SlyTerm reads the tab's lines again and types
 only if they show the very prompt the card did. A prompt whose keys were changed in Codex's keymap
-shows other hints and is left to the terminal.
+shows other hints and is left to the terminal. Codex's title stays on Action Required from one
+approval to the next, so a different command or edit on the tab is a new prompt with a card of its
+own, and a key pressed for the one before is not typed into it.
 
 ### omp and pi
 
@@ -343,14 +356,15 @@ session file it points to has the title omp gave the session, the call it is mak
 omp has the model give for each call, and the last reply. A question from omp's `ask` tool shows on
 the card with its options, and waits for you in the terminal like a tool approval, which omp asks
 for only when its `tools.approvalMode` is not the default. omp also rings the terminal bell when a
-turn ends or it asks something, and a bell marks the tab, sound included, whatever the card setting.
-Until omp has written the session's first reply there is no file, and the card has no text.
+turn ends or it asks something, which marks the tab as well. Until omp has written the session's
+first reply there is no file, and the card has no text.
 
 pi sets a title that never changes, and does not ask for permission, so it is read from its session
 file alone: under `~/.pi/agent/sessions/`, in a folder named after the working folder, the file
 named by `--session` or `--session-id`, else the newest one written there since pi started, when no
-other pi runs in that folder. pi writes a message once it is finished, so while a reply is being
-written the last line is the prompt or the tool results it answers, and the tab shows it working.
+other pi, in any terminal, runs in that folder. pi writes a message once it is finished, so while a
+reply is being written the last line is the prompt or the tool results it answers, and the tab shows
+it working.
 
 ### Gemini CLI and Qwen Code
 
@@ -370,10 +384,11 @@ as a notification: `OSC 9` with a text (`ESC ] 9 ; text BEL`) or `OSC 777` with 
 on, shows one: yellow like a finished turn, with the tab's name, the notification's title (or
 "notification") and its text, cut to its printable characters and about 300 of them. It fades like a
 finished card. A tab whose agent SlyTerm already reads gets that agent's card instead, which says
-more. An `OSC 9` whose text starts with a number, as the `9 ; 4` progress report and ConEmu's other
-commands do, is not a notification; a progress report is passed on to the terminal view as before.
-Nothing in the tab you are typing in is news, so to try one, run
-this and click into another app before it fires:
+more. An `OSC 9` whose text is a number, or a number and a `;` before the rest, is one of ConEmu's
+numbered commands rather than a notification: `9 ; 4 ; …`, the progress report, is passed on to the
+terminal view as before, and the others are dropped. A text that only begins with a digit, such as
+`3 tests failed`, is a notification. Nothing in the tab you are typing in is news, so to try one,
+run this and click into another app before it fires:
 
 ```sh
 sleep 5; printf '\033]777;notify;Build;All 42 tests pass\a'
@@ -403,7 +418,8 @@ Three kinds of thing can come in, and each comes across differently:
   transcript, so the conversation continues rather than starting over. It takes a few seconds, while
   the old one shuts down. A Codex whose turns run in its background server, as they do by default
   since Codex 0.157, keeps its turn running there while the one in the other terminal stops, and
-  `codex resume` here picks it up where it is. A Claude conversation you have not typed anything
+  `codex resume` here picks it up where it is. One that runs its turns itself, as with
+  `--no-daemon`, stops with its turn. A Claude conversation you have not typed anything
   into yet has no transcript, so bringing it in gives you a fresh one; a Codex, omp or pi that has
   not written its session file yet, or whose file SlyTerm cannot find, is listed as a plain shell
   tab.
@@ -442,10 +458,16 @@ Moving an agent that is mid-turn interrupts it, and whatever it was in the middl
 lost; the transcript on disk is not, which is why the resumed session still knows everything up to
 that point. So SlyTerm asks before interrupting a session it can see is working, or waiting for an
 answer to a permission prompt or a question, except a Codex whose turns run in its background
-server, whose turn a move does not interrupt. Turn the question off in Settings › General ("Ask
+server, whose turn a move does not interrupt; a Codex that runs its turns itself is asked about
+like the others. Turn the question off in Settings › General ("Ask
 before interrupting an agent that is working or waiting for an answer"). To avoid it altogether with
 Claude, type `/bg` in the source tab first: the session moves into Claude's daemon without being
 interrupted, and the picker then offers Attach, which stops nothing at all.
+
+To stop the session, SlyTerm sends it `SIGTERM` and waits up to 5 s. A Claude Code in iTerm2 that
+is still running then gets two Ctrl-C typed into its iTerm2 session and 3 s more, since it quits
+on a second Ctrl-C; no other agent or terminal gets them. If it is still running after that, nothing
+is resumed and a toast says it could not be stopped.
 
 By default the tab a session came from is closed once it is here, so you are not left with a dead
 prompt in iTerm2 to go back and tidy up. Only iTerm2 and Terminal.app can be told to close a tab, so
@@ -1520,7 +1542,8 @@ a game while an agent shuts down.
 `ActivityMonitor` scans once a second, three times slower while the overlay is hidden, and at once
 when a tab's title changes an agent's status. A scan starts on the main thread with a `TabProbe`
 per terminal tab: its tty, its foreground process group, the state each agent's title rules give
-its title and, only while one of them says its agent is waiting, the tab's visible lines. Everything
+its title and, only while the title says the agent the last scan found in the tab is waiting,
+the tab's visible lines. Everything
 else runs on the monitor's serial queue.
 
 Claude Code comes first. The monitor reads its session registry (`~/.claude/sessions/<pid>.json`)
@@ -1530,7 +1553,9 @@ tab with no Claude is matched to the Codex, omp, pi, Gemini CLI or Qwen Code pro
 that is in its tty's foreground group, recognised by its kernel name or, for a node or bun launch,
 by the script it runs; npm's Codex is a `node` whose native `codex` child is the one reported, once
 per group. `AgentDiscovery` then finds that process's session file, as [Codex](#codex) and
-[omp and pi](#omp-and-pi) describe, keeping what it read in a cache pruned every scan.
+[omp and pi](#omp-and-pi) describe, keeping what it read in a cache pruned every scan. Which Codex
+began a thread, and whether a pi is alone in its folder, is settled over every Codex and pi of this
+user in front on any terminal, not only SlyTerm's, before the tabs' own results are kept.
 
 `TranscriptTail` reads a Claude transcript, `CodexRollout` a Codex rollout and `PiSession` a pi or
 omp session file. Each reads the last 64 KB, only when the file's size or mtime moved, and goes

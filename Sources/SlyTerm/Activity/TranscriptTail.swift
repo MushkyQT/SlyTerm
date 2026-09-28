@@ -12,7 +12,8 @@ enum TranscriptTail {
         var ended = false
 
         var isEmpty: Bool {
-            doing == nil && request == nil && lastMessage == nil && lastTurnDuration == nil && status == nil
+            doing == nil && request == nil && lastMessage == nil && lastTurnDuration == nil
+                && status == nil
         }
     }
 
