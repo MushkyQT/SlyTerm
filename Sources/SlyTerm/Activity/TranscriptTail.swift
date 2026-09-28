@@ -241,7 +241,7 @@ enum TranscriptTail {
         return .permission(tool: tool, summary: summary, detail: detail)
     }
 
-    private static func questions(_ input: [String: Any]) -> [(text: String, options: [String])] {
+    static func questions(_ input: [String: Any]) -> [(text: String, options: [String])] {
         guard let asked = input["questions"] as? [[String: Any]] else { return [] }
         return asked.compactMap { question in
             let text = string(question["question"])
@@ -298,7 +298,7 @@ enum TranscriptTail {
         URL(string: url)?.host ?? url
     }
 
-    private static func firstLine(_ text: String) -> String {
+    static func firstLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
             .trimmingCharacters(in: .whitespaces) ?? ""
     }
@@ -307,7 +307,7 @@ enum TranscriptTail {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    private static func clipped(_ text: String, lines limit: Int, characters: Int) -> String {
+    static func clipped(_ text: String, lines limit: Int, characters: Int) -> String {
         var kept = text.components(separatedBy: .newlines)
         var cut = false
         if kept.count > limit { kept = Array(kept.prefix(limit)); cut = true }
