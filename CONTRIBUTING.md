@@ -151,8 +151,10 @@ Match the code around you. In particular:
   No setting keys, no internals, no edge cases.
 - **docs/TECHNICAL.md** is the reference: behaviour in detail, every setting, the URL scheme, the
   command-line modes, troubleshooting and the architecture.
+- **CHANGELOG.md** lists what changed in each version, with a link to the pull request for each
+  line. Leave out changes nobody would notice, such as a comment or a rename inside one file.
 
-Update both in the same pull request as the behaviour they describe.
+Update all three in the same pull request as the behaviour they describe.
 
 ## Commits and pull requests
 
@@ -165,6 +167,13 @@ Update both in the same pull request as the behaviour they describe.
   can have as many commits as you like.
 - The description says what changed, how you checked it and what is still unverified. For a visual
   change, attach the snapshot PNG or a screenshot, with other players' names and chat blurred.
+- A pull request that changes the app raises its version, in `Resources/Info.plist`
+  (`CFBundleShortVersionString`, and `CFBundleVersion` up by one), and adds a section for that
+  version at the top of CHANGELOG.md. The version follows [semantic versioning](https://semver.org):
+  the patch number for a fix, the minor number for something new, the major number for a change
+  that takes something away, such as a feature, a hotkey, a URL route or a command-line mode. If
+  another pull request takes the number first, take the next one when you rebase. Once the pull
+  request is merged, the Tag workflow tags `main` with `vX.Y.Z`.
 - AI-assisted changes are welcome. Credit the tool with a `Co-Authored-By:` trailer, and review
   the change yourself before you open the pull request: you are its author.
 

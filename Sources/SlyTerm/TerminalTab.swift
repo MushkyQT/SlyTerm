@@ -80,7 +80,10 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         let s = Settings.shared
         var env = Terminal.getEnvironmentVariables(termName: "xterm-256color")
         env.append("TERM_PROGRAM=SlyTerm")
-        env.append("TERM_PROGRAM_VERSION=0.1.0")
+        // Only an app bundle has an Info.plist; the bare debug binary sends no version.
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") {
+            env.append("TERM_PROGRAM_VERSION=\(version)")
+        }
         env.append("SLYTERM_TAB_ID=\(id.uuidString)")
         env.append("SHELL=\(s.shell)")
         env.append("PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")

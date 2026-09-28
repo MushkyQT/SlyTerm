@@ -1,0 +1,32 @@
+name: Tag
+
+on:
+  push:
+    branches: [main]
+    paths: [Resources/Info.plist]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag the version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag
+        # Pull requests are squash-merged, so the version can only be tagged once it is on main.
+        run: |
+          version=$(grep CFBundleShortVersionString Resources/Info.plist |
+            sed -E 's/.*<string>([^<]+)<\/string>.*/\1/')
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+            { echo "::error::Unexpected version '$version'"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already tagged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$version" -m "SlyTerm $version"
+          git push origin "v$version"

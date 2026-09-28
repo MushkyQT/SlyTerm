@@ -237,6 +237,7 @@ or each tap also opens a dictionary panel.
   the command-line modes, troubleshooting and how the app is built.
 - [Troubleshooting](docs/TECHNICAL.md#troubleshooting): the overlay hidden behind the game, a
   hotkey that does nothing, a lookup that opens the wrong page.
+- [Changelog](CHANGELOG.md): what changed in each release.
 - [Contributing](CONTRIBUTING.md): building, testing and sending a change.
 - [AGENTS.md](AGENTS.md): the same, for AI coding agents.
 - [Security](SECURITY.md): how to report a vulnerability privately.
