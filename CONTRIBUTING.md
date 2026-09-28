@@ -31,8 +31,8 @@ For a lookup that opens the wrong page, a screenshot of the game and the output 
 [Command-line modes](docs/TECHNICAL.md#command-line-modes)) usually show the problem straight away.
 
 Before you post a log or a screenshot, read it. The log holds text read off your screen, folder
-paths and what Claude was asked to do; a game screenshot can hold other players' names and chat.
-Remove or blur anything that is not yours to share.
+paths and what your agents were asked to do; a game screenshot can hold other players' names and
+chat. Remove or blur anything that is not yours to share.
 
 A security problem goes through private reporting instead, as [SECURITY.md](SECURITY.md) says, and
 a question goes to [Discussions](https://github.com/MushkyQT/slyterm/discussions).
@@ -62,10 +62,11 @@ issue before adding another.
 
 ## Where things are
 
-All the app's code is in `Sources/SlyTerm`, with the Claude activity feature in `Activity/` and
+All the app's code is in `Sources/SlyTerm`, with the agent activity feature in `Activity/` and
 "Bring In a Session" in `Teleport/`. [The source map](docs/TECHNICAL.md#source-map) says what each
-file holds. `Tools/` has scripts run by hand (the icon, lookup test images, the startup animation
-preview and the README's GIF of it), and `Resources/` has `Info.plist` and the icons.
+file holds. `Tools/` has scripts run by hand (the icon, lookup test images, agent session fixtures,
+the startup animation preview and the README's GIF of it), and `Resources/` has `Info.plist` and
+the icons.
 
 ## Checking a change
 
@@ -86,7 +87,7 @@ the running app when it involves windows, focus or hotkeys.
    | Protected playback and the user agent | `--drm-check` |
    | Tab strip | `--strip-snapshot out.png` |
    | Activity card | `--card-snapshot out.png` |
-   | Claude status and the transcript parser | `--activity`, `--activity --transcript <file.jsonl>` |
+   | Agent status and the session file readers | `--activity`, `--activity --transcript <file>`, `--activity --title <text>`, `--activity --screen <file>`; `swift Tools/make-agent-fixtures.swift <dir>` writes files to try them on |
    | Bring In a Session | `--sessions`, `--picker-snapshot out.png` |
    | Pick mode | `--pick-snapshot shot.png X Y out.png --scale 2` |
    | Startup animation | `Tools/preview-startup-animation.swift` (its header says how to run it) |
@@ -103,9 +104,10 @@ the running app when it involves windows, focus or hotkeys.
    - `open slyterm://…` goes to whichever copy macOS has registered, usually the one in
      `/Applications`. To reach the build you are testing, name it:
      `open -g -a dist/SlyTerm.app "slyterm://lookup?dry=1"`.
-   - Allow and refuse type into real Claude Code sessions. Test them on a scratch session in a
-     scratch folder, never on a conversation you care about. `claude --permission-mode default`
-     makes Claude ask before it acts, so there is a prompt to answer.
+   - Allow and refuse type into real Claude Code and Codex sessions. Test them on a scratch
+     session in a scratch folder, never on a conversation you care about.
+     `claude --permission-mode default` makes Claude ask before it acts, so there is a prompt to
+     answer.
    - With `debug` on, the log has a line for every mode change, lookup, activity transition and
      answer, which tells you what happened when nothing visible did.
 4. **Say what you checked.** The pull request template asks for what you ran and saw offline, what
@@ -127,9 +129,10 @@ Match the code around you. In particular:
 - **Threads.** UI on the main thread only. Anything that reads the process table, files, the
   network or runs OCR goes off it, and only its result comes back. Never block the main thread on
   an Apple event: the first one can wait for a permission dialog.
-- **Outside data is untrusted.** Claude Code's registry and transcripts, web responses and imported
-  game JSON can be malformed or change format. No force unwraps when parsing them, bounded reads,
-  and a line that does not parse is skipped.
+- **Outside data is untrusted.** The agents' files (Claude Code's registry and transcripts, Codex's
+  rollouts, omp's and pi's sessions) and titles, web responses and imported game JSON can be
+  malformed or change format. No force unwraps when parsing them, bounded reads, and a line that
+  does not parse is skipped.
 - **Settings.** A new preference gets a default in `Settings`'s `register(defaults:)`, is written
   through `set(_:_:)` so `Settings.didChange` fires, and appears in the right Settings pane and in
   the [preferences table](docs/TECHNICAL.md#preferences-from-the-shell). Never rename an existing

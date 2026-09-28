@@ -5,11 +5,9 @@ enum ActivityAnswer {
         case allow, refuse
 
         var verb: String { self == .allow ? "allowed" : "refused" }
-        // Claude Code's prompt has "Yes" first and highlighted: Return accepts, Escape rejects.
-        var keystroke: String { self == .allow ? "\r" : "\u{1b}" }
     }
 
-    // Claude Code records nothing until it acts on an answer, so a second press would find the same
+    // An agent records nothing until it acts on an answer, so a second press would find the same
     // prompt and type into whatever comes up next. Unstamped prompts are cleared by `forget`.
     private static var answered: [UUID: AgentPrompt] = [:]
 
@@ -70,6 +68,7 @@ enum ActivityAnswer {
             toast("Nothing is waiting", tint: .systemOrange)
             return
         }
+        let name = activity.agent.name
         if let done = answered[tab.id], done.isSame(as: prompt) {
             Settings.log("answer: \(answer.verb) ignored, this prompt was just answered in \(tab.title)")
             toast("Already answered", tint: .systemOrange)
@@ -77,20 +76,38 @@ enum ActivityAnswer {
         }
         guard seen == prompt else {
             Settings.log("answer: \(answer.verb) ignored, the prompt is not the one on screen in \(tab.title)")
-            toast("Claude asks something new: read it first", tint: .systemOrange)
+            toast("\(name) asks something new: read it first", tint: .systemOrange)
             return
         }
         let ghost = comboName(Settings.shared.hotkeyGhost)
         switch activity.request {
         case .permission(_, let summary, _):
-            // Claude may have been suspended or exited to a shell with half a command typed,
-            // which a Return would run.
-            guard let group = activity.processGroup, tab.foregroundProcessGroup == group else {
-                Settings.log("answer: \(answer.verb) ignored, Claude is not in front in \(tab.title)")
-                toast("Claude is not in front in \(tab.title)", tint: .systemOrange)
+            guard let keys = activity.agent.answerKeys else {
+                Settings.log("answer: \(answer.verb) ignored, \(name) takes no yes or no in \(tab.title)")
+                toast("\(name) is waiting, but not for a yes or no", tint: .systemOrange)
                 return
             }
-            tab.send(raw: answer.keystroke)
+            // The agent may have been suspended or exited to a shell with half a command typed,
+            // which a Return would run.
+            guard let group = activity.processGroup, tab.foregroundProcessGroup == group else {
+                Settings.log("answer: \(answer.verb) ignored, \(name) is not in front in \(tab.title)")
+                toast("\(name) is not in front in \(tab.title)", tint: .systemOrange)
+                return
+            }
+            // Codex writes its prompts nowhere: the one on its screen now, read in the same turn as
+            // the keystroke, must be the very one the card showed.
+            if activity.agent == .codex {
+                let onScreen = AgentScreen.request(lines: tab.visibleLines(), agent: .codex)
+                guard tab.titleStates[.codex]?.status == .waiting, let onScreen,
+                      onScreen.isAnswerableByKey, onScreen == seen?.request else {
+                    Settings.log("answer: \(answer.verb) ignored, \(name)'s screen does not show that prompt "
+                                 + "in \(tab.title)")
+                    toast(ghost.map { "\(name)'s prompt is not on screen: \($0) to look" }
+                          ?? "\(name)'s prompt is not on screen", tint: .systemOrange)
+                    return
+                }
+            }
+            tab.send(raw: answer == .allow ? keys.allow : keys.refuse)
             answered[tab.id] = prompt
             Settings.log("answer: \(answer.verb) \(summary) in \(tab.title)")
             Activity.card?.dismiss(tab: tab.id)
@@ -99,13 +116,13 @@ enum ActivityAnswer {
                   duration: 1.6)
         case .question:
             // Never answered: Return would pick the highlighted option, which nobody chose.
-            Settings.log("answer: \(answer.verb) ignored, Claude asks a question in \(tab.title)")
+            Settings.log("answer: \(answer.verb) ignored, \(name) asks a question in \(tab.title)")
             let opens = Activity.card?.presentedTab.map { $0 == tab.id } ?? (Activity.host?.selectedTerminal === tab)
-            toast(ghost.flatMap { opens ? "Claude asks a question: \($0) to answer" : nil }
-                  ?? "Claude asks a question", tint: .systemOrange)
+            toast(ghost.flatMap { opens ? "\(name) asks a question: \($0) to answer" : nil }
+                  ?? "\(name) asks a question", tint: .systemOrange)
         case .unknown, .none:
             Settings.log("answer: \(answer.verb) ignored, not a yes or no in \(tab.title)")
-            toast("Claude is waiting, but not for a yes or no", tint: .systemOrange)
+            toast("\(name) is waiting, but not for a yes or no", tint: .systemOrange)
         }
     }
 

@@ -6,7 +6,7 @@ a change, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 - [Principles](#principles)
 - [The overlay](#the-overlay)
-- [What each tab's Claude is doing](#what-each-tabs-claude-is-doing)
+- [What each tab's agent is doing](#what-each-tabs-agent-is-doing)
 - [Bringing a session in from another terminal](#bringing-a-session-in-from-another-terminal)
 - [Lookup](#lookup)
 - [Games and sources](#games-and-sources)
@@ -26,14 +26,16 @@ These hold for every feature, and a change that breaks one of them is a bug:
 - **The screen is read only on request.** The lookup takes one screenshot around the pointer when
   its hotkey (or its URL) fires, with SlyTerm's own windows excluded, and reads it on device.
   Nothing is captured at any other time.
-- **The game keeps the keyboard.** A finished turn, a permission prompt, a bell or a page arriving
-  in a web tab never takes focus from the game, and a floating web tab never takes it on its own. A
-  hidden overlay that has news comes back in click-through, so the next click and keystroke still
-  reach the game.
+- **The game keeps the keyboard.** A finished turn, a permission prompt, a bell, a terminal
+  notification or a page arriving in a web tab never takes focus from the game, and a floating web
+  tab never takes it on its own. A hidden overlay that has news comes back in click-through, so the
+  next click and keystroke still reach the game.
 - **Nothing is typed into a conversation on a guess.** Allow and refuse type one key, and only
   after a fresh check that the prompt up is the one the user read. Any doubt ends in a toast.
-- **Claude Code's files are read, never written.** The session registry and the transcripts are
-  Claude Code's own undocumented formats, read best effort and defensively.
+- **Agents' files are read, never written.** Claude Code's session registry and transcripts,
+  Codex's rollouts and thread index, and omp's and pi's session files are the agents' own
+  undocumented formats, read best effort and defensively, and so are the titles they set. Nothing
+  connects to an agent's server or takes its locks.
 
 ## The overlay
 
@@ -61,7 +63,7 @@ Window › Level to "Pop-up menu, highest".
 
 By default the overlay switches to click-through on its own as soon as the terminal loses keyboard
 focus, that is, the moment you click into the game. So the loop is: hotkey or eye button, type your
-prompt, click back into the game and keep playing, glance at Claude's output as it streams. The
+prompt, click back into the game and keep playing, glance at the agent's output as it streams. The
 keyboard moving between SlyTerm's own windows, from the terminal to a floating web tab or back,
 does not count. Turn this off in Settings › Window ("Switch to click-through when the terminal
 loses focus") if you would rather switch modes only by hand.
@@ -113,7 +115,9 @@ glyph fallback. Change it under Settings › Terminal › Font, which lists the 
 first and then every other fixed-pitch family.
 
 Option as Meta is **off** by default so that `{`, `[`, `|`, `~` keep working on French and other
-international layouts. `⇧Return` or `⌥Return` gives you a newline in Claude Code.
+international layouts. `⇧Return` or `⌥Return` gives you a newline in Claude Code, Codex, omp and
+pi: SlyTerm sends ESC CR, or, to a program that turned on the kitty keyboard protocol as Codex does,
+the key with its modifiers.
 
 ### Startup animation
 
@@ -133,9 +137,9 @@ logo animation", key `startupAnimation`).
 | Panic: fullscreen opaque terminal | `⌃⌥P` (configurable), `⌘Return` inside the terminal or a web tab, or the expand button |
 | Look up what is under the pointer, in a web tab | `⌃⌥Q` (configurable), or "Look Up Under Pointer" in the menu bar item, which also has a "Lookup Game" submenu. Press it again without moving for the next guess |
 | Pick which line near the pointer to look up | `⌃⌥⇧Q` (configurable), or "Pick Text Near Pointer…" in the menu bar item, then the key shown next to the line |
-| What each tab's Claude is doing | A spinner at the head of the tab while it works, an orange `?` while it waits for you; hover the tab for the detail |
-| Claude finished or is waiting | The tab turns yellow, the strip lights up and a card says what happened. Press `⌃⌥Tab`, or click the eye button |
-| Allow or refuse what Claude asks, from the game | `⌃⌥Y` / `⌃⌥N` (configurable), while a permission prompt is up in that tab |
+| What each tab's agent is doing | A spinner at the head of the tab while it works, an orange `?` while it waits for you; hover the tab for the detail |
+| An agent finished or is waiting, or a program sent a notification | The tab turns yellow, the strip lights up and a card says what happened. Press `⌃⌥Tab`, or click the eye button |
+| Allow or refuse what an agent asks, from the game | `⌃⌥Y` / `⌃⌥N` (configurable), while a Claude Code or Codex permission prompt is up in that tab |
 | Pause what web tabs are playing, or play it again | `⌃⌥V` (configurable), or "Play / Pause" in the menu bar item |
 | Move the window | Drag the tab strip |
 | Resize | Drag the left or right edge, or the edge the tab strip is not on |
@@ -153,58 +157,73 @@ logo animation", key `startupAnimation`).
 | In a web tab: back / forward / reload | `⌘←` / `⌘→` / `⌘R` |
 | In a web tab: find in page | `⌘F`, then `Return` / `⇧Return` or `⌘G` / `⌘⇧G` for the next / previous match, `Esc` to close; `⌘E` searches for the selection |
 | Bring a session in from another terminal | `⌘⇧T` in a terminal, "Bring In a Session…" in the menu bar item, or a right-click on `+` |
-| Newline in Claude Code | `⇧Return` or `⌥Return` |
+| Newline in Claude Code, Codex, omp and pi | `⇧Return` or `⌥Return` |
 | Open Settings | `⌘,` in the SlyTerm window or a floating web tab, or "Settings…" in the menu bar item |
 | Quit | `⌘Q` while the terminal or a web tab has focus, or the menu bar item |
 
-## What each tab's Claude is doing
+## What each tab's agent is doing
+
+A tab that runs a coding agent says so on the strip and on a card, with nothing to set up. SlyTerm
+reads what each agent writes anyway, its session files and the title it gives the tab, and a poll
+once a second, re-reading a file only when it has grown, costs about a millisecond. How much it
+learns depends on the agent:
+
+| Agent | Status from | Doing, asking and last answer from | Allow / refuse | Bring In |
+| --- | --- | --- | --- | --- |
+| Claude Code | its session registry | its transcript | Return / Escape | Move, Copy, Attach |
+| Codex | its title, else its rollout | its rollout; a permission prompt from the tab's text | `y` / `n`, for a command or an edit | Move, Copy |
+| omp | its title, else its session file | its session file | no: its questions wait in the terminal | Move |
+| pi | its session file | its session file | no: pi does not ask | Move, Copy |
+| Gemini CLI, Qwen Code | their titles | nothing | no | as a shell tab |
+| Any other program | a mark, from a bell or a notification | the notification's text | no | as a shell tab |
 
 ### On the strip
 
-A tab that runs a Claude Code session says so on the strip, with nothing to set up: a small spinner
-at the head of the tab while Claude works, an orange question mark while it waits for you (a
-permission prompt, a question) and the yellow dot below once it has finished and nobody looked.
-Hover the tab and the tooltip says more: "Claude is working for 2m · editing GuideTab.swift",
-"Claude is waiting for you · run `npm test`", "Claude finished 3m ago" and the first line of what
-it said. The hint at the right of the strip shows the selected tab's activity while it works,
-"running the tests · 2m", so in click-through the strip alone says whether it is worth coming back
-yet.
+A spinner at the head of the tab while the agent works, an orange question mark while it waits for
+you (a permission prompt, a question) and the yellow dot below once it has finished and nobody
+looked. Hover the tab and the tooltip says more, naming the agent: "Claude is working for 2m ·
+editing GuideTab.swift", "Codex is waiting for you · run `npm test`", "omp finished 3m ago" and the
+first line of what it said, or "Gemini is idle" when there is nothing more to say. The hint at the
+right of the strip shows the selected tab's activity while it works, "running the tests · 2m", so in
+click-through the strip alone says whether it is worth coming back yet.
 
-SlyTerm reads this from the two files Claude Code writes anyway: its session registry, which says
-whether each session is busy, waiting or idle, and the transcript, which says what the busy one is
-running and what the waiting one is waiting for. A poll once a second, re-reading a transcript only
-when it has grown, costs about a millisecond. Both formats are Claude Code's own and undocumented,
-so everything read from them is best effort: when the transcript cannot be read the status still
-shows, only the label does not. `SlyTerm --activity` (see [Command-line modes](#command-line-modes))
-prints what the poll sees.
+Codex, omp, Gemini CLI and Qwen Code animate the tab's title while they work. While one of them is
+the agent SlyTerm reads in a tab, the tab is named by the steady part of its title, so the name holds
+still: `⠸ Fix the login test | demo` shows as "Fix the login test | demo", and Gemini CLI's
+`✦  Working… (demo)` as "demo".
 
-A tab and a session are matched through the tab id the shell exports, and then only while the
-`claude` is the job in front on the tab's own terminal. So a `claude` started in the tab is found;
-one suspended with `⌃Z`, or running inside tmux, screen or an editor's terminal started from the
-tab, is not, since the tab's screen is not where it is.
+A tab and an agent are matched only while the agent is the job in front on the tab's own terminal:
+Claude Code through the tab id the shell exports as well, the other agents by their process on that
+terminal. So an agent started in the tab is found; one suspended with `⌃Z`, or running inside tmux,
+screen or an editor's terminal started from the tab, is not, since the tab's screen is not where it
+is. `SlyTerm --activity` (see [Command-line modes](#command-line-modes)) prints what the poll sees,
+for every agent in any terminal.
 
-### When Claude needs you
+### When an agent needs you
 
 A turn finishing, or a prompt appearing, marks that tab yellow and lights the whole strip up to full
 brightness even in click-through, so it stands out over the dimmed terminal. So does a terminal
-bell, or `open -g slyterm://notify` from a script or a hook. It also plays the system alert sound;
-switch that off in Settings › General ("Play a sound when a tab needs attention", key
-`attentionSound`). It never takes the keyboard from the game: if the overlay was hidden it comes
-back in click-through mode, so your next click and your next keystroke still go to the game.
-Press `⌃⌥Tab`, or click the eye button, to read it and the mark clears; clicking the yellow tab only
-brings it to the front, it does not take you out of click-through. Nothing that happens in the tab
-you are typing in is news, so a turn finishing there marks nothing and a shell completion beep stays
-quiet.
+bell, a [terminal notification](#terminal-notifications), or `open -g slyterm://notify` from a
+script or a hook. It also plays the system alert sound; switch that off in Settings › General
+("Play a sound when a tab needs attention", key `attentionSound`). It never takes the keyboard from
+the game: if the overlay was hidden it comes back in click-through mode, so your next click and your
+next keystroke still go to the game. Press `⌃⌥Tab`, or click the eye button, to read it and the mark
+clears; clicking the yellow tab only brings it to the front, it does not take you out of
+click-through. Nothing that happens in the tab you are typing in is news, so a turn finishing there
+marks nothing and a shell completion beep stays quiet.
 
 ### The card
 
 With the mark comes a card, hung off the strip and readable over the game: the tab's name, what
-happened and, for a finished turn, how long it took and the last paragraph of Claude's answer; for a
-permission prompt, the command it wants to run or the file it wants to edit; for a question, the
-question and its options. A finished card fades after ten seconds, a waiting one stays until it is
-answered or closed with its ×. Clicking the card brings its tab forward and, like a click on the
-strip, leaves you in click-through; `⌃⌥Tab` with a card up opens the tab the card is about,
-whichever tab is selected.
+happened and, for a finished turn, how long it took and the last paragraph of the agent's answer;
+for a permission prompt, the command it wants to run or the file it wants to edit; for a question,
+the question and its options; for a notification, its title and its text. The less SlyTerm can read
+of an agent, the less its card says: Gemini CLI's and Qwen Code's only say that a turn finished or
+that something waits, and so does the card of a Codex whose rollout cannot be found. A finished card
+fades
+after ten seconds, a waiting one stays until it is answered or closed with its ×. Clicking the
+card brings its tab forward and, like a click on the strip, leaves you in click-through; `⌃⌥Tab`
+with a card up opens the tab the card is about, whichever tab is selected.
 
 The card sits on the side of the strip away from the terminal when the screen has room there, and
 over the terminal's corner otherwise, never for the tab you are looking at. There is one card at a
@@ -215,36 +234,47 @@ meaning the tab you just turned to).
 
 ### Allow or refuse from the game
 
-A permission prompt can be answered without leaving the game: `⌃⌥Y` allows what Claude asks and
-`⌃⌥N` refuses it, both configurable in Settings › Shortcuts and named on the card. They type the one
-key the prompt takes (Return for the highlighted "Yes", Escape for "No") into the tab the card is
-about, or the selected tab, and only when a fresh look confirms all of this:
+A permission prompt from Claude Code or Codex can be answered without leaving the game: `⌃⌥Y`
+allows what the agent asks and `⌃⌥N` refuses it, both configurable in Settings › Shortcuts and named
+on the card. They type the one key the prompt takes into the tab the card is about, or the selected
+tab: for Claude Code, Return for the highlighted "Yes" and Escape for "No"; for Codex, `y` and `n`
+(see [Codex](#codex)). They type it only when a fresh look confirms all of this:
 
-- that tab's Claude is waiting on the very prompt the card showed,
+- that tab's agent is waiting on the very prompt the card showed,
 - the prompt has been up for at least a second and was not answered a moment ago,
-- it is for a tool known to put up a plain yes or no (a command, an edit, a read, a fetch or
-  search, an MCP tool),
-- and the Claude is still the job in front in the tab.
+- it is a prompt known to take a plain yes or no: for Claude Code, one for a tool known to put up
+  such a prompt (a command, an edit, a read, a fetch or search, an MCP tool); for Codex, a command
+  to run or an edit to make, as the tab shows it right before the key,
+- and the agent is still the job in front in the tab.
 
 Otherwise a small toast says why and nothing is typed. So a prompt that changed while you reached
 for the key wants another look at the card first, and some prompts always want the terminal: a
 question, which is never answered blind (the card says to press `⌃⌥Tab`), a plan to approve, a
 subagent asking for something, and several calls issued at once, where the transcript cannot say
-which one the prompt on screen is about.
+which one the prompt on screen is about. omp and pi have nothing to answer this way, and the toast
+says so ("omp is waiting, but not for a yes or no").
 
 ### Turning it off
 
-Turn the card off in Settings › General ("Show a card when Claude finishes or asks you something",
-key `activityCards`) and a Claude finishing or asking only marks its tab: the marks on the strip and
-the yellow tab stay, but there is no card, no sound, and a hidden overlay stays hidden. The allow
-and refuse shortcuts go with it, `slyterm://allow` and `slyterm://refuse` included.
+Turn the card off in Settings › General ("Show a card when an agent finishes or asks you
+something", key `activityCards`) and an agent finishing or asking only marks its tab: the marks on
+the strip and the yellow tab stay, but there is no card, no sound, and a hidden overlay stays
+hidden. The allow and refuse shortcuts go with it, `slyterm://allow` and `slyterm://refuse`
+included. A terminal notification then marks its tab as a bell does, with no card.
 
 Those two URLs are off anyway until you turn them on, since any program of yours can open a URL,
-and a Claude that can run `open` could approve its own next request:
+and an agent that can run `open` could approve its own next request:
 `defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`. `activityCardSeconds`
-(default 10; 0 keeps a finished card until it is closed) has no control in Settings either.
+(default 10; 0 keeps a finished card or a notification until it is closed) has no control in
+Settings either.
 
-### Hooks
+### Claude Code
+
+SlyTerm reads Claude Code from the two files it writes anyway: its session registry, which says
+whether each session is busy, waiting or idle, and the transcript, which says what the busy one is
+running and what the waiting one is waiting for. Both formats are Claude Code's own and
+undocumented, so everything read from them is best effort: when the transcript cannot be read the
+status still shows, only the label does not.
 
 The poll notices a change within a second; a Claude Code hook calling `slyterm://notify` (see
 [Claude Code hooks](#claude-code-hooks)) makes it instant, and a terminal bell
@@ -253,20 +283,130 @@ other bell. A session brought in with Attach runs in Claude's daemon rather than
 status is read through the `claude attach` client in the tab and its registry entry, when both can
 be seen.
 
+### Codex
+
+Codex (tried with 0.158) is read from three places: the title it gives the tab, its rollout file,
+and, while it asks for something, the text on the tab.
+
+- **The title.** Codex's default `terminal_title` is its activity, the thread's name and the
+  project: `⠸ Fix the login test | demo` while it works, a braille spinner frame first;
+  `[ ! ] Action Required | Fix the login test | demo`, blinking with `[ . ]`, while it waits for an
+  approval, a question or a plan; and the same without a mark once it is idle. The title decides
+  the status once it has shown a spinner or the Action Required mark since that Codex started. A
+  title set up without the activity never shows one, and that Codex is read from its rollout alone,
+  which cannot tell a call that waits for approval from one that runs: it shows as working. A change
+  of status in the title starts a scan at once, so the strip follows Codex without waiting for the
+  poll.
+- **The rollout.** `sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl` under `$CODEX_HOME` (`~/.codex`
+  by default) records each turn's start and end, the call it is making (a command, the file an edit
+  touches, a plan, an MCP tool), its final answer and how long it took; `session_index.jsonl` beside
+  it holds the names threads were given. A Codex started as `codex resume <id>` is read from that
+  thread's rollout, and one that runs its turns itself, as with `--no-daemon`, from the rollout it
+  holds open.
+- **The background server.** Since 0.157 Codex by default runs its turns in one machine-wide
+  `codex app-server`, which writes the rollouts, while the Codex in the tab only shows them. SlyTerm
+  finds the server the tab's Codex is connected to and the rollouts it has open, from the kernel's
+  list of their open files and sockets, without connecting to anything. It takes the one in the
+  same folder that began and was written since the tab's Codex started, with the thread name in the
+  title deciding between several; two Codex sessions in one folder that were both open when a thread
+  began cannot tell whose it is, and neither gets it. A thread reopened from Codex's own resume
+  picker is missed: its status still comes from the title, its card has no text, and Bring In lists
+  its tab as a shell tab. The server also runs Codex's commands and hooks, with its own environment,
+  so `SLYTERM_TAB_ID` never reaches them and a Codex hook cannot say which tab to mark. The title
+  does that job.
+- **The prompt on the tab.** Codex never writes an approval prompt to disk: in the rollout, a call
+  that waits for approval looks like one that runs. So while its title says Action Required,
+  SlyTerm reads the lines the tab shows (the text SlyTerm itself holds for that terminal, not a
+  capture of the screen) and looks at the prompt at the bottom: `Would you like to run the following
+  command?` with its `$` line, or `Would you like to make the following edits?` with its
+  destinations, each with the options `1. Yes, proceed (y)` and `No, and tell Codex what to do
+  differently (esc)`. The card shows the command or the files. Any other prompt (network access,
+  permissions, an MCP server's request, a question, a plan) is a Codex waiting for you, left to the
+  terminal; with no prompt on the tab, the rollout's pending call is the card's text.
+
+Allow types `y` and refuse types `n`, Codex's own keys for those two options. Refusing is "No, and
+tell Codex what to do differently": the call is refused and the turn stops, waiting for what you
+type next. Letters rather than Return and Escape, because if the prompt went away meanwhile a letter
+lands in the input box, where Return would send a draft and Escape would interrupt the turn. Right
+before the key, in the same turn of the main thread, SlyTerm reads the tab's lines again and types
+only if they show the very prompt the card did. A prompt whose keys were changed in Codex's keymap
+shows other hints and is left to the terminal.
+
+### omp and pi
+
+omp (tried with 18.4.1) sets a title too, `π ⠹ Run the tests` while it works, `π ! Run the tests`
+while it waits and `π > demo` when idle, and the status comes from it once omp has set one since it
+started. The rest comes from its session file. omp notes, for each terminal, the session it last
+opened there (`terminal-sessions/<tty>` under `~/.omp/agent`), a note it never removes, so SlyTerm
+trusts it only while an omp is in front on that terminal and in the folder the note names. The
+session file it points to has the title omp gave the session, the call it is making, with the intent
+omp has the model give for each call, and the last reply. A question from omp's `ask` tool shows on
+the card with its options, and waits for you in the terminal like a tool approval, which omp asks
+for only when its `tools.approvalMode` is not the default. omp also rings the terminal bell when a
+turn ends or it asks something, and a bell marks the tab, sound included, whatever the card setting.
+Until omp has written the session's first reply there is no file, and the card has no text.
+
+pi sets a title that never changes, and does not ask for permission, so it is read from its session
+file alone: under `~/.pi/agent/sessions/`, in a folder named after the working folder, the file
+named by `--session` or `--session-id`, else the newest one written there since pi started, when no
+other pi runs in that folder. pi writes a message once it is finished, so while a reply is being
+written the last line is the prompt or the tool results it answers, and the tab shows it working.
+
+### Gemini CLI and Qwen Code
+
+Gemini CLI and Qwen Code are read from their titles alone. Gemini CLI's, with its dynamic window
+title on, as it is by default, is `✦  Working…` or `⏲  Working…` while it works (`✦` followed by
+what the model is thinking, when it is set to show that), `✋  Action Required` while it waits and
+`◇  Ready` when idle, each followed by the folder. Qwen Code's starts with `◐` while it works and
+`✳` while it waits, and has no mark when idle. That gives the strip its marks and a card that only
+says a turn finished or something waits: SlyTerm reads no file of theirs, answers neither and does
+not list them in Bring In, where their tab comes across as a shell tab.
+
+### Terminal notifications
+
+Any program can ask for your attention with one of the two escape sequences terminals commonly take
+as a notification: `OSC 9` with a text (`ESC ] 9 ; text BEL`) or `OSC 777` with a title and a body
+(`ESC ] 777 ; notify ; title ; body BEL`). SlyTerm marks the tab as a bell does and, with the card
+on, shows one: yellow like a finished turn, with the tab's name, the notification's title (or
+"notification") and its text, cut to its printable characters and about 300 of them. It fades like a
+finished card. A tab whose agent SlyTerm already reads gets that agent's card instead, which says
+more. An `OSC 9` whose text starts with a number, as the `9 ; 4` progress report and ConEmu's other
+commands do, is not a notification; a progress report is passed on to the terminal view as before.
+Nothing in the tab you are typing in is news, so to try one, run
+this and click into another app before it fires:
+
+```sh
+sleep 5; printf '\033]777;notify;Build;All 42 tests pass\a'
+```
+
+### Focus reports
+
+A program that asks for focus reports (`ESC [ ? 1004 h`) is told whether its terminal has the
+keyboard. SlyTerm says yes to the selected terminal tab only while the overlay is interactive and
+its window has the keyboard, and no to every other tab, and to all of them while the game has the
+keyboard: in click-through, with the overlay hidden, or with another app in front. So a program that
+keeps its notifications for when nobody is looking at it sends them while you play.
+
 ## Bringing a session in from another terminal
 
-You have Claude halfway through something in iTerm2, the game starts, and you would rather carry on
-in the overlay than keep alt-tabbing out of it. macOS cannot move a running process from one
+You have an agent halfway through something in iTerm2, the game starts, and you would rather carry
+on in the overlay than keep alt-tabbing out of it. macOS cannot move a running process from one
 terminal app to another (a process is tied to the terminal it was started in, for good), so what
 SlyTerm moves is the **state**: it opens a tab here that picks the work up where the other one left
 it.
 
 Three kinds of thing can come in, and each comes across differently:
 
-- **A Claude Code conversation.** SlyTerm stops it where it is, then runs `claude --resume <id>`
-  here. Same session id, same transcript, so the conversation continues rather than starting over.
-  It takes a few seconds, while the old one shuts down. A conversation you have not typed anything
-  into yet has no transcript, so bringing it in gives you a fresh one.
+- **A coding agent's conversation**, from Claude Code, Codex, omp or pi. SlyTerm stops it where it
+  is, then runs the agent's own resume command here, in the session's folder: `claude --resume
+  <id>`, `codex resume <id>`, `omp --resume=<id>` or `pi --session <id>`. Same session id, same
+  transcript, so the conversation continues rather than starting over. It takes a few seconds, while
+  the old one shuts down. A Codex whose turns run in its background server, as they do by default
+  since Codex 0.157, keeps its turn running there while the one in the other terminal stops, and
+  `codex resume` here picks it up where it is. A Claude conversation you have not typed anything
+  into yet has no transcript, so bringing it in gives you a fresh one; a Codex, omp or pi that has
+  not written its session file yet, or whose file SlyTerm cannot find, is listed as a plain shell
+  tab.
 - **A background Claude**, started with `claude --bg` or sent to the background by typing `/bg`
   in it. That one lives in Claude's own daemon rather than in a terminal, so nothing has to be
   stopped: SlyTerm runs `claude attach <id>` here and you are back in it, uninterrupted.
@@ -277,30 +417,34 @@ Three kinds of thing can come in, and each comes across differently:
 
 Open the picker with `⌘⇧T` while the terminal has focus, with "Bring In a Session…" in the menu bar
 item, or with a right-click on the `+` of the tab strip. It lists what is running in your other
-terminals, grouped into Claude Code sessions and plain terminal tabs, each row with its folder,
-which app it is in, how long it has been going and what it is doing right now: Working (mid-turn),
-Waiting (Claude is waiting for your answer in that tab), Idle, Background, or "Already here" for one
-of SlyTerm's own tabs, which it offers to switch to instead. A Claude conversation is listed under
-the title its own `/resume` picker gives it; a shell tab is listed under what it is running, or the
-name of the shell when it is sitting at its prompt. Type to filter by name, folder or app, `↑` /
-`↓` to move, `Return` to bring the selected one in, `Esc` to close. The panel stays within the
-screen however many rows it gains, and it can be dragged by its title if it is covering something
-you want to see.
+terminals, in a group per agent (Claude Code, Codex, omp, pi) and then plain terminal tabs, each row
+with its folder, which app it is in, how long it has been going and what it is doing right now:
+Working (mid-turn), Waiting (the agent is waiting for your answer in that tab), Idle, Background, or
+"Already here" for one of SlyTerm's own tabs, which it offers to switch to instead. A Codex, omp or
+pi row takes its status from the session file, so a Codex waiting for an approval shows as Working.
+A Claude conversation is listed under the title its own `/resume` picker gives it, a Codex one under
+its thread's name or else its first prompt, an omp one under its title and a pi one under its name
+or else its first prompt; a shell tab is listed under what it is running, or the name of the shell
+when it is sitting at its prompt. Type to filter by name, folder or app, `↑` / `↓` to move, `Return`
+to bring the selected one in, `Esc` to close. The panel stays within the screen however many rows it
+gains, and it can be dragged by its title if it is covering something you want to see.
 
 ### Move, Copy, Attach
 
-`Return` does the obvious thing for the row it is on: Move for a foreground Claude, Attach for a
-background one, "Open Folder Here" for a shell tab. `⌥Return` on a Claude conversation makes a
-**copy** instead: `claude --resume <id> --fork-session`, a new conversation with the same history
-behind it, and the one in iTerm2 left running. That is the one for a side question about what it
-already knows while the first carries on working.
+`Return` does the obvious thing for the row it is on: Move for an agent in a terminal, Attach for a
+background Claude, "Open Folder Here" for a shell tab. `⌥Return` on a Claude Code, Codex or pi
+conversation makes a **copy** instead: `claude --resume <id> --fork-session`, `codex fork <id>` or
+`pi --fork <id>`, a new conversation with the same history behind it, and the one in iTerm2 left
+running. That is the one for a side question about what it already knows while the first carries on
+working. omp has no copy.
 
-Moving a Claude that is mid-turn interrupts it, and whatever it was in the middle of writing is
+Moving an agent that is mid-turn interrupts it, and whatever it was in the middle of writing is
 lost; the transcript on disk is not, which is why the resumed session still knows everything up to
 that point. So SlyTerm asks before interrupting a session it can see is working, or waiting for an
-answer to a permission prompt or a question. Turn the question off in Settings › General ("Ask
-before interrupting a Claude that is working or waiting for an answer"). To avoid it altogether,
-type `/bg` in the source tab first: the session moves into Claude's daemon without being
+answer to a permission prompt or a question, except a Codex whose turns run in its background
+server, whose turn a move does not interrupt. Turn the question off in Settings › General ("Ask
+before interrupting an agent that is working or waiting for an answer"). To avoid it altogether with
+Claude, type `/bg` in the source tab first: the session moves into Claude's daemon without being
 interrupted, and the picker then offers Attach, which stops nothing at all.
 
 By default the tab a session came from is closed once it is here, so you are not left with a dead
@@ -322,7 +466,8 @@ open -g "slyterm://teleport?tty=$(tty)"                            # from a plai
 ```
 
 `-g` keeps the terminal you typed it in at the front, so handing a session over never takes the
-screen from the game.
+screen from the game. `session=` takes a Codex, omp or pi session id too, and `pid=` the pid of
+any agent in the picker.
 
 ### Attached sessions and hooks
 
@@ -721,8 +866,8 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
   resizing keeps the page at that shape, with the toolbar on top.
 - **Hiding.** `⌃⌥H` and the strip's `–` hide the SlyTerm window only: floating windows stay until
   they are put back or closed. Panic hides them (see
-  [Pausing from the game](#pausing-from-the-game)). The card that says what Claude did stays above
-  them.
+  [Pausing from the game](#pausing-from-the-game)). The card that says what an agent did stays
+  above them.
 
 ### Click-through and focus
 
@@ -780,7 +925,7 @@ view, a podcast or music, is left playing.
 - **A video in the SlyTerm window goes out of view:** another tab comes in front of it (a terminal,
   another web tab, a new or a lookup's one), or the window hides. It plays again when it is back in
   front: its square clicked, `⌥⌘N`, `⌃Tab` or `⌘G` to it, or `⌃⌥H` showing the window. A window
-  that comes back on its own, for a Claude that needs you, leaves it paused; `⌃⌥V` plays it.
+  that comes back on its own, for an agent that needs you, leaves it paused; `⌃⌥V` plays it.
   Popping a video out is not leaving the view, and floating videos never pause for this.
 
 Panic keeps its own suspension, whatever this setting says; leaving it with `⌃⌥H`, which hides the
@@ -868,12 +1013,12 @@ resetting the window position, quitting.
 Everything that configures the app is behind **Settings…** in it, in five tabs:
 
 - **General**: restoring the last session's tabs at launch, the logo animation, the quit
-  confirmation, the sound a tab plays when it needs you, the card that says what Claude finished or
-  asks, what bringing a session in from another terminal does about the tab it came from and about
-  interrupting a Claude mid-turn, and, under Web tabs, "Search with": the address that words typed
-  into a web tab's address field go to, with `{query}` where they go. An address without `{query}`
-  shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under Web tabs,
-  pausing videos when a guide opens or they go out of view (see
+  confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
+  or asks, what bringing a session in from another terminal does about the tab it came from and
+  about interrupting an agent mid-turn, and, under Web tabs, "Search with": the address that words
+  typed into a web tab's address field go to, with `{query}` where they go. An address without
+  `{query}` shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under
+  Web tabs, pausing videos when a guide opens or they go out of view (see
   [Pausing on its own](#pausing-on-its-own)).
 - **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
   the current one's, the startup command, Option as Meta.
@@ -889,9 +1034,9 @@ Nothing there is modal: the terminal stays where it is and every change applies 
 ### Shortcuts
 
 **Settings › Shortcuts** has all eight actions: show / hide the terminal, toggle click-through,
-panic mode, "Look up what's under the pointer", "Pick text near the pointer", "Allow what Claude
-asks", "Refuse it" and "Play / pause". Allow and refuse are off, and say so, while the card is off
-in General. Click a field, press the new shortcut, done. A shortcut needs ⌃, ⌥ or ⌘, except
+panic mode, "Look up what's under the pointer", "Pick text near the pointer", "Allow what the
+agent asks", "Refuse it" and "Play / pause". Allow and refuse are off, and say so, while the card
+is off in General. Click a field, press the new shortcut, done. A shortcut needs ⌃, ⌥ or ⌘, except
 function keys and the top-left `§` / `` ` `` key, which work on their own; while SlyTerm runs, a key
 used alone is taken from every app, the game included. Esc cancels, ⌫ or Clear removes a shortcut.
 A global hotkey is only paused while its field is listening, so the others keep working while the
@@ -939,7 +1084,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `fontName` | iTerm2's font | Empty for the system monospaced font |
 | `workingDirectory` | home | The folder the first tab starts in, and new tabs when inheriting is off |
 | `newTabInheritsDirectory` | `true` | A new tab starts in the current tab's folder |
-| `startupCommand` | empty | Typed into every new tab, such as `claude` |
+| `startupCommand` | empty | Typed into every new tab, such as `claude` or `codex` |
 | `shell` | `$SHELL` | Run as a login shell in each tab |
 | `optionAsMeta` | `false` | Off keeps Option for accents and brackets on international layouts |
 | `scrollback` | `10000` | Lines kept per tab |
@@ -954,7 +1099,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `hotkeyPanic` | `ctrl+alt+p` | Panic mode |
 | `hotkeyQuest` | `ctrl+alt+q` | The lookup (named from when it only knew Dofus quests) |
 | `hotkeyPick` | `ctrl+alt+shift+q` | Pick mode |
-| `hotkeyAllow` | `ctrl+alt+y` | Allow Claude's permission prompt |
+| `hotkeyAllow` | `ctrl+alt+y` | Allow a Claude Code or Codex permission prompt |
 | `hotkeyRefuse` | `ctrl+alt+n` | Refuse it |
 | `hotkeyPlayPause` | `ctrl+alt+v` | Pause what web tabs are playing, or play it again |
 | `tapGesture` | `true` | The trackpad tap |
@@ -970,10 +1115,10 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `lookupActiveGame` | | The identifier of the game picked by hand |
 | `lookupAutoDetect` | `true` | Let the app in front pick the game |
 | `teleportClosesSource` | `true` | Close the tab a session came from after moving it (iTerm2 and Terminal only) |
-| `teleportConfirmBusy` | `true` | Ask before interrupting a Claude that is working or waiting for an answer |
-| `activityCards` | `true` | The card when Claude finishes or asks, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for a Claude |
+| `teleportConfirmBusy` | `true` | Ask before interrupting an agent that is working or waiting for an answer |
+| `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
-| `activityCardSeconds` | `10` | How long a finished card stays; 0 keeps it until closed (no control in Settings) |
+| `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
 
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
@@ -999,7 +1144,7 @@ open -g slyterm://hide
 open -g slyterm://ghost    # toggle click-through
 open -g slyterm://panic    # toggle the fullscreen opaque terminal
 open -g slyterm://notify   # mark the current tab as needing attention, never steals focus
-open -g slyterm://allow    # answer the permission prompt Claude has up with Yes (off until activityAnswerURLs)
+open -g slyterm://allow    # answer the permission prompt an agent has up with Yes (off until activityAnswerURLs)
 open -g slyterm://refuse   # or with No; both take ?tab= like notify, and do nothing unless a prompt is up
 open -g slyterm://lookup   # look up whatever is under the pointer
 open -g "slyterm://lookup?dry=1"   # same, but only show what would open
@@ -1015,9 +1160,9 @@ open -g slyterm://playpause   # pause what web tabs are playing, or play it agai
 open -g slyterm://settings # open the Settings window
 open -g slyterm://hotkeys  # open it on the Shortcuts tab
 open -g slyterm://teleport # open "Bring In a Session"
-open -g "slyterm://teleport?session=<uuid>"   # move that Claude conversation here
-open -g "slyterm://teleport?session=<uuid>&mode=copy"   # a forked copy, the source untouched
-open -g "slyterm://teleport?pid=<pid>"        # the Claude with that pid
+open -g "slyterm://teleport?session=<uuid>"   # move that conversation here, from any agent
+open -g "slyterm://teleport?session=<uuid>&mode=copy"   # a forked copy, the source untouched (not omp)
+open -g "slyterm://teleport?pid=<pid>"        # the agent with that pid
 open -g "slyterm://teleport?tty=ttys003"      # the shell on that tty: its folder, its command typed
 open -g "slyterm://teleport?cwd=/some/folder" # a new tab in that folder
 ```
@@ -1043,6 +1188,10 @@ hooks are optional since the strip reads Claude's status on its own; what they a
 mark and card, where the poll takes up to a second. The `$SLYTERM_TAB_ID` test matters because
 `~/.claude/settings.json` is global: without it, the same hook running in iTerm2 or VS Code would
 have LaunchServices start SlyTerm just to light up a tab you are not looking at.
+
+A Codex hook cannot do the same in Codex's default mode: Codex runs its hooks in its background
+server, whose environment has no `SLYTERM_TAB_ID`. Its title marks the tab instead (see
+[Codex](#codex)).
 
 ### Command-line modes
 
@@ -1095,10 +1244,14 @@ $B --sessions                             # what "Bring In a Session" would offe
 $B --sessions --json                      # the same, for scripts
 $B --picker-snapshot picker.png           # draw the picker offscreen with sample rows, plus a
                                           # second PNG with an `-empty` suffix for the empty state
-$B --activity                             # every running Claude, in any terminal: status, how long,
-                                          # what it is doing, what it asks, the last thing it said
+$B --activity                             # every running agent, in any terminal: agent, status, how
+                                          # long, what it is doing, what it asks, the last thing it said
 $B --activity --json                      # the same, for scripts
-$B --activity --transcript s.jsonl        # what the parser reads from one transcript file
+$B --activity --transcript s.jsonl        # what the parser reads from one transcript, rollout or
+                                          # session file
+$B --activity --title "⠸ Fix it | demo"   # what each agent's title rules make of a title
+$B --activity --screen tab.txt --agent codex
+                                          # the prompt the answer would find in a tab's lines
 $B --activity --poll --times 4            # scan repeatedly and time it; a quiet pass opens no file
 ```
 
@@ -1124,10 +1277,23 @@ $B --activity --poll --times 4            # scan repeatedly and time it; a quiet
   succeeds and then `createMediaKeys()`, and what
   `WebKitMediaKeys.isTypeSupported('com.apple.fps.1_0', 'video/mp4')` answers. It gives up after
   20 seconds.
-- `--sessions` columns are kind, host, status, pid, tty, folder, session or attach id, the action
-  Return would take, and the label. `--session <uuid>`, `--pid <pid>` and `--tty ttys003` narrow it
-  to the one a `slyterm://teleport` URL would pick, so a URL can be checked before it is fired at a
-  live session.
+- `--sessions` columns are kind (`claude`, `bg` for a background Claude, `codex`, `omp`, `pi` or
+  `shell`), host, status, pid, tty, folder, session or attach id, the action Return would take, and
+  the label. `--session <uuid>`, `--pid <pid>` and `--tty ttys003` narrow it to the one a
+  `slyterm://teleport` URL would pick, so a URL can be checked before it is fired at a live session;
+  `--tty` lists that terminal's agent, then its shell.
+- `--activity --transcript` tells the file's kind from its first line (a Codex rollout starts with
+  `session_meta`, an omp session with its title, a pi session with its header, anything else is
+  taken for Claude Code's), and `--agent <name>` forces it: `claude`, `codex`, `omp`, `pi`,
+  `gemini` or `qwen`. For an agent other than Claude it also prints the file's head (id, folder,
+  start, title or thread name, first prompt) and the status, its time and whether the session ended.
+  `--status waiting` (or `busy`) says what the tab would show in that state.
+- `--activity --title <text>` runs the title through every agent's rules, or only `--agent`'s, and
+  prints the status, whether the title carried the agent's own mark, and the name the strip would
+  show. `--activity --screen <file>` reads a file of a tab's lines, top to bottom, and prints the
+  request Codex's and omp's prompts give, or `--agent`'s alone; a first line `# title: '…'` is read
+  as the tab's title. `swift Tools/make-agent-fixtures.swift <dir>` writes synthetic rollouts,
+  session files, titles and screens for these modes and prints what each should give.
 
 None of the command-line modes signals a process, types into a session or puts a window on screen.
 What they write is the PNG you name and, for the index modes, the index cache. Run from the app
@@ -1142,17 +1308,25 @@ a separate `SlyTerm` defaults domain.
   a window manager. macOS does not report it to either app, so change the shortcut in one of them.
   When macOS itself refuses a combo, or uses it, Settings › Shortcuts says so next to the field and
   the menu bar item shows "Shortcut unavailable" under the refused row.
-- **No spinner on a tab that runs Claude.** The tab and the session are matched through the tab id
-  the shell exports, and then only while the `claude` is the job in front on the tab's own
-  terminal. So a `claude` started in the tab is found; one suspended with `⌃Z`, or running inside
-  tmux, screen or an editor's terminal started from the tab, is not, since the tab's screen is not
-  where it is. A session brought in with Attach is read through its `claude attach` client and its
-  daemon's registry entry, and shows nothing when either is missing. `SlyTerm --activity` prints
-  what the poll sees, and `debug` logs every transition as `activity:` lines.
+- **No spinner on a tab that runs an agent.** An agent is matched to a tab only while it is the job
+  in front on the tab's own terminal, and a Claude through the tab id the shell exports as well. So
+  an agent started in the tab is found; one suspended with `⌃Z`, or running inside tmux, screen or
+  an editor's terminal started from the tab, is not, since the tab's screen is not where it is. A
+  session brought in with Attach is read through its `claude attach` client and its daemon's
+  registry entry, and shows nothing when either is missing. `SlyTerm --activity` prints what the
+  poll sees, and `debug` logs every transition as `activity:` lines.
+- **A Codex shows as working while it waits, or its card has no text.** Codex says it waits only in
+  its title, with the activity part its default `terminal_title` has: a title set up without it
+  leaves SlyTerm the rollout, which cannot tell waiting from working. A card with no text means
+  SlyTerm found no rollout for that Codex, as with a thread reopened from Codex's own resume picker
+  (see [Codex](#codex)). `SlyTerm --sessions --json` names the file each agent is read from, as
+  `transcript`, and lists an agent without one as a shell tab.
 - **`⌃⌥Y` does nothing.** The card is off in Settings › General, which turns the shortcut off with
   it; or nothing is waiting in that tab; or the prompt is not a plain yes or no (a question, a
-  plan, a subagent's request, several calls at once); or it changed since the card showed it, the
-  card came up less than a second ago, or it was just answered. A toast by the strip says which.
+  plan, a subagent's request, several calls at once, or for Codex anything but a command or an
+  edit, or a prompt whose keys were remapped); or the agent is omp or pi, which have nothing to
+  answer this way; or it changed since the card showed it, the card came up less than a second ago,
+  or it was just answered. A toast by the strip says which.
 - **Typing goes to the game instead of the terminal.** You are in click-through mode (orange dot).
   Press `⌃⌥Tab`, click the eye button, or three-finger tap. Clicking the tab strip does not do it on
   purpose: it would fire every time you switched tabs or moved the window.
@@ -1196,7 +1370,7 @@ a separate `SlyTerm` defaults domain.
   whether a page is offered FairPlay; the toolbar's browser button hands the page to your browser.
 - **`claude` not found.** Tabs run your shell as a login shell so the `~/.zprofile` PATH applies.
   If `claude` only lives in `~/.zshrc`, either move the PATH line to `~/.zprofile` or use the full
-  path `~/.local/bin/claude` as the startup command.
+  path `~/.local/bin/claude` as the startup command. The same goes for `codex` and the others.
 
 ## Architecture
 
@@ -1217,7 +1391,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
-| `TerminalTab.swift` | One terminal tab: a SwiftTerm view, its pty and login shell, and its folder read from the kernel |
+| `TerminalTab.swift` | One terminal tab: a SwiftTerm view, its pty and login shell, its folder read from the kernel, its title read by each agent's rules, its visible lines, notifications and focus reports |
 | `TabStripView.swift` | The strip: tabs, the web tabs' squares, activity marks, tooltips, the hint; `--strip-snapshot` |
 | `HotKeys.swift` | `HotKeyCenter` over Carbon `RegisterEventHotKey`, and `KeyCombo` parsing on the current layout and checking against macOS's own shortcuts |
 | `HotkeyRecorder.swift` | The list of global actions and the shortcut recorder field |
@@ -1238,27 +1412,34 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `GuideFindBar.swift` | A web tab's find bar |
 | `WebMedia.swift` | The fullscreen shim and the media controller every page gets, as scripts; `WebMediaFrames`, the frames' reports merged into a tab's media state; `WebIcons`, the favicons; `--drm-check` |
 | `FloatingWebPanel.swift` | `FloatingWeb`, a web tab's floating window: the page panel, the toolbar panel over it, its frames, dragging and the kept aspect |
-| `Activity/AgentActivity.swift` | The types the monitor, strip, card and answer share |
-| `Activity/ActivityMonitor.swift` | The poll of Claude Code's registry and transcripts |
-| `Activity/TranscriptTail.swift` | The transcript parser, pure over lines of bytes |
+| `Activity/AgentActivity.swift` | The types the monitor, strip, card and answer share, and `AgentKind`: each agent's name, resume and copy commands and answer keys |
+| `Activity/ActivityMonitor.swift` | The poll: which agent runs in each tab, and its status from Claude Code's registry, the tab's title or the agent's session file |
+| `Activity/TranscriptTail.swift` | Claude Code's transcript parser, pure over lines of bytes, and the tail reads the other readers share |
+| `Activity/AgentTitle.swift` | The title rules of Codex, omp, Gemini CLI and Qwen Code |
+| `Activity/AgentScreen.swift` | The prompt Codex or omp shows on a tab's visible lines |
+| `Activity/CodexRollout.swift` | Codex's rollout reader and its thread index |
+| `Activity/PiSession.swift` | pi's and omp's session file reader |
 | `Activity/ActivityCard.swift` | The card; `--card-snapshot` |
 | `Activity/ActivityAnswer.swift` | Allow and refuse, and every check before the keystroke |
 | `Activity/ActivityCLI.swift` | `--activity` |
 | `Teleport/TeleportModel.swift` | The types discovery, engine and picker share |
-| `Teleport/SessionDiscovery.swift` | What is running in other terminals, from the registry and the process table |
+| `Teleport/SessionDiscovery.swift` | What is running in other terminals, from Claude Code's registry, the process table and the agents' session files; which session each tab hosts |
+| `Teleport/AgentDiscovery.swift` | The Codex, omp, pi, Gemini CLI and Qwen Code processes in front on a terminal, and the session file each one writes |
 | `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source |
 | `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
 | `Teleport/SessionsCLI.swift` | `--sessions` |
 
 `Tools/` holds scripts run by hand: `make-icon.swift` rebuilds `Resources/AppIcon.icns` from
 `Resources/StatusItemIcon.pdf`, `make-lookup-fixtures.swift` draws synthetic game screenshots for
-tuning the lookup, `preview-startup-animation.swift` renders instants of the logo animation to a
-contact sheet, and `make-readme-animation.swift` renders the whole of it to
+tuning the lookup, `make-agent-fixtures.swift` writes synthetic agent files, titles and screens for
+the `--activity` modes, `preview-startup-animation.swift` renders instants of the logo animation to
+a contact sheet, and `make-readme-animation.swift` renders the whole of it to
 `docs/startup-animation.gif`, the loop at the top of the README.
 
 ```sh
 swift Tools/make-icon.swift
 swift Tools/make-lookup-fixtures.swift <out dir>   # prints each file's --at X Y and expected first candidate
+swift Tools/make-agent-fixtures.swift <out dir>    # prints the mode to run on each file and what it should give
 ```
 
 The two animation scripts use top-level code, which only compiles from a file named `main.swift`,
@@ -1319,8 +1500,8 @@ from the kernel, so it follows `cd` without shell integration.
 The UI is main-thread only. Work that costs anything happens off it and only the answer crosses
 back:
 
-- the activity monitor's scan (the process table, `sysctl` per process, transcript tails) on a
-  serial background queue;
+- the activity monitor's scan (the process table, `sysctl` per process, the open files of Codex
+  processes, transcript and session file tails) on a serial background queue;
 - the session discovery scan, off the main thread whenever the picker refreshes;
 - Apple events to iTerm2 and Terminal on a queue of their own, because the first one raises the
   Automation permission dialog and does not return until the user answers it;
@@ -1332,26 +1513,58 @@ back:
 - the debug log, which has one writer queue.
 
 Waits in the teleport engine are 100 ms timers, never sleeps, since the overlay may be sitting over
-a game while a `claude` shuts down.
+a game while an agent shuts down.
 
-### Claude activity
+### Agent activity
 
-`ActivityMonitor` polls Claude Code's session registry (`~/.claude/sessions/<pid>.json`) once a
-second, three times slower while the overlay is hidden. It matches each live session to a tab by
-the `SLYTERM_TAB_ID` in its environment (read once per pid, since it never changes) when it is also
-the foreground job on that tab's pty, and reads the last 64 KB of the transcript only when its size
-or mtime moved, going back 512 KB once when that tail holds no assistant text, as a turn full of big
-tool results does.
+`ActivityMonitor` scans once a second, three times slower while the overlay is hidden, and at once
+when a tab's title changes an agent's status. A scan starts on the main thread with a `TabProbe`
+per terminal tab: its tty, its foreground process group, the state each agent's title rules give
+its title and, only while one of them says its agent is waiting, the tab's visible lines. Everything
+else runs on the monitor's serial queue.
 
-`TranscriptTail` turns those lines into the pending tool call, the request behind a waiting status
-and the last assistant text; the status itself is the registry's. Nothing is decoded into a struct,
-nothing is force-unwrapped, and a line that does not parse is skipped, because the format changes
-between Claude Code releases. Transitions become `ActivityEvent`s on the main thread, which the
-controller turns into the attention mark and the card, and the strip draws `TerminalTab.activity`.
+Claude Code comes first. The monitor reads its session registry (`~/.claude/sessions/<pid>.json`)
+and matches each live session to a tab by the `SLYTERM_TAB_ID` in its environment (read once per
+pid and start time, since it never changes) when it is also the foreground job on that tab's pty. A
+tab with no Claude is matched to the Codex, omp, pi, Gemini CLI or Qwen Code process of this user
+that is in its tty's foreground group, recognised by its kernel name or, for a node or bun launch,
+by the script it runs; npm's Codex is a `node` whose native `codex` child is the one reported, once
+per group. `AgentDiscovery` then finds that process's session file, as [Codex](#codex) and
+[omp and pi](#omp-and-pi) describe, keeping what it read in a cache pruned every scan.
 
-Allow and refuse type a single Return or Escape into the pty, after a fresh scan has confirmed that
-the prompt the card showed is still up and not yet answered, and `tcgetpgrp` on the tab's pty that
-the Claude is still in front.
+`TranscriptTail` reads a Claude transcript, `CodexRollout` a Codex rollout and `PiSession` a pi or
+omp session file. Each reads the last 64 KB, only when the file's size or mtime moved, and goes
+back 512 KB once when that tail holds no last answer, as a turn full of big tool results does (for
+a rollout, also when it holds no turn record). A file's head, a rollout's `session_meta` or a
+session's header and title, is read once. Nothing is decoded into a struct, nothing is
+force-unwrapped, and a line that does not parse is skipped, because these formats change between
+releases. A scan with nothing new opens no file, which `--activity --poll` counts.
+
+Claude's status is its registry's. For the other agents, a title's state counts when the title
+carried the agent's own mark at or after the agent's process started, with 2 s of slack, and the
+session file's reading otherwise; pi has only the reading, Gemini CLI and Qwen Code only the title.
+How long it has been in that state comes from whichever decided. When a title says a turn ended,
+the monitor rescans for up to 2 s for the session file's record of that end, so the finished card
+carries this turn's answer and not the one before. While a Codex waits, its request is what
+`AgentScreen` finds on the visible lines, else the rollout's pending call; an omp's is the `ask` in
+its session file, else the screen's. Transitions become `ActivityEvent`s on the main thread, which
+the controller turns into the attention mark and the card, and the strip draws
+`TerminalTab.activity`.
+
+`TerminalTab` keeps the title the program set and, for each agent with title rules, a `TitleState`:
+the status, since when (stamped only when the status changes, so a spinner frame or Codex's blinking
+mark does not restamp it), the name without the mark, and when the title last carried a mark. It
+registers handlers for OSC 9 and OSC 777 on SwiftTerm's terminal, which take precedence over
+SwiftTerm's own handling; SwiftTerm's `notify` delegate method is a protocol extension default,
+which a subclass override would never receive. Focus reports are sent with `setTerminalFocus`, on
+each change, because SwiftTerm sends them only when its view gains or loses first responder, which
+never happens when the game takes the keyboard from a non-activating panel.
+
+Allow and refuse type a single key into the pty, the agent's `answerKeys`, after a fresh scan has
+confirmed that the prompt the card showed is still up and not yet answered, and `tcgetpgrp` on the
+tab's pty that the agent is still in front. For Codex the tab's visible lines are read and parsed
+again in the same main-thread turn as the keystroke, and must give the very request the card
+showed.
 
 ### Web tabs
 
@@ -1503,6 +1716,9 @@ while the logo is up.
 | `~/Library/Logs/SlyTerm.log` | The debug trace, written only while `debug` is on |
 | WebKit's usual places under `~/Library` | The web tabs' cookies and cache, shared by all of them, and the compiled blocking rules |
 | `~/.claude/sessions/*.json` and Claude Code's transcripts | Read, never written |
+| `~/.codex/sessions/` rollouts and `~/.codex/session_index.jsonl`, under `$CODEX_HOME` when the Codex process has it set | Read, never written |
+| `~/.omp/agent/terminal-sessions/` and `~/.omp/agent/sessions/`, where omp's `PI_CONFIG_DIR`, `OMP_PROFILE`, `PI_CODING_AGENT_DIR` or `XDG_STATE_HOME` put them | Read, never written |
+| `~/.pi/agent/sessions/`, where pi's `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` or `--session-dir` put it | Read, never written |
 
 ## Migration notes
 

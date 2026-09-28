@@ -16,7 +16,7 @@ enum RemoteControl {
                 if let tab = target(of: url, controller: controller) { controller.requestAttention(tab) }
                 Activity.monitor?.refreshNow(completion: nil)
             case "allow", "refuse":
-                // Own opt-in: any local process can open a URL, the Claude being answered too.
+                // Own opt-in: any local process can open a URL, the agent being answered too.
                 guard Settings.shared.activityAnswerURLs else {
                     Settings.log("\(action): ignored, activityAnswerURLs is off")
                     let strip = controller.stripScreenFrame

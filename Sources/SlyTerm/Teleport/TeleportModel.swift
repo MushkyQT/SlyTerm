@@ -186,7 +186,8 @@ enum TeleportAction: Equatable {
 
 enum TeleportError: Error, Equatable {
     case notFound(String)
-    case couldNotStop(pid: pid_t)
+    case couldNotStop(pid: pid_t, agent: AgentKind)
+    case cannotCopy(AgentKind)
     case declined
     case noAttachID
     case noController
@@ -195,7 +196,9 @@ enum TeleportError: Error, Equatable {
     var message: String {
         switch self {
         case .notFound(let what): return "\(what) is not running any more"
-        case .couldNotStop(let pid): return "Couldn't stop Claude (pid \(pid)). Close it there and try again"
+        case .couldNotStop(let pid, let agent):
+            return "Couldn't stop \(agent.name) (pid \(pid)). Close it there and try again"
+        case .cannotCopy(let agent): return "\(agent.name) sessions can only be moved"
         case .declined: return "Left where it was"
         case .noAttachID: return "That background session has no id to attach to"
         case .noController: return "SlyTerm is not ready yet"

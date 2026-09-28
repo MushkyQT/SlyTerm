@@ -267,11 +267,11 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         startupAnimation = checkbox("Play the logo animation", #selector(setStartupAnimation(_:)))
         confirmQuit = checkbox("Ask before quitting with several tabs or a running command", #selector(setConfirmQuit(_:)))
         attentionSound = checkbox("Play a sound when a tab needs attention", #selector(setAttentionSound(_:)))
-        activityCards = checkbox("Show a card when Claude finishes or asks you something",
+        activityCards = checkbox("Show a card when an agent finishes or asks you something",
                                  #selector(setActivityCards(_:)))
         teleportClosesSource = checkbox("Close the tab a session came from after moving it (iTerm2, Terminal)",
                                         #selector(setTeleportClosesSource(_:)))
-        teleportConfirmBusy = checkbox("Ask before interrupting a Claude that is working or waiting for an answer",
+        teleportConfirmBusy = checkbox("Ask before interrupting an agent that is working or waiting for an answer",
                                        #selector(setTeleportConfirmBusy(_:)))
         autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
                                   #selector(setAutoPauseVideo(_:)))
@@ -281,7 +281,7 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
             section("Alerts", [
                 attentionSound,
                 activityCards,
-                caption("Off, a Claude finishing or asking only marks its tab: no card, no sound, and a hidden "
+                caption("Off, an agent finishing or asking only marks its tab: no card, no sound, and a hidden "
                         + "terminal stays hidden. The Allow and Refuse shortcuts go with it."),
             ]),
             section("Bring In", [teleportClosesSource, teleportConfirmBusy]),
@@ -400,7 +400,7 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
         folder.lineBreakMode = .byTruncatingMiddle
         width(folder, 240)
         inherit = checkbox("New tabs open in the current tab's folder", #selector(setInherit(_:)))
-        startupCommand.placeholderString = "claude"
+        startupCommand.placeholderString = "claude or codex"
         startupCommand.target = self
         startupCommand.action = #selector(setStartupCommand)
         startupCommand.delegate = self

@@ -29,12 +29,24 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
     var onAttentionChange: (() -> Void)?
     var onBell: (() -> Void)?
     var onExit: (() -> Void)?
-    var activity: AgentActivity? { didSet { if activity != oldValue { onActivityChange?() } } }
+    var activity: AgentActivity? {
+        didSet {
+            guard activity != oldValue else { return }
+            updateTitle()
+            onActivityChange?()
+        }
+    }
     var onActivityChange: (() -> Void)?
+    var onNotification: ((_ title: String?, _ body: String) -> Void)?
+    private(set) var titleStates: [AgentKind: TitleState] = [:]
 
     private var shellTitle: String?
     private var reportedDirectory: String?
     private var lastKnownDirectory: String
+    // What the program was last told about the keyboard. SwiftTerm starts at focused and reports
+    // on its own whenever the view becomes or stops being first responder.
+    private var focusReported = true
+    private var isFirstResponder = false
 
     init(frame: NSRect, directory: String) {
         let s = Settings.shared
@@ -54,6 +66,13 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         view.caretColor = NSColor(calibratedWhite: 0.9, alpha: 1)
         view.caretTextColor = TerminalTab.backgroundColor
         view.selectedTextBackgroundColor = NSColor.systemBlue.withAlphaComponent(0.45)
+        // Registered handlers replace SwiftTerm's own parsing of these two codes.
+        let terminal = view.getTerminal()
+        for code in [9, 777] {
+            terminal.registerOscHandler(code: code) { [weak self] data in
+                self?.notification(code: code, data)
+            }
+        }
         Settings.log("font: \(view.font.fontName) family=\(view.font.familyName ?? "?") size=\(view.font.pointSize)")
     }
 
@@ -74,7 +93,7 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         view.startProcess(executable: s.shell, args: ["-l"], environment: env, currentDirectory: cwd)
         startDirectory = cwd
         lastKnownDirectory = cwd
-        title = shellTitle ?? TerminalTab.folderTitle(cwd)
+        updateTitle()
         Settings.log("tab start: dir=\(cwd) pid=\(view.process?.shellPid ?? 0)")
 
         if runStartupCommand { sendStartupCommand() }
@@ -168,7 +187,13 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
             lastKnownDirectory = dir
             onDirectoryChange?()
         }
-        title = shellTitle ?? TerminalTab.folderTitle(dir)
+        updateTitle()
+    }
+
+    // An agent that animates its title is shown by the name in it, so the tab's name holds still.
+    private func updateTitle() {
+        let name = activity.flatMap { titleStates[$0.agent]?.name } ?? ""
+        title = name.isEmpty ? shellTitle ?? TerminalTab.folderTitle(lastKnownDirectory) : name
     }
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
@@ -177,8 +202,127 @@ final class TerminalTab: NSObject, Tab, LocalProcessTerminalViewDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.shellTitle = title.isEmpty ? nil : title
+            let moved = self.readTitleStates(title)
             self.refresh()
+            // Claude Code's title starts with Qwen's waiting mark: only the tab's own agent counts.
+            if moved.contains(where: { kind in self.activity.map { $0.agent == kind } ?? true }) {
+                Activity.monitor?.refreshNow(completion: nil)
+            }
         }
+    }
+
+    // Spinner frames and Codex's blinking mark keep the stamp: `since` moves with the status only.
+    // Returns the kinds whose status moved.
+    private func readTitleStates(_ text: String) -> [AgentKind] {
+        let now = Date()
+        var moved: [AgentKind] = []
+        for agent in AgentTitle.kinds {
+            guard let parsed = AgentTitle.parse(text, agent: agent) else {
+                if titleStates.removeValue(forKey: agent) != nil { moved.append(agent) }
+                continue
+            }
+            let old = titleStates[agent]
+            var state = old ?? TitleState(status: parsed.status, since: now, name: "", markedAt: nil)
+            if state.status != parsed.status { (state.status, state.since) = (parsed.status, now) }
+            state.name = parsed.name
+            if parsed.marked { state.markedAt = now }
+            if old.map({ $0.status != state.status }) ?? parsed.marked { moved.append(agent) }
+            titleStates[agent] = state
+        }
+        return moved
+    }
+
+    // The rows the program drew, even with the view scrolled back: only the bounds of
+    // `getScrollInvariantLine(row:)` say where the buffer ends. Main thread only.
+    func visibleLines() -> [String] {
+        let terminal = view.getTerminal()
+        let top = terminal.buffer.totalLinesTrimmed
+        var low = top + terminal.getTopVisibleRow() + terminal.rows
+        var high = low
+        var step = max(1, terminal.rows)
+        while terminal.getScrollInvariantLine(row: high) != nil {
+            low = high + 1
+            high += step
+            step *= 2
+        }
+        while low < high {
+            let middle = (low + high) / 2
+            if terminal.getScrollInvariantLine(row: middle) == nil { high = middle } else { low = middle + 1 }
+        }
+        return (max(top, low - terminal.rows)..<low).map { row in
+            // Cells never written hold NUL.
+            var text = terminal.getScrollInvariantLine(row: row)?.translateToString(
+                trimRight: true, skipNullCellsFollowingWide: true,
+                characterProvider: { cell in
+                    let character = terminal.getCharacter(for: cell)
+                    return character == "\0" ? " " : character
+                }) ?? ""
+            while text.last == " " { text.removeLast() }
+            return text
+        }
+    }
+
+    func firstResponderChanged(_ first: Bool) {
+        guard first != isFirstResponder else { return }
+        isFirstResponder = first
+        focusReported = first
+    }
+
+    // Reaches the program only once it has asked for focus reports (DECSET 1004).
+    func reportFocus(_ focused: Bool) {
+        guard focused != focusReported else { return }
+        focusReported = focused
+        view.getTerminal().setTerminalFocus(focused)
+    }
+
+    // OSC 777 `notify;title;body` and OSC 9 `body`. OSC 9 `4;state;progress` is a progress report,
+    // passed on to SwiftTerm's progress bar; ConEmu's other numbered OSC 9 commands are dropped.
+    private func notification(code: Int, _ data: ArraySlice<UInt8>) {
+        let text = String(decoding: data.prefix(4096), as: UTF8.self)
+        var title: String?
+        let body: String
+        if code == 777 {
+            let parts = text.split(separator: ";", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3, parts[0] == "notify" else { return }
+            (title, body) = (String(parts[1]), String(parts[2]))
+        } else {
+            if let report = TerminalTab.progressReport(text) {
+                view.progressReport(source: view.getTerminal(), report: report)
+                return
+            }
+            let conEmu = text.range(of: #"\A[0-9]+(;|\z)"#, options: .regularExpression) != nil
+            guard !conEmu else { return }
+            body = text
+        }
+        guard let clean = TerminalTab.printable(body) else { return }
+        let heading = title.flatMap { TerminalTab.printable($0) }
+        DispatchQueue.main.async { [weak self] in self?.onNotification?(heading, clean) }
+    }
+
+    // SwiftTerm's own reading of `4;<state>[;<progress>]`, which it keeps private.
+    private static func progressReport(_ text: String) -> Terminal.ProgressReport? {
+        let parts = text.split(separator: ";", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts[0] == "4", parts[1].count == 1, let raw = Int(parts[1]),
+              let state = Terminal.ProgressReportState(rawValue: raw) else { return nil }
+        var progress: UInt8?
+        if parts.count >= 3, !parts[2].isEmpty {
+            guard let value = Int(parts[2]) else { return nil }
+            progress = UInt8(max(0, min(value, 100)))
+        } else if state == .set {
+            progress = 0
+        }
+        return Terminal.ProgressReport(state: state, progress: state == .remove ? nil : progress)
+    }
+
+    // Any program in the tab can send these: controls and invisible format characters go.
+    private static func printable(_ text: String, limit: Int = 300) -> String? {
+        let scalars = text.unicodeScalars.lazy
+            .map { CharacterSet.whitespacesAndNewlines.contains($0) ? " " : $0 }
+            .filter { !CharacterSet.controlCharacters.contains($0) }
+        let flat = String(String.UnicodeScalarView(scalars)).split(separator: " ")
+            .joined(separator: " ")
+        guard !flat.isEmpty else { return nil }
+        return flat.count > limit ? String(flat.prefix(limit - 1)) + "…" : flat
     }
 
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {

@@ -44,18 +44,19 @@ final class ActivityCard: ActivityCardPresenting {
             // on nil would hide every text-less turn after the first.
             if let message = activity.lastMessage, let last = lastFinished,
                last.tab == tab.id, last.message == message { return }
-            guard let host = Activity.host, !host.isBeingViewed(tab) else { return }
-            if let up = presentedTab, presentedPrompt != nil, let asking = standingActivity(of: up, host: host) {
-                Settings.log("card: \(tab.title) finished, kept behind \(asking.tab.title)'s request")
-                return
-            }
+            guard let host = Activity.host, !host.isBeingViewed(tab),
+                  !isBehindRequest(tab, news: "finished", host: host) else { return }
             lastFinished = activity.lastMessage.map { (tab: tab.id, message: $0) }
             content = finishedContent(tab: tab, activity: activity)
         case .asks(_, let activity):
             guard let host = Activity.host, !host.isBeingViewed(tab) else { return }
             showRequest(activity, of: tab)
             return
-        case .answered, .gone, .changed, .notified:
+        case .notified(_, let title, let body):
+            guard let host = Activity.host, !host.isBeingViewed(tab),
+                  !isBehindRequest(tab, news: "sent a notification", host: host) else { return }
+            content = notifiedContent(tab: tab, title: title, body: body)
+        case .answered, .gone, .changed:
             return
         }
         show(content, for: tab.id, prompt: nil)
@@ -97,6 +98,14 @@ final class ActivityCard: ActivityCardPresenting {
         guard let prompt = activity.prompt else { return }
         standing[tab.id] = prompt
         show(asksContent(tab: tab, activity: activity), for: tab.id, prompt: prompt)
+    }
+
+    // News that needs no answer never covers a request that does.
+    private func isBehindRequest(_ tab: TerminalTab, news: String, host: ActivityHost) -> Bool {
+        guard let up = presentedTab, presentedPrompt != nil,
+              let asking = standingActivity(of: up, host: host) else { return false }
+        Settings.log("card: \(tab.title) \(news), kept behind \(asking.tab.title)'s request")
+        return true
     }
 
     private func standingActivity(of id: UUID, host: ActivityHost) -> (tab: TerminalTab, activity: AgentActivity)? {
@@ -224,6 +233,17 @@ final class ActivityCard: ActivityCardPresenting {
             accent: .systemYellow,
             title: title,
             body: Self.clamp(activity.lastMessage) ?? "Turn finished.",
+            mono: nil,
+            footer: footer([ghost.map { "\($0) to read" }]))
+    }
+
+    private func notifiedContent(tab: TerminalTab, title: String?,
+                                 body: String) -> ActivityCardView.Content {
+        let ghost = ActivityAnswer.comboName(settings.hotkeyGhost)
+        return ActivityCardView.Content(
+            accent: .systemYellow,
+            title: "\(tab.title) · \(title ?? "notification")",
+            body: Self.clamp(body) ?? body,
             mono: nil,
             footer: footer([ghost.map { "\($0) to read" }]))
     }
@@ -524,6 +544,18 @@ enum ActivityCardSnapshotCLI {
                   been at it. Everything is best effort: a line that does not parse is skipped, \
                   and nothing in the poll can crash the app.
                   """) ?? "",
+            mono: nil,
+            footer: "⌃⌥Tab to read"))
+        add("Codex asks to run a command, read off its screen", ActivityCardView.Content(
+            accent: .systemOrange,
+            title: "Fix the login test | api · needs an answer",
+            body: "Wants to run `npm test -- --grep login`",
+            mono: "npm test -- --grep login",
+            footer: "⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look"))
+        add("a notification from a program SlyTerm does not read", ActivityCardView.Content(
+            accent: .systemYellow,
+            title: "build · Build finished",
+            body: "All 214 targets built in 3m 12s, 2 warnings.",
             mono: nil,
             footer: "⌃⌥Tab to read"))
         add("a long command and a narrow strip", ActivityCardView.Content(

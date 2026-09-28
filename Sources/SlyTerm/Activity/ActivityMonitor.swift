@@ -16,6 +16,11 @@ final class ActivityMonitor: ActivityMonitoring {
     private var rescan = false
     private var completions: [() -> Void] = []
     private var seen: [UUID: AgentActivity] = [:]
+    // A title can end a turn before the session file has the answer: the tab stays working
+    // meanwhile, rescanned, for up to `fileWait`.
+    private var holds: [UUID: Date] = [:]
+    private let fileWait: TimeInterval = 2
+    private var codexPrompts: [UUID: CodexPrompt] = [:]
 
     // Keyed with start time because pids are reused; `KERN_PROCARGS2` costs a megabyte per call.
     private var inspected: [pid_t: (started: Date?, arguments: SessionDiscovery.ProcessArguments?)] = [:]
@@ -40,6 +45,8 @@ final class ActivityMonitor: ActivityMonitoring {
         tabs = nil
         visible = nil
         seen = [:]
+        holds = [:]
+        codexPrompts = [:]
         completions = []
         rescan = false
     }
@@ -69,10 +76,16 @@ final class ActivityMonitor: ActivityMonitoring {
         let terminals = tabs?() ?? []
         guard !terminals.isEmpty else { return finish() }
         scanning = true
-        // Main thread: `ptsname` returns a shared static buffer.
+        // Main thread: `ptsname` returns a shared static buffer, and the titles and the screen are
+        // SwiftTerm's.
         let probes = Dictionary(terminals.compactMap { tab in
-            tab.ttyName.map {
-                (tab.id, TabProbe(tty: $0, foregroundGroup: tab.foregroundProcessGroup, titles: [:], screen: nil))
+            tab.ttyName.map { tty in
+                let titles = tab.titleStates
+                let waiting = tab.activity.map { titles[$0.agent]?.status == .waiting }
+                    ?? titles.values.contains { $0.status == .waiting }
+                let screen = waiting ? tab.visibleLines() : nil
+                return (tab.id, TabProbe(tty: tty, foregroundGroup: tab.foregroundProcessGroup,
+                                         titles: titles, screen: screen))
             }
         }, uniquingKeysWith: { (first: TabProbe, _: TabProbe) in first })
         queue.async { [weak self] in
@@ -98,7 +111,22 @@ final class ActivityMonitor: ActivityMonitoring {
         for completion in waiting { completion() }
     }
 
-    private func scan(tabs: [UUID: TabProbe]) -> [UUID: AgentActivity] {
+    private struct Found {
+        var activity: AgentActivity
+        var byTitle = false
+        var fromScreen = false
+        var readsFile = false
+        // The session file's own idle stamp: nil while it says the turn runs.
+        var fileIdleSince: Date?
+    }
+
+    private struct CodexPrompt {
+        var titleSince: Date
+        var request: AgentRequest?
+        var since: Date
+    }
+
+    private func scan(tabs: [UUID: TabProbe]) -> [UUID: Found] {
         reads = 0
         var touched: Set<pid_t> = []
         let hosted = SessionDiscovery.hostedSessions(tabs: tabs, inspect: { pid in
@@ -106,10 +134,11 @@ final class ActivityMonitor: ActivityMonitoring {
             return inspect(pid)
         }, files: files)
         files.prune()
-        var activities: [UUID: AgentActivity] = [:]
+        var activities: [UUID: Found] = [:]
         for (tab, found) in hosted {
-            activities[tab] = ActivityMonitor.activity(for: found.session, reading: reading(for: found.session),
-                                                       processGroup: found.processGroup)
+            let reading = reading(for: found.session)
+            activities[tab] = ActivityMonitor.found(for: found.session, reading: reading,
+                                                    processGroup: found.processGroup, probe: tabs[tab])
         }
         inspected = inspected.filter { touched.contains($0.key) }
         let live = Set(hosted.values.map(\.session.sessionID))
@@ -171,30 +200,82 @@ final class ActivityMonitor: ActivityMonitoring {
         return reading
     }
 
-    // Claude's status is its registry's; the other agents' is read from their session files.
     static func activity(for session: AgentSessionInfo, reading: TranscriptTail.Reading?,
-                         processGroup: pid_t? = nil) -> AgentActivity {
-        let claude = session.agent == .claude
-        let status = claude ? session.status : (reading?.status ?? .unknown)
-        return AgentActivity(agent: session.agent,
-                             status: status,
-                             since: claude ? session.statusUpdatedAt : reading?.statusSince,
-                             sessionID: session.sessionID,
-                             pid: session.pid,
-                             isBackground: session.isBackground,
-                             processGroup: processGroup,
-                             doing: status == .working ? reading?.doing : nil,
-                             request: status == .waiting ? (reading?.request ?? .unknown) : nil,
-                             lastMessage: reading?.lastMessage,
-                             lastTurnDuration: reading?.lastTurnDuration)
+                         processGroup: pid_t? = nil, probe: TabProbe? = nil) -> AgentActivity {
+        found(for: session, reading: reading, processGroup: processGroup, probe: probe).activity
     }
 
-    private func apply(_ found: [UUID: AgentActivity]) {
+    // Claude's status is its registry's. A title agent's is its title's once the title has shown
+    // one of its marks since this process started (Codex's and Qwen's idle titles have none);
+    // until then, and always for pi, the session file's.
+    private static func found(for session: AgentSessionInfo, reading: TranscriptTail.Reading?,
+                              processGroup: pid_t?, probe: TabProbe?) -> Found {
+        let agent = session.agent
+        var status = reading?.status ?? .unknown
+        var since = reading?.statusSince
+        var byTitle = false
+        if agent == .claude {
+            (status, since) = (session.status, session.statusUpdatedAt)
+        } else if let title = probe?.titles[agent], let marked = title.markedAt,
+                  marked >= session.startedAt.addingTimeInterval(-titleSlack) {
+            (status, since, byTitle) = (title.status, max(title.since, session.startedAt), true)
+        }
+        var request: AgentRequest?
+        var fromScreen = false
+        if status == .waiting {
+            let screen = probe?.screen.flatMap { AgentScreen.request(lines: $0, agent: agent) }
+            // Codex writes no prompt down: its screen shows the one in front, its rollout only a
+            // call that has not returned.
+            let first = agent == .codex ? screen ?? reading?.request : reading?.request ?? screen
+            request = first ?? .unknown
+            fromScreen = screen != nil && request == screen
+        }
+        let activity = AgentActivity(agent: agent,
+                                     status: status,
+                                     since: since,
+                                     sessionID: session.sessionID,
+                                     pid: session.pid,
+                                     isBackground: session.isBackground,
+                                     processGroup: processGroup,
+                                     doing: status == .working ? reading?.doing : nil,
+                                     request: request,
+                                     lastMessage: reading?.lastMessage,
+                                     lastTurnDuration: reading?.lastTurnDuration)
+        return Found(activity: activity, byTitle: byTitle, fromScreen: fromScreen,
+                     readsFile: agent != .claude && reading != nil,
+                     fileIdleSince: reading?.status == .idle ? reading?.statusSince : nil)
+    }
+
+    // The title is parsed in SlyTerm and the start time is the kernel's, a little after the exec.
+    private static let titleSlack: TimeInterval = 2
+
+    private func apply(_ found: [UUID: Found]) {
         let terminals = tabs?() ?? []
+        let now = Date()
         var events: [ActivityEvent] = []
+        var again = false
         for tab in terminals {
             let before = seen[tab.id]
-            var after = found[tab.id]
+            var after = found[tab.id]?.activity
+            if var activity = after {
+                stampCodexPrompt(&activity, tab: tab.id, onScreen: found[tab.id]?.fromScreen ?? false)
+                after = activity
+            } else {
+                codexPrompts[tab.id] = nil
+            }
+            // The finished card is to carry this turn's answer, not the one before.
+            if let was = before, was.isWorking, let from = was.since, let scanned = found[tab.id],
+               scanned.byTitle, scanned.readsFile, scanned.activity.status == .idle,
+               (scanned.fileIdleSince ?? .distantPast) < from {
+                let held = holds[tab.id] ?? now
+                holds[tab.id] = held
+                if now.timeIntervalSince(held) < fileWait {
+                    after = was
+                    again = true
+                }
+            } else {
+                holds[tab.id] = nil
+            }
             // Claude Code skips `turn_duration` for some turns (interrupted ones); use the stamps.
             if var activity = after, activity.lastTurnDuration == nil,
                let previous = before, previous.isWorking, activity.status == .idle,
@@ -208,7 +289,32 @@ final class ActivityMonitor: ActivityMonitoring {
         }
         let live = Set(terminals.map(\.id))
         seen = seen.filter { live.contains($0.key) }
+        holds = holds.filter { live.contains($0.key) }
+        codexPrompts = codexPrompts.filter { live.contains($0.key) }
         for event in events { onEvent?(event) }
+        if again {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.requestScan(completion: nil)
+            }
+        }
+    }
+
+    // Codex's title stays on "Action Required" from one approval to the next: another command on
+    // its screen is another prompt, with its own card and its own answer.
+    private func stampCodexPrompt(_ activity: inout AgentActivity, tab: UUID, onScreen: Bool) {
+        guard activity.agent == .codex, activity.isWaiting, let from = activity.since else {
+            codexPrompts[tab] = nil
+            return
+        }
+        var prompt = codexPrompts[tab].flatMap { $0.titleSince == from ? $0 : nil }
+            ?? CodexPrompt(titleSince: from, request: nil, since: from)
+        if onScreen, let request = activity.request, request.isAnswerableByKey,
+           request != prompt.request {
+            if prompt.request != nil { prompt.since = Date() }
+            prompt.request = request
+        }
+        codexPrompts[tab] = prompt
+        activity.since = prompt.since
     }
 
     private func transition(tab: TerminalTab,

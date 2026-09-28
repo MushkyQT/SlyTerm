@@ -7,7 +7,8 @@
 
 <p align="center">
   A terminal that floats over your game.<br>
-  Keep Claude Code working while you play, and look things up without alt-tabbing.
+  Keep Claude Code, Codex and other coding agents working while you play, and look things up
+  without alt-tabbing.
 </p>
 
 <p align="center">
@@ -20,10 +21,11 @@
 
 ---
 
-SlyTerm is a terminal window that sits on top of your game. Type a prompt, click back into the
-game, and the terminal lets every click through to it while Claude works. When Claude finishes or
-asks for permission, a card tells you, and a hotkey answers it without leaving the game. Point at a
-quest, an item or a spell, press a key, and its wiki page opens in a tab next to your terminals.
+SlyTerm is a terminal window that sits on top of your game. Type a prompt to Claude Code, Codex or
+another coding agent, click back into the game, and the terminal lets every click through to it
+while the agent works. When it finishes or asks for permission, a card tells you, and a hotkey
+answers it without leaving the game. Point at a quest, an item or a spell, press a key, and its wiki
+page opens in a tab next to your terminals.
 
 https://github.com/user-attachments/assets/420bb480-98c7-4931-8162-4ad74fbe23a5
 
@@ -50,21 +52,25 @@ on the trackpad switches modes too.
 <img src="docs/features/overlay.gif" width="600"
      alt="The terminal appears over Dofus with ⌃⌥H, a prompt is typed, and a click on a monster dims it into click-through while Claude keeps working">
 
-### See what Claude is doing
+### See what your agent is doing
 
-Each tab running Claude Code shows its state on the tab strip: a spinner while it works, an orange
-question mark while it waits for you, a yellow dot once it has finished and you have not looked.
-Hover a tab for the details, such as "Claude is working for 2m · editing GuideTab.swift" or "Claude
-is waiting for you · run `npm test`". There is nothing to set up: SlyTerm reads the files Claude
-Code already writes.
+Each tab running a coding agent shows its state on the tab strip: a spinner while it works, an
+orange question mark while it waits for you, a yellow dot once it has finished and you have not
+looked. Hover a tab for the details, such as "Codex is working for 2m · editing GuideTab.swift" or
+"Claude is waiting for you · run `npm test`". There is nothing to set up: SlyTerm reads the session
+files and the terminal titles the agents already write.
 
-### Answer Claude from the game
+Claude Code and Codex get all of this, answers included. omp and pi get the marks and the cards,
+with nothing to answer from the game. Gemini CLI and Qwen Code show their state on the strip. Any
+other program that sends terminal notifications gets a mark and a card with its text.
 
-When Claude finishes a turn or asks for permission, a card appears by the tab strip with the end
-of its answer or the command it wants to run. `⌃⌥Y` allows the request and `⌃⌥N` refuses it, and
-the game keeps the keyboard throughout. SlyTerm types the answer only after it has checked that the
-prompt on screen is the one the card showed. Anything it cannot answer safely, such as a question
-with several options, waits for you in the terminal.
+### Answer your agent from the game
+
+When an agent finishes a turn or asks for permission, a card appears by the tab strip with the end
+of its answer or the command it wants to run. For Claude Code and Codex, `⌃⌥Y` allows the request
+and `⌃⌥N` refuses it, and the game keeps the keyboard throughout. SlyTerm types the answer only
+after it has checked that the prompt on screen is the one the card showed. Anything it cannot answer
+safely, such as a question with several options, waits for you in the terminal.
 
 <img src="docs/features/claude.gif" width="600"
      alt="Over World of Warcraft, a tab's spinner turns into a question mark and a card asks to run npm test; ⌃⌥Y allows it, and a second card says Claude finished">
@@ -120,11 +126,12 @@ setting sends the lookup's pages there instead.
 
 ### Bring a session in from another terminal
 
-If you started Claude in iTerm2, Terminal or another terminal app before launching the game,
-press `⌘⇧T` in a terminal tab to bring it into SlyTerm. The conversation carries on from the same
-transcript. A background session (`claude --bg`) is attached without being interrupted, a copy can
-be opened while the original keeps running, and a plain shell tab comes across with its folder and
-its command.
+If you started Claude Code, Codex, omp or pi in iTerm2, Terminal or another terminal app before
+launching the game, press `⌘⇧T` in a terminal tab to bring it into SlyTerm. The conversation carries
+on from the same session. A background Claude (`claude --bg`) is attached without being
+interrupted, and Codex keeps working through the move. Claude Code, Codex and pi can also be
+copied, with the original left running, and a plain shell tab comes across with its folder and its
+command.
 
 <img src="docs/features/bring-in.gif" width="600"
      alt="⌘⇧T opens Bring In a Session over Old School RuneScape, and Return resumes an iTerm2 Claude session in a new tab">
@@ -145,8 +152,8 @@ where it was, with the floating tabs and what was playing.
   Fonts are picked up automatically
 - Option is left alone by default, so `{`, `[`, `|` and `~` keep working on French and other
   international keyboards
-- `⇧Return` for a newline in Claude Code
-- A startup command, such as `claude`, typed into each new tab
+- `⇧Return` for a newline in Claude Code and Codex
+- A startup command, such as `claude` or `codex`, typed into each new tab
 
 ### Scriptable
 
@@ -184,12 +191,12 @@ it.
 
 1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide
    the overlay.
-2. Press `⌃⌥H` to show the terminal and run `claude`. To start Claude in every new tab, set
-   Settings › Terminal › Startup command to `claude`.
+2. Press `⌃⌥H` to show the terminal and run `claude` or `codex`. To start your agent in every new
+   tab, set Settings › Terminal › Startup command to it.
 3. Type your prompt, then click back into the game. The terminal lets your clicks through while
-   Claude works.
-4. When a card says Claude is done or needs you, answer with `⌃⌥Y` or `⌃⌥N`, or press `⌃⌥Tab` to go
-   back to the terminal.
+   the agent works.
+4. When a card says the agent is done or needs you, answer with `⌃⌥Y` or `⌃⌥N`, or press `⌃⌥Tab`
+   to go back to the terminal.
 5. Point at something in the game and press `⌃⌥Q` to look it up.
 6. Press `⌘L` in the terminal for a web tab, type an address, and pop it out with the button in its
    toolbar to watch it in a window of its own over the game.
@@ -206,7 +213,7 @@ Option, ⌘ is Command and ⇧ is Shift.
 | Panic: fullscreen opaque terminal | `⌃⌥P` |
 | Look up what is under the pointer | `⌃⌥Q`, again for the next guess |
 | Pick a line near the pointer to look up | `⌃⌥⇧Q` |
-| Allow or refuse Claude's permission prompt | `⌃⌥Y` / `⌃⌥N` |
+| Allow or refuse an agent's permission prompt | `⌃⌥Y` / `⌃⌥N` |
 | Pause the web tabs that are playing, or play them again | `⌃⌥V` |
 | Bring in a session from another terminal | `⌘⇧T` in a terminal |
 | Web tab ↔ terminal | `⌘G` |

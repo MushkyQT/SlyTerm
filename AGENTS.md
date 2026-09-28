@@ -4,8 +4,8 @@ Guidance for AI coding agents working on SlyTerm. Human contributors: the same r
 in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 SlyTerm is a macOS menu bar app, one Swift package (`Package.swift`, Swift 5.9, macOS 14): a
-terminal that floats over games, with click-through, global hotkeys, Claude Code session status and
-answers, web tabs that show guides and video and can float over the game, an OCR lookup that opens a
+terminal that floats over games, with click-through, global hotkeys, coding agent session status and
+answers (Claude Code, Codex, omp, pi, and Gemini CLI and Qwen Code from their titles), web tabs that show guides and video and can float over the game, an OCR lookup that opens a
 game's wiki in one, and bringing sessions in from other terminals. Its only dependency is SwiftTerm.
 Behaviour and architecture are in [docs/TECHNICAL.md](docs/TECHNICAL.md); the
 [source map](docs/TECHNICAL.md#source-map) says which file holds what.
@@ -27,7 +27,7 @@ offscreen and never type into anything:
 | Pick mode | `--pick-snapshot <png> X Y <out.png> [--scale 2]` |
 | Web tabs | `--guide-snapshot <url> <out.png> [--full] [--fill] [--width N] [--height N] [--scroll N] [--eval <js>] [--find <text>]`, `--float-snapshot <out.png>`, `--drm-check` |
 | Tab strip | `--strip-snapshot <out.png>` |
-| Activity | `--activity [--json]`, `--activity --transcript <file.jsonl> [--status waiting]`, `--activity --poll [--times N]`, `--card-snapshot <out.png>` |
+| Activity | `--activity [--json]`, `--activity --transcript <file.jsonl> [--status waiting]`, `--activity --title <text>`, `--activity --screen <file>`, the last three with `[--agent <name>]`, `--activity --poll [--times N]`, `--card-snapshot <out.png>`; fixtures from `swift Tools/make-agent-fixtures.swift <dir>` |
 | Bring In a Session | `--sessions [--json] [--session <uuid> \| --pid <pid> \| --tty <tty>]`, `--picker-snapshot <out.png>` |
 
 `swift Tools/make-lookup-fixtures.swift <dir>` draws synthetic game screenshots and prints the
@@ -55,12 +55,13 @@ Read these before running anything.
   delete` it and `defaults import` the backup.
 - **`open slyterm://…` reaches the registered copy,** usually the installed one. Target the build
   under test with `open -g -a dist/SlyTerm.app "slyterm://…"`.
-- **Claude sessions and terminal tabs you did not create are off limits.** The activity and
-  teleport features read `~/.claude/sessions` and the user's transcripts, and allow, refuse and
-  teleport act on real sessions. Never answer, signal, resume, attach to or close a session or tab
-  that was not created for the test. `--activity` and `--sessions` are read-only ways to look.
-  For a live test, start a scratch `claude --permission-mode default` in a scratch folder, in a
-  window you opened.
+- **Agent sessions and terminal tabs you did not create are off limits.** The activity and
+  teleport features read `~/.claude/sessions`, `~/.codex`, `~/.omp` and `~/.pi` and the user's
+  transcripts, and allow, refuse and teleport act on real sessions. Never answer, signal, resume,
+  attach to or close a session or tab that was not created for the test, and never connect to
+  Codex's background server or take its locks. `--activity` and `--sessions` are read-only ways to
+  look. For a live test, start a scratch `claude --permission-mode default` or `codex -s read-only`
+  in a scratch folder, in a window you opened.
 - **Guard anything that types.** Before an automated keystroke, confirm SlyTerm is the frontmost
   app, or the text lands in whatever the user has in front.
 - **Nothing generated goes in the repository:** screenshots, fixture images, snapshot PNGs, logs.
@@ -78,15 +79,15 @@ A change that breaks one of these is wrong, whatever it fixes.
    ScreenCaptureKit with SlyTerm's own windows excluded.
 3. **The game keeps the keyboard.** Panels are non-activating. A card, an attention mark or a
    guide arriving never takes focus; a hidden overlay with news comes back in click-through.
-4. **No keystroke on a guess.** `Activity/ActivityAnswer.swift` types one Return or Escape, only
-   after every check passes; any doubt ends in a toast and an `answer: … ignored` log line.
+4. **No keystroke on a guess.** `Activity/ActivityAnswer.swift` types one key (Return or Escape
+   for Claude Code, `y` or `n` for Codex), only after every check passes; any doubt ends in a toast and an `answer: … ignored` log line.
    `activityCards` off disables the card, both hotkeys and both URLs. `activityAnswerURLs` stays
-   off by default, since any local process, a Claude included, can open a URL.
+   off by default, since any local process, an agent included, can open a URL.
 5. **Main thread for UI only.** Process-table reads, file reads, OCR and network run off it.
    Apple events go through the teleport engine's own queue, because the first one can block on a
    permission dialog.
-6. **Outside data is untrusted.** Claude Code's registry and transcript formats are undocumented
-   and change between releases: bounded reads, no force unwraps, and a line that does not parse is
+6. **Outside data is untrusted.** The agents' registries, transcripts, titles and screens are
+   undocumented formats that change between releases: bounded reads, no force unwraps, and a line that does not parse is
    skipped. The same goes for web responses and imported game JSON.
 7. **Stored data stays compatible.** Never rename a preference key (`hotkeyQuest` and
    `questOpenInApp` keep their old names on purpose). A change to stored games goes through

@@ -10,7 +10,7 @@ enum HotkeyAction: String, CaseIterable {
         case .panic: return "Panic mode"
         case .quest: return "Look up what's under the pointer"
         case .pick: return "Pick text near the pointer"
-        case .allow: return "Allow what Claude asks"
+        case .allow: return "Allow what the agent asks"
         case .refuse: return "Refuse it"
         case .playPause: return "Play / pause"
         }
