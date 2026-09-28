@@ -11,6 +11,7 @@ if SessionsCLI.run(CommandLine.arguments) { exit(0) }
 if ActivityCLI.run(CommandLine.arguments) { exit(0) }
 if TeleportPicker.runSnapshotCLI(CommandLine.arguments) { exit(0) }
 if LookupPicker.runSnapshotCLI(CommandLine.arguments) { exit(0) }
+if SetupAssistant.runSnapshotCLI(CommandLine.arguments) { exit(0) }
 app.setActivationPolicy(.accessory)
 let appDelegate = AppDelegate()
 app.delegate = appDelegate

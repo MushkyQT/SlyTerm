@@ -228,7 +228,7 @@ final class LookupStore {
             var added: [String] = []
             for i in _games.indices where _games[i].preset == LookupPresets.Preset.dofus.rawValue
                 && !_games[i].sources.contains(where: { $0.host == LookupPresets.dofusDBHost }) {
-                _games[i].sources.append(LookupPresets.dofusDB())
+                _games[i].sources.append(LookupPresets.dofusDB(language: "fr"))
                 added.append(_games[i].name)
             }
             return (false, added)
@@ -363,6 +363,7 @@ final class LookupStore {
 enum LookupPresets {
     enum Preset: String, CaseIterable {
         case dofus
+        case dofusRetro = "dofus-retro"
         case wow
         case wowClassic = "wow-classic"
         case wowTBC = "wow-tbc"
@@ -374,6 +375,7 @@ enum LookupPresets {
         var title: String {
             switch self {
             case .dofus: return "Dofus"
+            case .dofusRetro: return "Dofus Retro"
             case .wow: return "World of Warcraft"
             case .wowClassic: return "WoW Classic"
             case .wowTBC: return "Burning Crusade Classic"
@@ -386,14 +388,21 @@ enum LookupPresets {
 
         var siteName: String {
             switch self {
-            case .dofus: return "Dofus pour les Noobs, DofusDB"
+            case .dofus: return "Dofus Wiki, DofusDB"
+            case .dofusRetro: return "129Dofus Wiki"
             case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever: return "Wowhead"
             case .osrs: return "OSRS Wiki"
             case .rs3: return "RuneScape Wiki"
             }
         }
 
-        var family: String? { wowhead == nil ? nil : "World of Warcraft" }
+        var family: String? {
+            switch self {
+            case .dofus, .dofusRetro: return "Dofus"
+            case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever: return "World of Warcraft"
+            case .osrs, .rs3: return "RuneScape"
+            }
+        }
 
         var variant: String {
             switch self {
@@ -402,7 +411,10 @@ enum LookupPresets {
             case .wowTBC: return "Burning Crusade Classic"
             case .wowMoP: return "Mists of Pandaria Classic"
             case .wowForever: return "Forever"
-            case .dofus, .osrs, .rs3: return title
+            case .dofus: return "Dofus 3"
+            case .dofusRetro: return "Dofus Retro"
+            case .osrs: return "Old School"
+            case .rs3: return "RuneScape 3"
             }
         }
 
@@ -413,7 +425,7 @@ enum LookupPresets {
             case .wowTBC: return ("/tbc", "Wowhead TBC Classic")
             case .wowMoP: return ("/mop-classic", "Wowhead MoP Classic")
             case .wowForever: return ("/forever", "Wowhead Forever")
-            case .dofus, .osrs, .rs3: return nil
+            case .dofus, .dofusRetro, .osrs, .rs3: return nil
             }
         }
     }
@@ -424,16 +436,28 @@ enum LookupPresets {
             return LookupGame(
                 name: "Dofus",
                 appBundleIDs: ["com.Ankama.Dofus", "com.ankama.dofus"],
-                ocrLanguages: ["fr-FR", "en-US"],
+                ocrLanguages: ["en-US", "fr-FR"],
                 sources: [
                     LookupSource(
-                        name: "Dofus pour les Noobs",
-                        home: URL(string: "https://www.dofuspourlesnoobs.com")!,
-                        searchURL: "https://www.dofuspourlesnoobs.com/apps/search?q={query}",
-                        kind: .weebly,
-                        indexURL: URL(string: "https://www.dofuspourlesnoobs.com/sitemap.xml")),
-                    dofusDB(),
+                        name: "Dofus Wiki",
+                        home: URL(string: "https://dofuswiki.fandom.com")!,
+                        searchURL: "https://dofuswiki.fandom.com/wiki/Special:Search?query={query}",
+                        kind: .mediaWiki,
+                        indexURL: URL(string: "https://dofuswiki.fandom.com/api.php")),
+                    dofusDB(language: "en"),
                 ],
+                preset: preset.rawValue)
+        // Retro's bundle identifier is unknown here, so it is picked by hand or set in Settings.
+        case .dofusRetro:
+            return LookupGame(
+                name: "Dofus Retro",
+                ocrLanguages: ["en-US"],
+                sources: [LookupSource(
+                    name: "129Dofus Wiki",
+                    home: URL(string: "https://129dofus.fandom.com")!,
+                    searchURL: "https://129dofus.fandom.com/wiki/Special:Search?query={query}",
+                    kind: .mediaWiki,
+                    indexURL: URL(string: "https://129dofus.fandom.com/api.php"))],
                 preset: preset.rawValue)
         case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever:
             let database = preset.wowhead!
@@ -475,11 +499,12 @@ enum LookupPresets {
 
     static let dofusDBHost = "dofusdb.fr"
 
-    static func dofusDB() -> LookupSource {
+    // The migration adds the French one: it goes next to Dofus pour les Noobs, a French site.
+    static func dofusDB(language: String) -> LookupSource {
         LookupSource(
             name: "DofusDB",
-            home: URL(string: "https://dofusdb.fr/fr")!,
-            searchURL: "https://dofusdb.fr/fr/database/objects?q={query}",
+            home: URL(string: "https://dofusdb.fr/\(language)")!,
+            searchURL: "https://dofusdb.fr/\(language)/database/items?q={query}",
             kind: .dofusDB)
     }
 }
@@ -491,7 +516,7 @@ extension LookupPresets.Preset {
         switch self {
         case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever: return Self.warcraftStrip
         case .osrs, .rs3: return Self.runeScapeStrip
-        case .dofus: return []
+        case .dofus, .dofusRetro: return []
         }
     }
 
@@ -500,6 +525,8 @@ extension LookupPresets.Preset {
         case .wow, .wowClassic, .wowTBC, .wowMoP, .wowForever: return Self.warcraftTooltip
         case .osrs, .rs3: return Self.runeScapeTooltip
         case .dofus: return Self.dofusTooltip
+        // Retro's tooltips are laid out differently and have not been read yet.
+        case .dofusRetro: return []
         }
     }
 

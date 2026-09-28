@@ -700,7 +700,7 @@ can be asked is: a page named exactly the text wins over a near one, and among e
 higher up. The first source's search page is the fallback."
 
 **Text language** is what Apple's text recognition reads the screen in: Automatic, or one of its
-languages. A game set to several (the Dofus preset reads French and English) shows as an item of
+languages. A game set to several (the Dofus 3 preset reads English and French) shows as an item of
 its own. **Game app** is the app the game runs in, picked from what is running, or "Any (choose the
 game by hand)". "Detect the game from the app in front" is what uses it, and "Otherwise use" names
 the game that answers when nothing recognisable is in front. The menu bar's **Lookup Game** submenu
@@ -728,8 +728,9 @@ added.
   spell's tooltip lines in English and in French (`Sell Price`, `Prix de vente`, `Use:`, `Equip:`,
   `Binds when`, `Lié quand`, `Requires`, `Item Level`, `Durability`, `Unique`, `Rank 1`, `15 Mana`,
   `Instant`, `30 sec cooldown`, `Tools:`, `Reagents:` and so on).
-- Dofus knows the line under an item's name (`Niveau 56 • Poil`), `POIDS`, `PRIX MOYEN` and the
-  `Épingler l'infobulle` hint.
+- Dofus 3 knows the line under an item's name (`Level 56 • Hair`, `Niveau 56 • Poil`), `WEIGHT`
+  and `POIDS`, `AVERAGE PRICE` and `PRIX MOYEN`, and the tooltip's pin hint. Dofus Retro has none
+  yet.
 - Old School RuneScape and RuneScape know the mouseover text's `2 more options` and RuneLite's
   `Weight:`, and strip what the mouseover text and RuneLite's box by the pointer write around a
   name: the action in front of it (`Use`, `Take`, `Wield`, `Attack`, `Talk-to`, `Chop down`,
@@ -750,17 +751,29 @@ overwrite: it comes in with fresh identifiers and sits next to what you already 
 
 A fresh install starts with the first of them, Dofus, configured.
 
-- **Dofus** (Dofus pour les Noobs, then DofusDB). Dofus pour les Noobs is a Weebly site, whose
-  sitemap gives every page name away in its slugs: the quest under your pointer is matched offline
-  against ~2500 pages, and the site's own `apps/search` answers for the rest. An item has no guide
-  page there, which is what [DofusDB](https://dofusdb.fr/fr), the encyclopedia, is for: the name in
-  an item's tooltip opens its page, as `dofusdb.fr/fr/database/object/649` for `Poils de Wo
-  Wabbit`. DofusDB has no index (some 22 000 items, 50 to a request), but its API finds an item by
-  name, with the accents the recognition dropped and an `i` it read as `l` forgiven (`Polls de Wo
-  Wabblt` still finds it), and by the name's longest word when a slip elsewhere keeps the whole name
-  from matching. It is detected from its address, and the address's first part is the language it
-  is asked in: `https://dofusdb.fr/en/database/objects?q={query}` for English, and `es`, `de` and
-  `pt` the same.
+- **Dofus**, two presets in a submenu of their own, both in English and reading English then
+  French text:
+  - **Dofus 3** (the Dofus Wiki, then DofusDB), the current game. The
+    [Dofus Wiki](https://dofuswiki.fandom.com) is an English Fandom wiki of some 31 000 articles,
+    about 2 000 of them quests with their steps, and items and monsters besides: its titles are
+    matched offline like any MediaWiki's. [DofusDB](https://dofusdb.fr/en), the encyclopedia, is
+    asked about items: the name in an item's tooltip opens its page, as
+    `dofusdb.fr/en/database/object/336` for `Gwandpa Wabbit's Staff`. DofusDB has no index (some
+    22 000 items, 50 to a request), but its API finds an item by name, with the accents the
+    recognition dropped and an `i` it read as `l` forgiven (`Gwandpa Wabblt's Staff` still finds
+    it), and by the name's longest word when a slip elsewhere keeps the whole name from matching.
+    It is detected from its address, and the address's first part is the language it is asked in:
+    `https://dofusdb.fr/fr/database/items?q={query}` for French, and `es`, `de` and `pt` the same.
+  - **Dofus Retro** (the 129Dofus Wiki), the 1.29 game Ankama runs next to Dofus 3, sometimes
+    called Dofus Classic. The [129Dofus Wiki](https://129dofus.fandom.com) has some 5 000
+    articles: items, monsters and areas, and about half the quests. DofusDB has no Retro data. Its
+    app is not known to the preset, so pick the game by hand or set its app in Settings, and it has
+    no tooltip patterns yet.
+
+  For French guides, [Dofus pour les Noobs](https://www.dofuspourlesnoobs.com) works as a source
+  from `https://www.dofuspourlesnoobs.com/apps/search?q={query}`: a Weebly site, whose sitemap gives
+  every page name away in its slugs, so a quest is matched offline against ~2 500 pages, with a
+  reader stylesheet of its own.
 - **World of Warcraft** (Wowhead), one preset per version because Wowhead keeps one database per
   version: Retail at `wowhead.com`, Classic (the Anniversary, Era and Hardcore realms) at
   `wowhead.com/classic`, Burning Crusade Classic at `/tbc`, Mists of Pandaria Classic at
@@ -771,12 +784,13 @@ A fresh install starts with the first of them, Dofus, configured.
   item, the NPC, the zone, the achievement and the spell. Every version is the same app to macOS, so
   with several of them configured the one picked by hand answers when World of Warcraft is in
   front.
-- **Old School RuneScape** (OSRS Wiki). A MediaWiki: every article title is listed through its API
-  and matched offline, and `opensearch` catches what the recognition misspelled. Point at an item
-  and the mouseover text names it at the top left of the game, which is a tooltip wherever the
-  pointer is.
-- **RuneScape** (RuneScape Wiki), the modern game, RS3 to its players. The OSRS wiki's sibling, read
-  the same way; at some 92 000 articles it is the largest index the app builds.
+- **RuneScape**, two presets in a submenu of their own:
+  - **Old School RuneScape** (OSRS Wiki). A MediaWiki: every article title is listed through its
+    API and matched offline, and `opensearch` catches what the recognition misspelled. Point at an
+    item and the mouseover text names it at the top left of the game, which is a tooltip wherever
+    the pointer is.
+  - **RuneScape** (RuneScape Wiki), the modern game, RS3 to its players. The OSRS wiki's sibling,
+    read the same way; at some 92 000 articles it is the largest index the app builds.
 
 ### Any other site
 
@@ -1006,7 +1020,8 @@ front in the SlyTerm window, or, if it floats, its window shows with the others.
 - **The reader is per site.** SlyTerm carries a stylesheet for each of the two sites it was tuned
   on, Dofus pour les Noobs and Wowhead; one for MediaWiki, which serves the OSRS and RuneScape
   wikis, warcraft.wiki.gg and any Fandom wiki, with chrome and rails gone and the article at the
-  full width of the tab; and a generic one for everything else, which hides the header, the nav,
+  full width of the tab (on Fandom also its navigation, cover image and featured video, and a dark
+  Fandom theme is left as it is); and a generic one for everything else, which hides the header, the nav,
   the footer, the sidebar and the cookie banner and reads the rest in the system font. A light page
   is inverted rather than recoloured, so the guides keep their own colours and the screenshots are
   inverted back; a page that was already dark, Wowhead or a wiki in night mode, is left as it is.
@@ -1067,7 +1082,8 @@ lookup and which game it asks, a new web tab, play / pause, opacity (terminal, c
 resetting the window position, quitting.
 Everything that configures the app is behind **Settings…** in it, in five tabs:
 
-- **General**: restoring the last session's tabs at launch, the logo animation, the quit
+- **General**: restoring the last session's tabs at launch, the logo animation, **Run Setup
+  Assistant…** (see [The setup assistant](#the-setup-assistant)), the quit
   confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
   or asks, what bringing a session in from another terminal does about the tab it came from and
   about interrupting an agent mid-turn, and, under Web tabs, "Search with": the address that words
@@ -1085,6 +1101,34 @@ Everything that configures the app is behind **Settings…** in it, in five tabs
   Recording has been granted, and importing or exporting a game.
 
 Nothing there is modal: the terminal stays where it is and every change applies as you make it.
+
+### The setup assistant
+
+A fresh install opens a four-step window, and the terminal first appears when it closes:
+
+1. **Welcome**: what SlyTerm does. **Use Defaults** closes it and changes nothing.
+2. **Games**: "No, skip game lookup", or a list of the [presets](#the-presets): one row per game,
+   Dofus, World of Warcraft and RuneScape, with a segment per version (its full name in the
+   segment's tooltip). **Add Another Game…** opens a short form, which **Cancel** (or `Esc`)
+   closes without adding anything: a name, one or more site addresses, and optionally the app the game runs
+   in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
+   own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
+   site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it
+   has one. Under the list, whether Screen Recording is granted and a button that asks macOS for it;
+   nothing is captured.
+3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
+   on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
+4. **Done**: the main shortcuts as chosen, **Open Settings** and **Start**.
+
+Nothing is saved until **Start** or **Open Settings** on the last step; closing the window keeps
+everything as it was. A new game list starts with the Dofus preset: on the first run it stays only
+if Dofus is checked, so "No" leaves no game at all. The games already there show as checked and
+stay, and a preset or a name that is already in the list is not added twice. Run again from
+Settings › General, it only adds. Closing it sets `setupDone`, and it does not open by itself
+again; quitting SlyTerm while it is open brings it back at the next launch. The first launch of a
+version that has it stores `setupDone` as false on a fresh install and as true on one that already
+ran an earlier version (it has `frameEdge`, `sessionDirectories` or `lookupGamesVersion` stored), so
+existing installs never see it.
 
 ### Shortcuts
 
@@ -1176,6 +1220,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
 | `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
+| `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
 
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
@@ -1260,8 +1305,8 @@ The lookup modes (everything before `--guide-snapshot` below) take `--game <name
 you have configured or one of the presets `dofus`, `wow` or `osrs`, made up on the spot so a site
 can be tried out before it is added to Settings; without it they use the game the hotkey would.
 `--preset <name>` is always the preset as this build ships it, even when a game you configured has
-that name, so `--preset dofus` tries DofusDB next to a Dofus game stored before it had it, without
-reading the games you configured at all.
+that name, so `--preset dofus` tries the English sources next to a Dofus game stored with the
+French ones, without reading the games you configured at all.
 
 ```sh
 B=dist/SlyTerm.app/Contents/MacOS/SlyTerm
@@ -1276,7 +1321,7 @@ $B --lookup                               # the whole pipeline at the pointer, o
 $B --lookup 360 531                       # same at a screen point (origin bottom-left)
 $B --search "Abyssal whip" --game osrs    # what each source that can be asked resolves it to,
                                           # and the answer the lookup would take
-$B --search "Poils de Wo Wabbit" --preset dofus
+$B --search "Gwandpa Wabbit's Staff" --preset dofus
                                           # the same with both of the Dofus preset's sites, as
                                           # this build ships it
 $B --index                                # every game's sources, their kind and their index size
@@ -1301,6 +1346,8 @@ $B --sessions                             # what "Bring In a Session" would offe
 $B --sessions --json                      # the same, for scripts
 $B --picker-snapshot picker.png           # draw the picker offscreen with sample rows, plus a
                                           # second PNG with an `-empty` suffix for the empty state
+$B --setup-snapshot setup.png             # draw every step of the setup assistant offscreen, in one
+                                          # PNG; `--step 1`…`4` draws one. Saves nothing, no network
 $B --activity                             # every running agent, in any terminal: agent, status, how
                                           # long, what it is doing, what it asks, the last thing it said
 $B --activity --json                      # the same, for scripts
@@ -1485,6 +1532,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source |
 | `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
 | `Teleport/SessionsCLI.swift` | `--sessions` |
+| `SetupAssistant.swift` | The first-launch setup window: its steps, the short game form, applying the choices; `--setup-snapshot` |
 
 `Tools/` holds scripts run by hand: `make-icon.swift` rebuilds `Resources/AppIcon.icns` from
 `Resources/StatusItemIcon.pdf`, `make-lookup-fixtures.swift` draws synthetic game screenshots for
@@ -1792,6 +1840,13 @@ first launch. Screen Recording has to be granted again, and any hook or script t
 `hoverterm://` or `$HOVERTERM_TAB_ID` needs the new spelling. The old
 `~/Library/Application Support/HoverTerm` cache, `~/Library/Logs/HoverTerm.log` and the
 `com.charlesmelki.hoverterm` preferences can be deleted once the old app is gone.
+
+### Dofus in English
+
+The Dofus preset was French (Dofus pour les Noobs and DofusDB in French) before it became Dofus 3
+in English. A Dofus game already stored keeps the sources it has; to switch, remove it and add
+Dofus 3 from `+`, or add the Dofus Wiki to it. A new list, and a game added from the preset, get
+the English ones.
 
 ### DofusDB in stored Dofus games
 

@@ -131,7 +131,9 @@ enum GuideContent {
         case .mediaWiki:
             return SiteStyle(readerCSS: inversion + "\n" + mediaWikiStylesheet,
                              hiddenSelectors: ".top-ads-container, .bottom-ads-container, .ad-slot, .gpt-ad, "
-                                 + "[class*=\"wikigg-showcase\"], [id^=\"wikigg-sl-\"], [id^=\"sp_message_container\"]")
+                                 + "[class*=\"wikigg-showcase\"], [id^=\"wikigg-sl-\"], [id^=\"sp_message_container\"], "
+                                 + "[class*=\"fandom-ad-sticky\"], .fandom-ad-wrapper, #featured-video__player-container, "
+                                 + "#onetrust-consent-sdk, .onetrust-pc-dark-filter")
         default:
             return SiteStyle(readerCSS: inversion + "\n" + genericStylesheet)
         }
@@ -353,21 +355,26 @@ enum GuideContent {
     html.slyterm-reader .wsite-spacer { height: 8px !important }
     """
 
+    // A dark Fandom wiki says so on body, not html.
     private static let mediaWikiStylesheet = """
     html.slyterm-reader.skin-theme-clientpref-night,
     html.slyterm-reader.theme-dark,
-    html.slyterm-reader.view-dark {
+    html.slyterm-reader.view-dark,
+    html.slyterm-reader:has(> body.theme-fandomdesktop-dark) {
       filter: none !important;
     }
     html.slyterm-reader.skin-theme-clientpref-night img,
     html.slyterm-reader.theme-dark img,
     html.slyterm-reader.view-dark img,
+    html.slyterm-reader:has(> body.theme-fandomdesktop-dark) img,
     html.slyterm-reader.skin-theme-clientpref-night video,
     html.slyterm-reader.theme-dark video,
     html.slyterm-reader.view-dark video,
+    html.slyterm-reader:has(> body.theme-fandomdesktop-dark) video,
     html.slyterm-reader.skin-theme-clientpref-night svg,
     html.slyterm-reader.theme-dark svg,
-    html.slyterm-reader.view-dark svg {
+    html.slyterm-reader.view-dark svg,
+    html.slyterm-reader:has(> body.theme-fandomdesktop-dark) svg {
       filter: none !important;
     }
     html.slyterm-reader body,
@@ -425,7 +432,12 @@ enum GuideContent {
     html.slyterm-reader .notifications-placeholder,
     html.slyterm-reader .community-header-wrapper,
     html.slyterm-reader .wiki-tools,
-    html.slyterm-reader .page-side-tools {
+    html.slyterm-reader .page-side-tools,
+    html.slyterm-reader #global-top-navigation,
+    html.slyterm-reader #global-explore-navigation,
+    html.slyterm-reader .fandom-community-header__background,
+    html.slyterm-reader .page__right-rail,
+    html.slyterm-reader .global-footer {
       display: none !important;
     }
     html.slyterm-reader body,
@@ -450,6 +462,7 @@ enum GuideContent {
     html.slyterm-reader .infobox,
     html.slyterm-reader .infobox-wrapper,
     html.slyterm-reader .portable-infobox,
+    html.slyterm-reader .mw-parser-output > table,
     html.slyterm-reader table.wikitable {
       float: none !important;
       max-width: 100% !important;

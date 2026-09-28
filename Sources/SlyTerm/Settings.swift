@@ -57,6 +57,7 @@ final class Settings {
             "activityCards": true,
             "activityAnswerURLs": false,  // keep off: any local process, a Claude too, can open them
             "activityCardSeconds": 10.0,
+            // Not "setupDone": decideSetup needs to see that it was never stored.
         ])
     }
 
@@ -133,9 +134,22 @@ final class Settings {
     var teleportConfirmBusy: Bool { get { d.bool(forKey: "teleportConfirmBusy") } set { set(newValue, "teleportConfirmBusy") } }
     var activityCards: Bool { get { d.bool(forKey: "activityCards") } set { set(newValue, "activityCards") } }
     var activityAnswerURLs: Bool { get { d.bool(forKey: "activityAnswerURLs") } set { set(newValue, "activityAnswerURLs") } }
+    var setupDone: Bool { get { d.bool(forKey: "setupDone") } set { set(newValue, "setupDone") } }
     var activityCardSeconds: Double {
         get { max(0, d.double(forKey: "activityCardSeconds")) }
         set { set(max(0, newValue), "activityCardSeconds") }
+    }
+
+    // Before the overlay exists: it writes frameEdge at once. These keys come only from a launch
+    // of an earlier build (or HoverTerm's), which never showed the setup assistant. The persistent
+    // domain, because object(forKey:) also answers from the registered defaults. The decision is
+    // stored, so quitting during the assistant brings it back rather than reading as an upgrade.
+    func decideSetup() {
+        let domain = Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName
+        let stored = d.persistentDomain(forName: domain) ?? [:]
+        guard stored["setupDone"] == nil else { return }
+        let upgrading = ["lookupGamesVersion", "frameEdge", "sessionDirectories"].contains { stored[$0] != nil }
+        d.set(upgrading, forKey: "setupDone")
     }
 
     static var echo = false

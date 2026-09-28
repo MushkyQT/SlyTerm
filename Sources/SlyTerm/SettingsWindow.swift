@@ -277,7 +277,8 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
                                   #selector(setAutoPauseVideo(_:)))
         return grid([
-            section("Launch", [restoreSession, startupAnimation]),
+            section("Launch", [restoreSession, startupAnimation,
+                               button("Run Setup Assistant…", #selector(runSetupAssistant))]),
             section("Quitting", [confirmQuit]),
             section("Alerts", [
                 attentionSound,
@@ -350,6 +351,10 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         if notification.object as? NSTextField === searchURL { setSearchURL() }
     }
 
+    @objc private func runSetupAssistant() {
+        view.window?.close()
+        (NSApp.delegate as? AppDelegate)?.runSetupAssistant()
+    }
     @objc private func setRestoreSession(_ sender: NSButton) { settings.restoreSession = sender.state == .on }
     @objc private func setStartupAnimation(_ sender: NSButton) { settings.startupAnimation = sender.state == .on }
     @objc private func setConfirmQuit(_ sender: NSButton) { settings.confirmQuit = sender.state == .on }
@@ -693,16 +698,10 @@ final class ShortcutsPane: SettingsPane {
             var message = ""
             if !enabled {
                 message = "Off while the card is off (Settings › General)"
-            } else if !combo.isEmpty {
-                if KeyCombo.parse(combo) == nil {
-                    message = "Cannot be used"
-                } else if let other = combos.first(where: { $0.0 != action && $0.1 == combo }) {
-                    message = "Also used by “\(other.0.title)”"
-                } else if KeyCombo.isMacOSShortcut(combo) {
-                    message = "Also a macOS shortcut"
-                } else if controller.isRefused?(action) == true {
-                    message = "macOS did not accept it"
-                }
+            } else if let warning = action.warning(among: combos) {
+                message = warning
+            } else if !combo.isEmpty, controller.isRefused?(action) == true {
+                message = "macOS did not accept it"
             }
             statusLabels[action]?.stringValue = message
             statusLabels[action]?.textColor = enabled ? .systemOrange : .secondaryLabelColor
@@ -964,13 +963,16 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
             item.target = self
             item.representedObject = preset.rawValue
             if let family = preset.family {
+                let members = LookupPresets.Preset.allCases.filter { $0.family == family }
+                let sameSite = Set(members.map(\.siteName)).count == 1
                 if families[family] == nil {
-                    let parent = NSMenuItem(title: "\(family) (\(preset.siteName))", action: nil, keyEquivalent: "")
+                    let title = sameSite ? "\(family) (\(preset.siteName))" : family
+                    let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                     parent.submenu = NSMenu(title: family)
                     menu.addItem(parent)
                     families[family] = parent.submenu
                 }
-                item.title = preset.variant
+                item.title = sameSite ? preset.variant : "\(preset.variant) (\(preset.siteName))"
                 families[family]?.addItem(item)
             } else {
                 item.title = "\(preset.title) (\(preset.siteName))"
@@ -1132,7 +1134,7 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
         buildLanguageMenu(for: game)
     }
 
-    private static func runningApps() -> [(name: String, id: String)] {
+    static func runningApps() -> [(name: String, id: String)] {
         NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.processIdentifier != NSRunningApplication.current.processIdentifier }
             .compactMap { app -> (name: String, id: String)? in

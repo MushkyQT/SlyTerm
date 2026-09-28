@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pendingURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Settings.shared.decideSetup()
         controller = OverlayController()
         TeleportEngine.shared.controller = controller
         Activity.card = ActivityCard.shared
@@ -19,8 +20,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Lookup.shared.openGuide = { [weak self] url in self?.controller.showGuide(url) }
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged(_:)), name: Settings.didChange, object: nil)
         buildStatusItem()
-        controller.show()
-        controller.playStartupAnimation()
+        if Settings.shared.setupDone {
+            controller.show()
+            controller.playStartupAnimation()
+        } else {
+            // The overlay floats above normal windows, so it waits until the assistant closes.
+            runSetupAssistant { [weak self] in
+                // A hotkey, the menu or a URL may have shown it already.
+                guard let self, !controller.isVisible else { return }
+                controller.show()
+                controller.playStartupAnimation()
+            }
+        }
         if !pendingURLs.isEmpty {
             RemoteControl.handle(pendingURLs, controller: controller)
             pendingURLs.removeAll()
@@ -155,6 +166,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         window.isRefused = { [weak self] action in self?.hotkeyOK[action.rawValue] == false }
         window.show(tab: tab, level: Settings.shared.dialogLevel)
+    }
+
+    func runSetupAssistant(then: (() -> Void)? = nil) {
+        let assistant = SetupAssistant.shared
+        // Open already: keep its onClose, which may still owe the first launch its overlay.
+        guard !assistant.isVisible else { assistant.show(level: Settings.shared.dialogLevel); return }
+        assistant.onBeginRecording = {
+            HotKeyCenter.shared.unregisterAll()
+            Settings.log("recording a shortcut: hotkeys paused")
+        }
+        assistant.onEndRecording = { [weak self] in self?.registerHotkeys() }
+        assistant.onClose = { [weak self] in
+            Settings.shared.setupDone = true
+            self?.registerHotkeys()
+            then?()
+        }
+        assistant.show(level: Settings.shared.dialogLevel)
     }
 
     private func buildStatusItem() {

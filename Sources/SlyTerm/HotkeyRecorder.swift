@@ -46,6 +46,17 @@ enum HotkeyAction: String, CaseIterable {
     }
 
     var needsActivityCards: Bool { self == .allow || self == .refuse }
+
+    // `combos` holds every action's combo, including ones not on screen.
+    func warning(among combos: [(HotkeyAction, String)]) -> String? {
+        guard let combo = combos.first(where: { $0.0 == self })?.1, !combo.isEmpty else { return nil }
+        if KeyCombo.parse(combo) == nil { return "Cannot be used" }
+        if let other = combos.first(where: { $0.0 != self && $0.1 == combo }) {
+            return "Also used by “\(other.0.title)”"
+        }
+        if KeyCombo.isMacOSShortcut(combo) { return "Also a macOS shortcut" }
+        return nil
+    }
 }
 
 final class HotkeyRecorderView: NSView {
@@ -63,6 +74,7 @@ final class HotkeyRecorderView: NSView {
     }
 
     private var recording = false { didSet { needsDisplay = true } }
+    private var startedByClick: TimeInterval?
     private var heldModifiers: NSEvent.ModifierFlags = []
     private var warning: String? { didSet { needsDisplay = true } }
     private var warningTimer: Timer?
@@ -83,6 +95,10 @@ final class HotkeyRecorderView: NSView {
 
     override func becomeFirstResponder() -> Bool {
         recording = true
+        // AppKit makes a clicked view first responder before its mouseDown (seen on macOS 26):
+        // that click started the recording and must not end it.
+        let event = NSApp.currentEvent
+        startedByClick = event?.type == .leftMouseDown ? event?.timestamp : nil
         heldModifiers = []
         onBeginRecording?()
         return true
@@ -97,7 +113,7 @@ final class HotkeyRecorderView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard isEnabled else { return }
         if recording {
-            window?.makeFirstResponder(nil)
+            if startedByClick != event.timestamp { window?.makeFirstResponder(nil) }
         } else {
             window?.makeFirstResponder(self)
         }

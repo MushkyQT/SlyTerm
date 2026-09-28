@@ -402,6 +402,7 @@ enum LookupProbe {
         var home: URL
         var indexURL: URL?
         var pageCount: Int?
+        var searchURL: String? = nil
     }
 
     static func detect(searchURL: URL) async -> Result {
@@ -415,7 +416,14 @@ enum LookupProbe {
                   let data = await LookupHTTP.get(url),
                   let site = MediaWikiSite(siteinfo: data, api: api) else { continue }
             Settings.log("lookup: probe \(origin.host ?? "") is a MediaWiki at \(api.path), \(site.articles ?? 0) articles")
-            return Result(kind: .mediaWiki, home: URL(string: site.server) ?? origin, indexURL: api, pageCount: site.articles)
+            // An articlepath with a query of its own (`/index.php?title=$1`) cannot take a second
+            // one, so those go through index.php next to api.php.
+            let folder = (api.path as NSString).deletingLastPathComponent
+            let search = site.articlePath.contains("$1") && !site.articlePath.contains("?")
+                ? site.server + site.articlePath.replacingOccurrences(of: "$1", with: "Special:Search?search={query}")
+                : site.server + (folder == "/" ? "" : folder) + "/index.php?title=Special:Search&search={query}"
+            return Result(kind: .mediaWiki, home: URL(string: site.server) ?? origin, indexURL: api,
+                          pageCount: site.articles, searchURL: search)
         }
         if let host = origin.host?.lowercased(), host == "wowhead.com" || host.hasSuffix(".wowhead.com") {
             var prefix = (searchURL.path as NSString).deletingLastPathComponent

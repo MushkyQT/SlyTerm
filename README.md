@@ -89,11 +89,11 @@ key each.
 
 Presets are included for:
 
-- **Dofus**: Dofus pour les Noobs and DofusDB
+- **Dofus**: Dofus 3 with the Dofus Wiki and DofusDB, and Dofus Retro with the 129Dofus Wiki, in
+  English
 - **World of Warcraft**, every version Wowhead covers: Retail, Classic, Burning Crusade Classic,
   Mists of Pandaria Classic and WoW: Forever
-- **Old School RuneScape**: the OSRS Wiki
-- **RuneScape**: the RuneScape Wiki
+- **RuneScape**: Old School with the OSRS Wiki, and RuneScape 3 with the RuneScape Wiki
 
 Other games work too: add a site by pasting its search URL. SlyTerm indexes MediaWiki sites,
 including Fandom and wiki.gg wikis, and any site with a sitemap, so a name opens its exact page.
@@ -199,6 +199,11 @@ it.
 
 ## Getting started
 
+The first time SlyTerm opens, a short setup asks whether you play games with it open and which
+ones, so the lookup knows where to search, and shows the main shortcuts so you can change them.
+Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
+which can run the setup again.
+
 1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide
    the overlay.
 2. Press `⌃⌥H` to show the terminal and run `claude` or `codex`. To start your agent in every new
@@ -254,8 +259,9 @@ or each tap also opens a dictionary panel.
 ## Credits
 
 Terminal emulation is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza.
-The lookup presets open pages from [Dofus pour les Noobs](https://www.dofuspourlesnoobs.com),
-[DofusDB](https://dofusdb.fr), [Wowhead](https://www.wowhead.com), the
+The lookup presets open pages from the [Dofus Wiki](https://dofuswiki.fandom.com), the
+[129Dofus Wiki](https://129dofus.fandom.com), [DofusDB](https://dofusdb.fr),
+[Wowhead](https://www.wowhead.com), the
 [OSRS Wiki](https://oldschool.runescape.wiki) and the [RuneScape Wiki](https://runescape.wiki).
 SlyTerm is not affiliated with any of these sites, or with Ankama, Blizzard Entertainment or Jagex.
 
