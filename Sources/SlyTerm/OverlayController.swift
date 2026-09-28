@@ -34,14 +34,24 @@ final class OverlayController: NSObject, TabStripDelegate {
     private var lastOtherApp: NSRunningApplication?
     private var startupAnimation: StartupAnimationView?
 
+    private enum FullscreenWindow: Equatable { case main, floating(UUID) }
+    private var fullscreen: FullscreenWindow?
+    // The SlyTerm window's frame before it filled the screen; a floating window keeps its own.
+    private var fullscreenFrame = NSRect.zero
+    var isFullscreen: Bool { fullscreen != nil }
+
     private struct PanicRestore {
         let frame: NSRect
         let ghost: Bool
         let visible: Bool
         let web: UUID?
+        // A web tab asked for during panic comes in front instead.
+        var arrived: UUID?
+        let fullscreen: FullscreenWindow?
     }
     private var panicRestore: PanicRestore?
     var isPanic: Bool { panicRestore != nil }
+    private var fillsScreen: Bool { isPanic || fullscreen == .main }
 
     private var isRestoringSession = false
 
@@ -236,7 +246,7 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     // The band comes from the window: `strip.frame` is stale inside a resize notification.
     private func updateStripEdge() {
-        guard !isPanic else { return }
+        guard !fillsScreen else { return }
         let band = OverlayController.stripFrame(for: main.frame, edge: stripEdge)
         applyStripEdge(OverlayController.edge(forStripAt: band, window: main.frame,
                                               setting: settings.stripPosition))
@@ -244,6 +254,7 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     func resetPosition() {
         if isPanic { exitPanic() }
+        exitFullscreen()
         let frame = OverlayController.defaultFrame()
         main.setFrame(frame, display: true)
         applyStripEdge(OverlayController.edge(forStripAt: OverlayController.stripFrame(for: frame, edge: .bottom),
@@ -253,13 +264,13 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     @objc private func mainDidResize() {
         layoutStrip()
-        if !isPanic { settings.savedFrame = main.frame }
+        if !fillsScreen { settings.savedFrame = main.frame }
         updateStripEdge()
         Activity.card?.layout()
     }
 
     @objc private func mainDidMove() {
-        if !isPanic { settings.savedFrame = main.frame }
+        if !fillsScreen { settings.savedFrame = main.frame }
         updateStripEdge()
         Activity.card?.layout()
     }
@@ -268,17 +279,26 @@ final class OverlayController: NSObject, TabStripDelegate {
         if isPanic { exitPanic() } else { enterPanic() }
     }
 
+    private var mainScreen: NSScreen {
+        NSScreen.screens.first { $0.frame.intersects(main.frame) } ?? NSScreen.main ?? NSScreen.screens[0]
+    }
+
     func enterPanic() {
         endStartupAnimation()
         guard !isPanic else { return }
         let fromWeb = frontWeb != nil
-        panicRestore = PanicRestore(frame: main.frame, ghost: isGhost, visible: main.isVisible, web: frontWeb?.id)
-        let screen = NSScreen.screens.first { $0.frame.intersects(main.frame) } ?? NSScreen.main ?? NSScreen.screens[0]
-        Settings.log("enterPanic screen=\(screen.frame) restore=\(panicRestore!.frame) web=\(fromWeb)")
+        let screen = mainScreen
+        // A SlyTerm window in fullscreen already fills the screen: panic keeps the frame it left.
+        let frame = fullscreen == .main ? fullscreenFrame : main.frame
+        panicRestore = PanicRestore(frame: frame, ghost: isGhost, visible: main.isVisible,
+                                    web: frontWeb?.id, arrived: nil, fullscreen: fullscreen)
+        Settings.log("enterPanic screen=\(screen.frame) restore=\(frame) web=\(fromWeb)"
+                     + " fullscreen=\(fullscreen.map { "\($0)" } ?? "none")")
         // Suspension pauses the players, so which tabs were a show is noted first.
         panicPaused = webTabs.filter { $0.media.isPlaying }.map(\.id)
         webTabs.forEach { $0.setMediaSuspended(true) }
         floating.values.forEach { $0.hide() }
+        if fullscreen == .main { fullscreen = nil } else { exitFullscreen() }
         container.layer?.cornerRadius = 0
         stripView.squareCorners = true
         applyBackground()
@@ -295,16 +315,25 @@ final class OverlayController: NSObject, TabStripDelegate {
     func exitPanic(hidden: Bool = false) {
         guard let restore = panicRestore else { return }
         panicRestore = nil
+        var refill = hidden ? nil : restore.fullscreen
+        if case .floating(let id)? = refill, floating[id] == nil { refill = nil }
         Settings.log("exitPanic restore=\(restore.frame) ghost=\(restore.ghost) visible=\(restore.visible)"
-                     + " hidden=\(hidden)")
-        container.layer?.cornerRadius = 10
-        stripView.squareCorners = false
-        applyBackground()
-        main.setFrame(restore.frame, display: true)
-        updateStripEdge()
-        layoutStrip()
+                     + " hidden=\(hidden) fullscreen=\(refill.map { "\($0)" } ?? "none")")
+        if refill == .main {
+            // Back to fullscreen: the window already fills the screen, square and opaque.
+            fullscreen = .main
+            fullscreenFrame = restore.frame
+        } else {
+            container.layer?.cornerRadius = 10
+            stripView.squareCorners = false
+            applyBackground()
+            main.setFrame(restore.frame, display: true)
+            updateStripEdge()
+            layoutStrip()
+        }
         if !restore.visible || hidden {
-            hide()
+            // A floating window going back to fullscreen takes the keyboard, not the game.
+            if refill == nil { hide() }
             // Floating windows stay out, and must let clicks through again if they did before.
             if restore.ghost { setGhost(true) }
         } else if restore.ghost {
@@ -313,28 +342,119 @@ final class OverlayController: NSObject, TabStripDelegate {
             focusTerminal()
         }
         // Last, so the page ends up first responder whichever branch ran above.
-        if let id = restore.web, let tab = webTabs.first(where: { $0.id == id }), tab.place == .docked {
+        if let id = restore.arrived ?? restore.web, let tab = webTabs.first(where: { $0.id == id }),
+           tab.place == .docked {
             selectWeb(tab)
         }
         floating.values.forEach { $0.show() }
-        // Hiding on the way out takes the video panic covered out of view: it ends paused.
+        // The video panic covered ends paused if it is no longer on screen: hidden on the way out,
+        // or behind a page that came during panic.
+        let inView = restore.visible && !hidden ? frontWeb : nil
         for tab in webTabs {
-            if settings.autoPauseVideo, hidden, restore.visible, tab.id == restore.web, tab.place == .docked,
+            if settings.autoPauseVideo, tab.id == restore.web, tab.place == .docked, tab !== inView,
                panicPaused.contains(tab.id), tab.media.hasVideo {
                 tab.endSuspensionPaused()
                 outOfViewPaused.insert(tab.id)
+            } else if panicPaused.contains(tab.id), playPaused.contains(tab.id) {
+                tab.endSuspensionPaused()
             } else {
                 tab.setMediaSuspended(false)
             }
         }
         panicPaused = []
+        if case .floating? = refill, let refill {
+            enterFullscreen(refill)
+            // The SlyTerm window was hidden before panic; the keyboard is in the floating window now.
+            if !restore.visible { main.orderOut(nil) }
+        }
         updateInView()
         stripView.needsDisplay = true
         Activity.card?.layout()
     }
 
+    func toggleFullscreen() {
+        guard !isPanic else { return }
+        if isFullscreen { exitFullscreen(); return }
+        let key = floating.first { $0.value.isKey }?.key
+        enterFullscreen(key.map { .floating($0) } ?? .main)
+    }
+
+    private func enterFullscreen(_ window: FullscreenWindow) {
+        endStartupAnimation()
+        guard !isPanic, fullscreen == nil else { return }
+        switch window {
+        case .main:
+            let screen = mainScreen
+            fullscreenFrame = main.frame
+            fullscreen = .main
+            Settings.log("enterFullscreen main screen=\(screen.frame) restore=\(fullscreenFrame)")
+            container.layer?.cornerRadius = 0
+            stripView.squareCorners = true
+            applyBackground()
+            main.setFrame(screen.frame, display: true)
+            layoutStrip()
+            focusTerminal()
+        case .floating(let id):
+            guard let web = floating[id] else { return }
+            fullscreen = window
+            Settings.log("enterFullscreen floating \(webTabs.first { $0.id == id }?.title ?? "")")
+            if isGhost { setGhost(false) }
+            web.setFilled(true)
+            web.show()
+            if !web.isKey {
+                NSApp.activate(ignoringOtherApps: true)
+                web.panel.makeKeyAndOrderFront(nil)
+            }
+            raiseFloating()
+        }
+        applyAlpha()
+        stripView.needsDisplay = true
+        Activity.card?.layout()
+    }
+
+    // Leaves the keyboard and the mode where they are.
+    func exitFullscreen() {
+        guard let window = fullscreen else { return }
+        fullscreen = nil
+        Settings.log("exitFullscreen \(window)"
+                     + (window == .main ? " restore=\(fullscreenFrame)" : ""))
+        switch window {
+        case .main:
+            container.layer?.cornerRadius = 10
+            stripView.squareCorners = false
+            applyBackground()
+            main.setFrame(fullscreenFrame, display: true)
+            updateStripEdge()
+            layoutStrip()
+        case .floating(let id):
+            floating[id]?.setFilled(false)
+        }
+        applyAlpha()
+        stripView.needsDisplay = true
+        Activity.card?.layout()
+    }
+
+    // Floating windows share the level of the one filling the screen, which comes to the front
+    // whenever it takes the keyboard: they go back above it.
+    private func raiseFloating() {
+        guard let fullscreen else { return }
+        for (id, web) in floating where web.panel.isVisible && fullscreen != .floating(id) {
+            web.show()
+        }
+        Activity.card?.layout()
+    }
+
+    // A fullscreen floating window that goes away ends fullscreen; its remembered frame stays.
+    private func floatingWillClose(_ id: UUID) {
+        guard fullscreen == .floating(id) else { return }
+        Settings.log("exitFullscreen: the floating window closed")
+        fullscreen = nil
+        stripView.needsDisplay = true
+    }
+
     func toggleVisible() {
         if isPanic { exitPanic(hidden: true); return }
+        if isFullscreen { hide(); return }
         if main.isVisible { hide() } else { show() }
     }
 
@@ -356,6 +476,7 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     func hide() {
         endStartupAnimation()
+        exitFullscreen()
         if hasKeyboard {
             giveKeyboardAway {
                 main.orderOut(nil)
@@ -384,6 +505,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         if let view = current?.focusView { main.makeFirstResponder(view) }
         Settings.log("focusTerminal: isKey=\(main.isKeyWindow) appActive=\(NSApp.isActive) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?")")
         clearAttentionIfViewed()
+        raiseFloating()
         // Last: `makeKeyAndOrderFront` put the window above the card, which shares its level and
         // is only re-ordered by its own layout.
         Activity.card?.layout()
@@ -391,7 +513,11 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     func setGhost(_ ghost: Bool) {
         Settings.log("setGhost(\(ghost)) wasKey=\(main.isKeyWindow)")
-        if ghost { endStartupAnimation() }
+        if ghost {
+            endStartupAnimation()
+            // First, so the window that goes click-through is the one back at its own frame.
+            exitFullscreen()
+        }
         isGhost = ghost
         main.ignoresMouseEvents = ghost
         applyAlpha()
@@ -560,6 +686,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         // AppKit hands key status back when a dialog closes; in click-through, take it as typing.
         if isGhost, !isPanic { setGhost(false) }
         clearAttentionIfViewed()
+        if fullscreen == .main { raiseFloating() }
     }
 
     @objc private func mainDidResignKey() {
@@ -591,6 +718,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         Activity.card?.layout()
         guard handed == nil else { return }
         if isGhost, !isPanic { setGhost(false) }
+        if fullscreen == .floating(id) { raiseFloating() }
         if let tab = webTabs.first(where: { $0.id == id }), tab.needsAttention, isBeingViewed(tab) {
             tab.needsAttention = false
         }
@@ -661,8 +789,13 @@ final class OverlayController: NSObject, TabStripDelegate {
     }
 
     // A floating tab is put back first: selecting a web tab means showing it in the main window.
+    // During panic nothing of the web shows: a docked tab asked for comes in front when it ends.
     func selectWeb(_ tab: GuideTab) {
         guard webTabs.contains(where: { $0 === tab }) else { return }
+        if isPanic {
+            if tab.place == .docked { panicRestore?.arrived = tab.id }
+            return
+        }
         guard tab.place == .docked else { dock(tab); return }
         frontWeb = tab
         lastWeb = tab
@@ -762,11 +895,14 @@ final class OverlayController: NSObject, TabStripDelegate {
         revealWithoutKeyboard()
     }
 
+    // The web tab keys do nothing during panic.
     func toggleGuide() {
+        guard !isPanic else { return }
         if frontWeb != nil { selectCurrentTerminal() } else { showLastWeb() }
     }
 
     func newWebTab() {
+        guard !isPanic else { return }
         let tab = addWebTab(nil)
         selectWeb(tab)
         focusTerminal()
@@ -774,6 +910,7 @@ final class OverlayController: NSObject, TabStripDelegate {
     }
 
     func reopenClosedWebTab() {
+        guard !isPanic else { return }
         guard let url = closedWebURLs.popLast() else { NSSound.beep(); return }
         selectWeb(addWebTab(url))
         focusTerminal()
@@ -832,7 +969,13 @@ final class OverlayController: NSObject, TabStripDelegate {
 
     // A lookup's guide pauses every video, floating ones too; play / pause plays them again.
     private func pauseVideosForGuide() {
-        guard settings.autoPauseVideo, !isPanic else { return }
+        guard settings.autoPauseVideo else { return }
+        // Panic holds them already: noted here, they end paused instead of playing on.
+        if isPanic {
+            playPaused = webTabs.filter { panicPaused.contains($0.id) && $0.media.hasVideo }.map(\.id)
+            Settings.log("web: a guide during panic paused \(playPaused.count)")
+            return
+        }
         let playing = webTabs.filter(playsVideo)
         guard !playing.isEmpty else { return }
         playing.forEach { $0.setPlaying(false) }
@@ -967,7 +1110,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         if event.keyCode == 36 {                                     // Return
             // In the address field ⌘Return opens a new web tab, so the field is asked first.
             if let web, web.isEditingText, web.handleCommandKey(event, shift: shift) { return true }
-            togglePanic()
+            toggleFullscreen()
             return true
         }
         if option, event.keyCode == 123 { prevTab(); return true }  // Left arrow
@@ -1026,7 +1169,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         }
         if event.keyCode == 36 {                                     // Return
             if tab.isEditingText, tab.handleCommandKey(event, shift: shift) { return true }
-            togglePanic()
+            toggleFullscreen()
             return true
         }
         if tab.handleCommandKey(event, shift: shift) { return true }
@@ -1066,13 +1209,13 @@ final class OverlayController: NSObject, TabStripDelegate {
     // A video playing in front has its own level in either mode; the strip keeps the usual one.
     private func applyAlpha() {
         let dim = CGFloat(settings.ghostOpacity)
-        main.alphaValue = frontWeb.flatMap(videoAlpha) ?? (isGhost ? dim : 1)
+        main.alphaValue = fullscreen == .main ? 1 : frontWeb.flatMap(videoAlpha) ?? (isGhost ? dim : 1)
         strip.alphaValue = isGhost && !hasAttention ? dim : 1
         applyFloating()
     }
 
     private func applyBackground() {
-        let alpha = isPanic ? 1 : CGFloat(settings.opacity)
+        let alpha = fillsScreen ? 1 : CGFloat(settings.opacity)
         container.layer?.backgroundColor = TerminalTab.backgroundColor.withAlphaComponent(alpha).cgColor
     }
 
@@ -1094,6 +1237,7 @@ final class OverlayController: NSObject, TabStripDelegate {
     }
     var stripIsGhost: Bool { isGhost }
     var stripIsPanic: Bool { isPanic }
+    var stripIsFullscreen: Bool { isFullscreen }
     var stripHint: (text: String, color: NSColor)? {
         if hasAttention {
             if isGhost {
@@ -1168,19 +1312,27 @@ final class OverlayController: NSObject, TabStripDelegate {
     func stripSelectTab(_ index: Int) { select(index); focusTerminalUnlessGhost() }
     func stripCloseTab(_ index: Int) { if terminals.indices.contains(index) { close(terminals[index]) } }
     func stripSelectWeb(_ index: Int) {
-        guard webTabs.indices.contains(index) else { return }
+        guard !isPanic, webTabs.indices.contains(index) else { return }
         selectWeb(webTabs[index])
         focusTerminalUnlessGhost()
     }
     func stripCloseWeb(_ index: Int) { if webTabs.indices.contains(index) { closeWebTab(webTabs[index]) } }
-    func stripOpenWeb() { openHome(); focusTerminalUnlessGhost() }
+    func stripOpenWeb() {
+        guard !isPanic else { return }
+        openHome()
+        focusTerminalUnlessGhost()
+    }
     func stripNewTab() { newTab(); focusTerminalUnlessGhost() }
     func stripToggleGhost() { toggleGhost() }
-    func stripTogglePanic() { togglePanic() }
+    // The strip belongs to the SlyTerm window, whichever window has the keyboard.
+    func stripToggleFullscreen() {
+        guard !isPanic else { return }
+        if isFullscreen { exitFullscreen() } else { enterFullscreen(.main) }
+    }
     func stripHide() { hide() }
     func stripClicked() { focusTerminalUnlessGhost() }
     func stripDragged(to stripOrigin: NSPoint) {
-        guard !isPanic else { return }
+        guard !fillsScreen else { return }
         let band = NSRect(origin: stripOrigin, size: strip.frame.size)
         let edge = OverlayController.edge(forStripAt: band, window: main.frame, setting: settings.stripPosition)
         if edge != stripEdge { setStripEdge(edge) }
@@ -1190,7 +1342,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         layoutStrip()
     }
     func stripDragEnded() {
-        if !isPanic { settings.savedFrame = main.frame }
+        if !fillsScreen { settings.savedFrame = main.frame }
     }
 }
 
@@ -1225,9 +1377,10 @@ extension OverlayController: WebTabHost {
         let aspect = video || tab.media.isFilled ? tab.media.aspect : nil
         Settings.log("web: float \(tab.title) video=\(video) filled=\(tab.media.isFilled)")
         tab.detachChrome()
+        let near = panicRestore?.frame ?? (fullscreen == .main ? fullscreenFrame : main.frame)
         let web = FloatingWeb(id: tab.id, bar: tab.toolbar, page: tab.pageView,
                               video: video || aspect != nil, aspect: aspect,
-                              near: panicRestore?.frame ?? main.frame,
+                              near: near,
                               avoiding: floating.values.map { $0.panel.frame })
         let id = tab.id
         web.keyHandler = { [weak self, weak tab] event in
@@ -1253,6 +1406,7 @@ extension OverlayController: WebTabHost {
 
     func dock(_ tab: GuideTab) {
         guard let web = floating.removeValue(forKey: tab.id) else { return }
+        floatingWillClose(tab.id)
         let hadKeyboard = web.isKey
         Settings.log("web: put back \(tab.title) key=\(hadKeyboard)")
         web.close()
@@ -1282,6 +1436,7 @@ extension OverlayController: WebTabHost {
             closedWebURLs.append(url)
             if closedWebURLs.count > 10 { closedWebURLs.removeFirst() }
         }
+        floatingWillClose(tab.id)
         let hadKeyboard = floating[tab.id]?.isKey ?? false
         let keyToMain = hadKeyboard && main.isVisible && !isGhost
         if let web = floating.removeValue(forKey: tab.id) {

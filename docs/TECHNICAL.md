@@ -54,12 +54,30 @@ Window › Level to "Pop-up menu, highest".
   back to the game. Click-through covers every SlyTerm window at once: a floating web tab lets
   clicks through too, all but its toolbar (see [Click-through and focus](#click-through-and-focus)).
 - **Panic** (red dot) covers the whole screen, menu bar included, with a fully opaque terminal and
-  puts the keyboard in it. Nothing of the game shows through. Press the hotkey, the button or
-  `⌘Return` again and the window goes back exactly where it was, with its previous opacity, mode
-  and visibility. From a web tab it switches to the terminal you were reading it over, opening
-  one if you have none, and comes back to the page when you leave. It also silences every web tab
-  and hides the floating ones; leaving panic shows them again and lets the sound go on. Works from
-  the hidden state too.
+  puts the keyboard in it. Nothing of the game shows through. Press the hotkey again and the window
+  goes back exactly where it was, with its previous opacity, mode and visibility. From a web tab it
+  switches to the terminal you were reading it over, opening one if you have none, and comes back
+  to the page when you leave. It also silences every web tab and hides the floating ones; leaving
+  panic shows them again and lets the sound go on. Works from the hidden state too.
+  While it lasts, the strip shows only the terminal tabs, and nothing brings a web tab in front:
+  `⌘G`, `⌥⌘1`…`⌥⌘9`, `⌘L` and "New Web Tab" do nothing, and a guide that arrives loads out of sight
+  (see [The lookup's tab](#the-lookups-tab)). Panic taken during Fullscreen covers it, and leaving
+  panic goes back to Fullscreen; Fullscreen's keys do nothing during panic. `⌃⌥H` leaves panic and
+  hides the window.
+- **Fullscreen** (green dot) fills the screen, menu bar included, with the window that has the
+  keyboard, opaque and in interact mode: a floating web tab when one has it, otherwise the SlyTerm
+  window, shown if it was hidden, with the tab in front, terminal or web. Unlike panic it changes
+  nothing else: no tab switches, nothing pauses, floating windows stay where they are and above it,
+  and tabs and web tabs switch as usual. `⌃⌥M` (configurable), `⌘Return` in the SlyTerm window or a
+  floating web tab, the strip's expand button, "Fullscreen" in the menu bar item and
+  `slyterm://fullscreen` toggle it; while it is on, the expand button shows the collapse icon. One
+  window is in Fullscreen at a time, and leaving puts it back at its exact frame and strip edge,
+  with its previous opacity. Click-through, from the hotkey, the eye button, the tap or the
+  keyboard going to another app, first leaves Fullscreen, so the window that ghosts is the one put
+  back; `⌃⌥H` leaves it and hides. This is SlyTerm's own mode, not macOS fullscreen: it opens no
+  Space and the game stays where it is. A page's own fullscreen button is something else again: it
+  fills only its web tab (see
+  [Streaming sites, DRM and fullscreen](#streaming-sites-drm-and-fullscreen)).
 
 By default the overlay switches to click-through on its own as soon as the terminal loses keyboard
 focus, that is, the moment you click into the game. So the loop is: hotkey or eye button, type your
@@ -72,7 +90,8 @@ loses focus") if you would rather switch modes only by hand.
 
 A quick tap with three fingers roughly side by side, anywhere on the trackpad, toggles
 click-through by default. Settings › Shortcuts › Trackpad sets how many fingers (2 to 5) and whether
-the tap toggles click-through, shows or hides the terminal, fires panic mode, or does nothing.
+the tap toggles click-through, shows or hides the terminal, fires panic mode, toggles Fullscreen,
+or does nothing.
 
 It relies on Apple's private MultitouchSupport framework, the same one BetterTouchTool uses, so a
 future macOS update could stop it; that pane then says "Unavailable" and the hotkeys keep working.
@@ -134,7 +153,8 @@ logo animation", key `startupAnimation`).
 | --- | --- |
 | Show / hide the overlay | `⌃⌥H` (configurable), or the `–` button; floating web tabs stay where they are |
 | Toggle click-through | `⌃⌥Tab` (configurable), the eye button, or a three-finger tap on the trackpad; every SlyTerm window at once |
-| Panic: fullscreen opaque terminal | `⌃⌥P` (configurable), `⌘Return` inside the terminal or a web tab, or the expand button |
+| Panic: cover the screen with an opaque terminal | `⌃⌥P` (configurable), or "Panic Mode" in the menu bar item |
+| Fullscreen: the window with the keyboard fills the screen | `⌃⌥M` (configurable), `⌘Return` inside the SlyTerm window or a floating web tab, the expand button, or "Fullscreen" in the menu bar item |
 | Look up what is under the pointer, in a web tab | `⌃⌥Q` (configurable), or "Look Up Under Pointer" in the menu bar item, which also has a "Lookup Game" submenu. Press it again without moving for the next guess |
 | Pick which line near the pointer to look up | `⌃⌥⇧Q` (configurable), or "Pick Text Near Pointer…" in the menu bar item, then the key shown next to the line |
 | What each tab's agent is doing | A spinner at the head of the tab while it works, an orange `?` while it waits for you; hover the tab for the detail |
@@ -856,7 +876,7 @@ While a web tab is in front in the SlyTerm window:
 A floating window takes the same page keys (`⌘←` / `⌘→`, `⌘R`, `⌘F`, `⌘E`, `⌘G` / `⌘⇧G` while
 finding, `⌘C`, `⌘V`, `⌘X`, `⌘A`, `⌘+` / `⌘-` / `⌘0`), plus `⌘L`, `⌘T` for a new web tab in the
 SlyTerm window, `⌘⇧T` to reopen a closed one there, `⌥⌘1`…`⌥⌘9`, `⌘W` to close it, `⌘Return` for
-panic, `⌘,` for Settings and `⌘Q`.
+Fullscreen, `⌘,` for Settings and `⌘Q`.
 
 ### Links
 
@@ -893,6 +913,10 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
   they are put back or closed. Panic hides them (see
   [Pausing from the game](#pausing-from-the-game)). The card that says what an agent did stays
   above them.
+- **Fullscreen.** `⌃⌥M` or `⌘Return` in a floating window fills its screen with it, opaque, with
+  the kept shape set aside and the other floating windows above it. Leaving puts it back where it
+  was, and that frame, not the filled one, stays its remembered place. Closing it, putting it back
+  or hiding it ends Fullscreen; panic hides it and fills it again when panic ends.
 
 ### Click-through and focus
 
@@ -935,7 +959,9 @@ controls work as usual; loading another page lets go of it too.
 Panic silences every web tab, suspending all of its media, sound kept outside the page included, and
 hides the floating windows; leaving panic shows them again and lets each tab go on as it was. A web
 tab in front in the SlyTerm window switches to the terminal, as described in
-[Window and modes](#window-and-modes).
+[Window and modes](#window-and-modes). Until panic ends the web tabs are gone from the strip and no
+key brings one in front; a guide that arrives meanwhile stays out of sight (see
+[The lookup's tab](#the-lookups-tab)). Fullscreen pauses and suspends nothing.
 
 ### Pausing on its own
 
@@ -945,8 +971,8 @@ view, a podcast or music, is left playing.
 
 - **A guide opens.** The lookup, press again and `slyterm://guide?url=` pause every video that is
   playing, in the SlyTerm window or floating, before the guide loads. `⌃⌥V` then plays them again,
-  as long as nothing else is playing.
-  A guide sent to your browser pauses nothing.
+  as long as nothing else is playing. A guide that arrives during panic leaves the videos panic
+  silenced paused when it ends. A guide sent to your browser pauses nothing.
 - **A video in the SlyTerm window goes out of view:** another tab comes in front of it (a terminal,
   another web tab, a new or a lookup's one), or the window hides. It plays again when it is back in
   front: its square clicked, `⌥⌘N`, `⌃Tab` or `⌘G` to it, or `⌃⌥H` showing the window. A window
@@ -967,6 +993,9 @@ globe opened on the game's first source is the lookup's too when it has none. A 
 coming back in click-through so the game keeps the keyboard; a floating one loads the page where it
 is. `slyterm://guide?url=` goes the same way, and `slyterm://web?url=` always opens a new web tab,
 in front, with the same rule for a hidden overlay.
+During panic the page still loads, in the lookup's tab or a new one, suspended like the others, but
+it does not come in front and no floating window shows. When panic ends, that tab is the one in
+front in the SlyTerm window, or, if it floats, its window shows with the others.
 
 ### Reader mode and blocking
 
@@ -1032,8 +1061,8 @@ is why none is kept warm. Web tabs are not restored at launch.
 
 ### The Settings window
 
-The menu bar item is for doing: show / hide, a new tab, click-through, panic mode, the lookup and
-which game it asks, a new web tab, play / pause, opacity (terminal, click-through, playing video),
+The menu bar item is for doing: show / hide, a new tab, click-through, panic mode, Fullscreen, the
+lookup and which game it asks, a new web tab, play / pause, opacity (terminal, click-through, playing video),
 resetting the window position, quitting.
 Everything that configures the app is behind **Settings…** in it, in five tabs:
 
@@ -1049,7 +1078,7 @@ Everything that configures the app is behind **Settings…** in it, in five tabs
   the current one's, the startup command, Option as Meta.
 - **Window**: background opacity, the dim level in click-through, the level of a playing video,
   switching to click-through on focus loss, the window level, where the tab bar sits.
-- **Shortcuts**: the eight global hotkeys and the trackpad tap.
+- **Shortcuts**: the nine global hotkeys and the trackpad tap.
 - **Lookup**: the games and their sources, the language each game's text is read in, how the game
   is picked, where guides open ("In a web tab inside SlyTerm" or "In your browser"), whether Screen
   Recording has been granted, and importing or exporting a game.
@@ -1058,9 +1087,9 @@ Nothing there is modal: the terminal stays where it is and every change applies 
 
 ### Shortcuts
 
-**Settings › Shortcuts** has all eight actions: show / hide the terminal, toggle click-through,
-panic mode, "Look up what's under the pointer", "Pick text near the pointer", "Allow what the
-agent asks", "Refuse it" and "Play / pause". Allow and refuse are off, and say so, while the card
+**Settings › Shortcuts** has all nine actions: show / hide the terminal, toggle click-through,
+panic mode, Fullscreen, "Look up what's under the pointer", "Pick text near the pointer", "Allow
+what the agent asks", "Refuse it" and "Play / pause". Allow and refuse are off, and say so, while the card
 is off in General. Click a field, press the new shortcut, done. A shortcut needs ⌃, ⌥ or ⌘, except
 function keys and the top-left `§` / `` ` `` key, which work on their own; while SlyTerm runs, a key
 used alone is taken from every app, the game included. Esc cancels, ⌫ or Clear removes a shortcut.
@@ -1122,13 +1151,14 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `hotkeyToggle` | `ctrl+alt+h` | Show / hide |
 | `hotkeyGhost` | `ctrl+alt+tab` | Toggle click-through |
 | `hotkeyPanic` | `ctrl+alt+p` | Panic mode |
+| `hotkeyFullscreen` | `ctrl+alt+m` | Fullscreen |
 | `hotkeyQuest` | `ctrl+alt+q` | The lookup (named from when it only knew Dofus quests) |
 | `hotkeyPick` | `ctrl+alt+shift+q` | Pick mode |
 | `hotkeyAllow` | `ctrl+alt+y` | Allow a Claude Code or Codex permission prompt |
 | `hotkeyRefuse` | `ctrl+alt+n` | Refuse it |
 | `hotkeyPlayPause` | `ctrl+alt+v` | Pause what web tabs are playing, or play it again |
 | `tapGesture` | `true` | The trackpad tap |
-| `tapGestureAction` | `ghost` | `ghost`, `toggle` or `panic` |
+| `tapGestureAction` | `ghost` | `ghost`, `toggle`, `panic` or `fullscreen` |
 | `tapFingers` | `3` | 2–5 |
 | `tapAlignment` | `0.5` | Max vertical spread between fingers, as a fraction of the trackpad height; 1 disables the check |
 | `questOpenInApp` | `true` | Open the lookup's pages in a web tab rather than the browser |
@@ -1167,7 +1197,8 @@ open -g slyterm://toggle   # show / hide
 open -g slyterm://show     # show and focus
 open -g slyterm://hide
 open -g slyterm://ghost    # toggle click-through
-open -g slyterm://panic    # toggle the fullscreen opaque terminal
+open -g slyterm://panic    # toggle panic: an opaque terminal over the whole screen
+open -g slyterm://fullscreen   # toggle Fullscreen for the window with the keyboard
 open -g slyterm://notify   # mark the current tab as needing attention, never steals focus
 open -g slyterm://allow    # answer the permission prompt an agent has up with Yes (off until activityAnswerURLs)
 open -g slyterm://refuse   # or with No; both take ?tab= like notify, and do nothing unless a prompt is up
@@ -1413,7 +1444,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | --- | --- |
 | `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
 | `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events |
-| `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
+| `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic, Fullscreen), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
 | `TerminalTab.swift` | One terminal tab: a SwiftTerm view, its pty and login shell, its folder read from the kernel, its title read by each agent's rules, its visible lines, notifications and focus reports |
@@ -1436,7 +1467,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `GuideTab.swift` | `GuideContent` (blocking rules, per-site stylesheets, the web view's configuration), `GuideTab` (one web tab: its toolbar and address field, its icon, its media state), `--guide-snapshot` |
 | `GuideFindBar.swift` | A web tab's find bar |
 | `WebMedia.swift` | The fullscreen shim and the media controller every page gets, as scripts; `WebMediaFrames`, the frames' reports merged into a tab's media state; `WebIcons`, the favicons; `--drm-check` |
-| `FloatingWebPanel.swift` | `FloatingWeb`, a web tab's floating window: the page panel, the toolbar panel over it, its frames, dragging and the kept aspect |
+| `FloatingWebPanel.swift` | `FloatingWeb`, a web tab's floating window: the page panel, the toolbar panel over it, its frames, dragging, the kept aspect and filling its screen for Fullscreen |
 | `Activity/AgentActivity.swift` | The types the monitor, strip, card and answer share, and `AgentKind`: each agent's name, resume and copy commands and answer keys |
 | `Activity/ActivityMonitor.swift` | The poll: which agent runs in each tab, and its status from Claude Code's registry, the tab's title or the agent's session file |
 | `Activity/TranscriptTail.swift` | Claude Code's transcript parser, pure over lines of bytes, and the tail reads the other readers share |
@@ -1486,7 +1517,8 @@ swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/make-re
 - `OverlayPanel` is a borderless, resizable `NSPanel` with `.nonactivatingPanel`, so it can take
   keyboard input without activating the app: the game keeps its menu bar and its Space.
   `collectionBehavior` includes `fullScreenAuxiliary` and `canJoinAllSpaces` so it also floats over
-  fullscreen apps. Its `constrainFrameRect` is overridden so panic mode can cover the menu bar.
+  fullscreen apps. Its `constrainFrameRect` is overridden so panic and Fullscreen can cover the
+  menu bar.
 - Click-through is `ignoresMouseEvents`, which is all-or-nothing per window, so the tab strip is a
   separate child panel that stays clickable and doubles as the drag handle.
 - A floating web tab is two panels built the same way (`FloatingWeb`): the page panel, a resizable

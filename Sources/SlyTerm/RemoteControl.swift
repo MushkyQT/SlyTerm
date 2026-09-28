@@ -12,6 +12,7 @@ enum RemoteControl {
             case "hide": controller.hide()
             case "ghost": controller.toggleGhost()
             case "panic": controller.togglePanic()
+            case "fullscreen": controller.toggleFullscreen()
             case "notify", "attention":
                 if let tab = target(of: url, controller: controller) { controller.requestAttention(tab) }
                 Activity.monitor?.refreshNow(completion: nil)

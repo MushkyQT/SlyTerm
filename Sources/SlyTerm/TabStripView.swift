@@ -8,6 +8,7 @@ protocol TabStripDelegate: AnyObject {
     var stripWebItems: [TabStripWebItem] { get }
     var stripIsGhost: Bool { get }
     var stripIsPanic: Bool { get }
+    var stripIsFullscreen: Bool { get }
     var stripHint: (text: String, color: NSColor)? { get }
     func stripTabNeedsAttention(_ index: Int) -> Bool
     func stripTabMark(_ index: Int) -> TabStripMark
@@ -20,7 +21,7 @@ protocol TabStripDelegate: AnyObject {
     func stripNewTab()
     func stripBringIn()
     func stripToggleGhost()
-    func stripTogglePanic()
+    func stripToggleFullscreen()
     func stripHide()
     func stripClicked()
     func stripDragged(to stripOrigin: NSPoint)
@@ -38,7 +39,7 @@ final class TabStripView: NSView {
     var edge: StripEdge = .bottom { didSet { needsDisplay = true } }
 
     private enum Region: Equatable {
-        case none, tab(Int), close(Int), web(Int), emptyWeb, moreWeb, newTab, ghost, hide, panic
+        case none, tab(Int), close(Int), web(Int), emptyWeb, moreWeb, newTab, ghost, hide, fullscreen
     }
 
     private var tabRects: [NSRect] = []
@@ -51,7 +52,7 @@ final class TabStripView: NSView {
     private var newTabRect = NSRect.zero
     private var ghostRect = NSRect.zero
     private var hideRect = NSRect.zero
-    private var panicRect = NSRect.zero
+    private var fullscreenRect = NSRect.zero
 
     private var hint: (text: String, color: NSColor)?
 
@@ -139,10 +140,12 @@ final class TabStripView: NSView {
         var x = b.maxX - pad - button
         hideRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
         ghostRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
-        panicRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
+        fullscreenRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
         newTabRect = NSRect(x: x, y: y, width: button, height: button)
 
-        webItems = delegate?.stripWebItems ?? []
+        // Panic leaves nothing of the web tabs: no squares, no "…", no globe.
+        let panic = delegate?.stripIsPanic ?? false
+        webItems = panic ? [] : delegate?.stripWebItems ?? []
         let titles = delegate?.stripTabTitles ?? []
         let left = pad + 12
         let count = CGFloat(max(1, titles.count))
@@ -159,7 +162,7 @@ final class TabStripView: NSView {
         var wx = webRight - button
         moreRect = overflows ? NSRect(x: wx, y: y, width: button, height: button) : nil
         if overflows { wx -= step }
-        for _ in 0..<(overflows ? slots - 1 : max(1, webItems.count)) {
+        for _ in 0..<(panic ? 0 : overflows ? slots - 1 : max(1, webItems.count)) {
             webRects.insert(NSRect(x: wx, y: y, width: button, height: button), at: 0)
             wx -= step
         }
@@ -242,7 +245,7 @@ final class TabStripView: NSView {
     private func region(at p: NSPoint) -> Region {
         if hideRect.contains(p) { return .hide }
         if ghostRect.contains(p) { return .ghost }
-        if panicRect.contains(p) { return .panic }
+        if fullscreenRect.contains(p) { return .fullscreen }
         if newTabRect.contains(p) { return .newTab }
         if moreRect?.contains(p) == true { return .moreWeb }
         for (i, r) in webRects.enumerated() where r.contains(p) {
@@ -342,8 +345,11 @@ final class TabStripView: NSView {
         }
 
         drawButton(newTabRect, symbol: "plus", hovered: hover == .newTab)
-        drawButton(panicRect, symbol: panic ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                   hovered: hover == .panic, tint: panic ? .systemRed : nil)
+        let fullscreen = delegate?.stripIsFullscreen ?? false
+        let expand = fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        // It does nothing during panic.
+        drawButton(fullscreenRect, symbol: expand, hovered: hover == .fullscreen && !panic,
+                   tint: panic ? NSColor(calibratedWhite: 1, alpha: 0.25) : nil)
         drawButton(ghostRect, symbol: ghost ? "eye.slash" : "eye", hovered: hover == .ghost, tint: ghost ? .systemOrange : nil)
         drawButton(hideRect, symbol: "minus", hovered: hover == .hide)
 
@@ -534,7 +540,7 @@ final class TabStripView: NSView {
         case .newTab where event.modifierFlags.contains(.control): delegate?.stripBringIn()
         case .newTab: delegate?.stripNewTab()
         case .ghost: delegate?.stripToggleGhost()
-        case .panic: delegate?.stripTogglePanic()
+        case .fullscreen: delegate?.stripToggleFullscreen()
         case .hide: delegate?.stripHide()
         case .none: delegate?.stripClicked()
         }
@@ -577,11 +583,14 @@ enum StripSnapshotCLI {
 
         var rows: [(String, NSImage)] = []
         func add(_ caption: String, width: CGFloat = 600, selected: Int?, web: [TabStripWebItem] = [book],
-                 hoverWeb: Int? = nil, hoverEmpty: Bool = false, ghost: Bool = false, attention: Int? = nil,
+                 hoverWeb: Int? = nil, hoverEmpty: Bool = false, ghost: Bool = false, panic: Bool = false,
+                 fullscreen: Bool = false, attention: Int? = nil,
                  marks: [Int: TabStripMark] = [:], hint: (text: String, color: NSColor)? = nil,
                  edge: StripEdge = .bottom, titles: [String] = ["slyterm", "claude", "Projects"]) {
             let delegate = StripSnapshotDelegate(titles: titles, selected: selected, web: web)
             delegate.stripIsGhost = ghost
+            delegate.stripIsPanic = panic
+            delegate.stripIsFullscreen = fullscreen
             delegate.attention = attention
             delegate.marks = marks
             if attention != nil { delegate.stripHint = ("needs you: click the tab", .systemYellow) }
@@ -603,6 +612,10 @@ enum StripSnapshotCLI {
         add("the video's tab selected", selected: nil, web: [book, selecting(video), away])
         add("a video page with no icon, playing and floating", selected: 0, web: [book, floatingVideo])
         add("ghost mode, a web tab selected", selected: nil, web: [selecting(book), video], ghost: true)
+        add("fullscreen, a web tab selected: the collapse button", selected: nil,
+            web: [selecting(book), video], fullscreen: true)
+        add("panic, three web tabs: none of them shows", selected: 0, web: three, panic: true)
+        add("panic, no web tab: no globe either", selected: 0, web: [], panic: true)
         add("a terminal asking for the user", selected: 0, attention: 2)
         add("a Claude working (the spinner, frozen mid-turn)", selected: 1,
             marks: [1: .working],
@@ -693,6 +706,7 @@ enum StripSnapshotCLI {
         let view = TabStripView(frame: NSRect(x: 0, y: 0, width: width, height: TabStripView.height))
         view.delegate = delegate
         view.edge = edge
+        view.squareCorners = delegate.stripIsPanic || delegate.stripIsFullscreen
         window.contentView?.addSubview(view)
         view.freezeSpinner(atDegrees: 120)
         if hoverEmpty { view.hoverWeb(nil) } else if let hoverWeb { view.hoverWeb(hoverWeb) }
@@ -748,6 +762,7 @@ private final class StripSnapshotDelegate: TabStripDelegate {
     let stripWebItems: [TabStripWebItem]
     var stripIsGhost = false
     var stripIsPanic = false
+    var stripIsFullscreen = false
     var stripHint: (text: String, color: NSColor)?
     var attention: Int?
     var marks: [Int: TabStripMark] = [:]
@@ -768,7 +783,7 @@ private final class StripSnapshotDelegate: TabStripDelegate {
     func stripOpenWeb() {}
     func stripNewTab() {}
     func stripToggleGhost() {}
-    func stripTogglePanic() {}
+    func stripToggleFullscreen() {}
     func stripHide() {}
     func stripClicked() {}
     func stripDragged(to stripOrigin: NSPoint) {}

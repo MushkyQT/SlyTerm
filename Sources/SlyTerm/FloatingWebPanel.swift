@@ -24,6 +24,9 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
     var isKey: Bool { panel.isKeyWindow || bar.isKeyWindow }
     var isVideo: Bool
     var aspect: CGFloat?
+    // Set while the window fills its screen: the frame it goes back to.
+    private var unfilledFrame: NSRect?
+    var isFilled: Bool { unfilledFrame != nil }
 
     private let toolbarView: NSView
     private let pageView: NSView
@@ -139,11 +142,11 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
     // `video` is the playing-video level, which replaces the click-through one.
     func apply(ghost: Bool, dim: CGFloat, video: CGFloat?, backgroundOpacity: CGFloat) {
         panel.ignoresMouseEvents = ghost
-        panel.alphaValue = video ?? (ghost ? dim : 1)
+        panel.alphaValue = isFilled ? 1 : video ?? (ghost ? dim : 1)
         bar.ignoresMouseEvents = false
         bar.alphaValue = ghost ? dim : 1
         bar.allowsKey = !ghost
-        let background = TerminalTab.backgroundColor.withAlphaComponent(backgroundOpacity)
+        let background = TerminalTab.backgroundColor.withAlphaComponent(isFilled ? 1 : backgroundOpacity)
         container.layer?.backgroundColor = background.cgColor
     }
 
@@ -154,11 +157,33 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
 
     func setAspect(_ aspect: CGFloat?) {
         self.aspect = FloatingWeb.sane(aspect)
-        guard let ratio = self.aspect else { return }
+        guard let ratio = self.aspect, !isFilled else { return }
         let frame = FloatingWeb.clamped(FloatingWeb.snapped(panel.frame, to: ratio, barHeight: barHeight),
                                         aspect: ratio, barHeight: barHeight)
         if frame != panel.frame { panel.setFrame(frame, display: true) }
         placeBar()
+    }
+
+    // Fullscreen: nothing is clamped, snapped, moved or saved meanwhile, and the frame comes back
+    // as it was. The caller applies the opacity again.
+    func setFilled(_ filled: Bool) {
+        guard filled != isFilled else { return }
+        if filled {
+            unfilledFrame = panel.frame
+            if let screen = FloatingWeb.screen(for: panel.frame) {
+                panel.setFrame(screen.frame, display: true)
+            }
+        } else if let frame = unfilledFrame {
+            unfilledFrame = nil
+            panel.setFrame(frame, display: true)
+        }
+        let radius = filled ? 0 : FloatingWeb.cornerRadius
+        container.layer?.cornerRadius = radius
+        barView.layer?.cornerRadius = radius
+        barView.target = filled ? nil : panel
+        placeBar()
+        // The video's shape may have changed while the lock was off.
+        if !filled { setAspect(aspect) }
     }
 
     func releaseKey() {
@@ -173,17 +198,21 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
     }
 
     private func keepOnScreen() {
+        guard !isFilled else { return }
         let frame = FloatingWeb.clamped(panel.frame, aspect: aspect, barHeight: barHeight)
         if frame != panel.frame { panel.setFrame(frame, display: true) }
         placeBar()
     }
 
     private func saveFrame() {
+        guard !isFilled else { return }
         Settings.shared.setSavedFloatFrame(panel.frame, video: isVideo)
     }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        guard sender === panel, let aspect = FloatingWeb.sane(aspect) else { return frameSize }
+        guard sender === panel else { return frameSize }
+        if isFilled { return sender.frame.size }
+        guard let aspect = FloatingWeb.sane(aspect) else { return frameSize }
         return FloatingWeb.lockedSize(frameSize, current: sender.frame.size, aspect: aspect, barHeight: barHeight)
     }
 
@@ -377,6 +406,12 @@ enum FloatSnapshotCLI {
         print("video window: \(video.panel.frame) bar: \(video.bar.frame)")
         let proposed = NSSize(width: video.panel.frame.width + 180, height: video.panel.frame.height)
         print("video window dragged 180 pt wider: \(video.windowWillResize(video.panel, to: proposed))")
+        let unfilled = video.panel.frame
+        video.setFilled(true)
+        print("video window fullscreen: \(video.panel.frame) bar: \(video.bar.frame), "
+              + "dragged 180 pt wider: \(video.windowWillResize(video.panel, to: proposed))")
+        video.setFilled(false)
+        print("and back: \(video.panel.frame), as before: \(video.panel.frame == unfilled)")
 
         var rows: [[(caption: String, image: NSImage)]] = [[], []]
         func shot(_ row: Int, _ caption: String, _ web: FloatingWeb, ghost: Bool, playing: Bool) {

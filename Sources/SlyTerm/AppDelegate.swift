@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch Settings.shared.tapGestureAction {
         case "toggle": controller.toggleVisible()
         case "panic": controller.togglePanic()
+        case "fullscreen": controller.toggleFullscreen()
         default: controller.toggleGhost()
         }
     }
@@ -124,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .toggle: controller.toggleVisible()
         case .ghost: controller.toggleGhost(followingCard: true)
         case .panic: controller.togglePanic()
+        case .fullscreen: controller.toggleFullscreen()
         // Carbon calls hotkey handlers on the main thread, which assumeIsolated relies on.
         case .quest:
             MainActor.assumeIsolated {
@@ -183,6 +185,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let panic = item("Panic Mode", #selector(togglePanic), hotkey: .panic)
         panic.state = controller.isPanic ? .on : .off
         menu.addItem(panic)
+        let fullscreen = item("Fullscreen", #selector(toggleFullscreen), hotkey: .fullscreen)
+        fullscreen.state = controller.isFullscreen ? .on : .off
+        menu.addItem(fullscreen)
         menu.addItem(item("Look Up Under Pointer", #selector(lookUp), hotkey: .quest))
         menu.addItem(item("Pick Text Near Pointer…", #selector(pickText), hotkey: .pick))
         let games = NSMenuItem(title: "Lookup Game", action: nil, keyEquivalent: "")
@@ -282,6 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleVisible() { controller.toggleVisible() }
     @objc private func toggleGhost() { controller.toggleGhost() }
     @objc private func togglePanic() { controller.togglePanic() }
+    @objc private func toggleFullscreen() { controller.toggleFullscreen() }
     @objc private func lookUp() { Lookup.shared.trigger() }
     @objc private func pickText() { Lookup.shared.pick() }
     @objc private func toggleLookupAutoDetect() { LookupStore.shared.autoDetect.toggle() }

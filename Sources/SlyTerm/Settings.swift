@@ -25,6 +25,7 @@ final class Settings {
             "hotkeyToggle": "ctrl+alt+h",
             "hotkeyGhost": "ctrl+alt+tab",
             "hotkeyPanic": "ctrl+alt+p",
+            "hotkeyFullscreen": "ctrl+alt+m",
             "hotkeyQuest": "ctrl+alt+q", // the lookup's legacy key name; renaming a stored key loses it
             "hotkeyPick": "ctrl+alt+shift+q",
             "hotkeyAllow": "ctrl+alt+y",
@@ -97,6 +98,7 @@ final class Settings {
     var hotkeyToggle: String { get { d.string(forKey: "hotkeyToggle") ?? "" } set { set(newValue, "hotkeyToggle") } }
     var hotkeyGhost: String { get { d.string(forKey: "hotkeyGhost") ?? "" } set { set(newValue, "hotkeyGhost") } }
     var hotkeyPanic: String { get { d.string(forKey: "hotkeyPanic") ?? "" } set { set(newValue, "hotkeyPanic") } }
+    var hotkeyFullscreen: String { get { d.string(forKey: "hotkeyFullscreen") ?? "" } set { set(newValue, "hotkeyFullscreen") } }
     var hotkeyQuest: String { get { d.string(forKey: "hotkeyQuest") ?? "" } set { set(newValue, "hotkeyQuest") } }
     var hotkeyPick: String { get { d.string(forKey: "hotkeyPick") ?? "" } set { set(newValue, "hotkeyPick") } }
     var hotkeyAllow: String { get { d.string(forKey: "hotkeyAllow") ?? "" } set { set(newValue, "hotkeyAllow") } }

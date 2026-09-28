@@ -141,11 +141,19 @@ shell tab comes across with its folder and its command.
 ### Panic button
 
 `⌃⌥P` fills the screen with an opaque terminal, menu bar included, and puts the keyboard in it.
-Web tabs go silent and floating web tabs hide. Press it again and the window goes back exactly
-where it was, with the floating tabs and what was playing.
+Web tabs go silent and leave the tab strip, and floating web tabs hide. A guide you look up in the
+meantime loads out of sight and is in front when you leave. Press it again and the window goes back
+exactly where it was, with the floating tabs and what was playing.
 
 <img src="docs/features/fullscreen.gif" width="600"
      alt="Over World of Warcraft, ⌃⌥P fills the screen with an opaque terminal while Claude keeps working, and pressing it again puts the window and a floating Wowhead page back where they were">
+
+### Fullscreen
+
+`⌃⌥M`, `⌘Return` inside SlyTerm or the expand button on the tab strip fills the screen with the
+window you are in: the SlyTerm window with the tab in front, or a floating web tab. It is opaque
+and keeps the keyboard. Nothing pauses or hides, and tabs switch as usual. Press it again, or
+switch to click-through, and the window goes back where it was.
 
 ### A real terminal
 
@@ -212,7 +220,8 @@ Option, ⌘ is Command and ⇧ is Shift.
 | --- | --- |
 | Show or hide the terminal | `⌃⌥H` |
 | Switch between interact and click-through | `⌃⌥Tab`, or a three-finger tap |
-| Panic: fullscreen opaque terminal | `⌃⌥P` |
+| Panic: cover the screen with an opaque terminal | `⌃⌥P` |
+| Fullscreen: fill the screen with the window you are in | `⌃⌥M`, or `⌘Return` inside SlyTerm |
 | Look up what is under the pointer | `⌃⌥Q`, again for the next guess |
 | Pick a line near the pointer to look up | `⌃⌥⇧Q` |
 | Allow or refuse an agent's permission prompt | `⌃⌥Y` / `⌃⌥N` |
