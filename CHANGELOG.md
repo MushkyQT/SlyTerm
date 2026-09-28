@@ -1,9 +1,11 @@
 # Changelog
 
-What changes in SlyTerm from one version to the next. Versions follow
-[semantic versioning](https://semver.org), and each one is tagged `vX.Y.Z` on `main`. The format
-follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). How each feature behaves in
-detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
+What changes in SlyTerm from one version to the next. Changes merged since the last release are
+under Unreleased. Versions follow [semantic versioning](https://semver.org), and each one is tagged
+`vX.Y.Z` on `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
+
+## [Unreleased]
 
 ## [1.1.0] - 2026-09-28
 
@@ -47,5 +49,6 @@ hotkeys, Claude Code's state on the tab strip with cards answered by `⌃⌥Y` a
 that opens a game's wiki page for what is under the pointer, web tabs that float over the game, and
 Bring In a Session for Claude Code and plain shell tabs.
 
+[Unreleased]: https://github.com/MushkyQT/slyterm/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/MushkyQT/slyterm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MushkyQT/slyterm/releases/tag/v1.0.0

@@ -167,13 +167,15 @@ Update all three in the same pull request as the behaviour they describe.
   can have as many commits as you like.
 - The description says what changed, how you checked it and what is still unverified. For a visual
   change, attach the snapshot PNG or a screenshot, with other players' names and chat blurred.
-- A pull request that changes the app raises its version, in `Resources/Info.plist`
-  (`CFBundleShortVersionString`, and `CFBundleVersion` up by one), and adds a section for that
-  version at the top of CHANGELOG.md. The version follows [semantic versioning](https://semver.org):
-  the patch number for a fix, the minor number for something new, the major number for a change
-  that takes something away, such as a feature, a hotkey, a URL route or a command-line mode. If
-  another pull request takes the number first, take the next one when you rebase. Once the pull
-  request is merged, the Tag workflow tags `main` with `vX.Y.Z`.
+- A pull request that changes the app adds its lines under `## [Unreleased]` at the top of
+  CHANGELOG.md, and leaves the version alone.
+- A release is a pull request of its own, made by a maintainer when enough has gathered. It raises
+  the version in `Resources/Info.plist` (`CFBundleShortVersionString`, and `CFBundleVersion` up
+  by one) and renames `[Unreleased]` to that version with the date. The version follows
+  [semantic versioning](https://semver.org), counted over everything unreleased: the patch number
+  if it is only fixes, the minor number for something new, the major number for a change that
+  takes something away, such as a feature, a hotkey, a URL route or a command-line mode. Once it
+  is merged, the Tag workflow tags `main` with `vX.Y.Z`.
 - AI-assisted changes are welcome. Credit the tool with a `Co-Authored-By:` trailer, and review
   the change yourself before you open the pull request: you are its author.
 

@@ -22,5 +22,5 @@ session. -->
 -
 
 - [ ] README.md and docs/TECHNICAL.md describe the change
-- [ ] The version in Resources/Info.plist is raised and CHANGELOG.md has a section for it
+- [ ] CHANGELOG.md has its lines under `[Unreleased]`
 - [ ] It keeps to the [principles](https://github.com/MushkyQT/slyterm/blob/main/docs/TECHNICAL.md#principles)
