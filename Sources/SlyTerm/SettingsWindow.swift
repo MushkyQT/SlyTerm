@@ -104,6 +104,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         window.level = level
         if !centered { window.center(); centered = true }
+        AppSwitcher.shared.windowOpened(window)
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
@@ -125,6 +126,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     // Ends any recording, which re-registers the hotkeys; otherwise they stay off after closing.
     func windowWillClose(_ notification: Notification) {
         window?.makeFirstResponder(nil)
+        if let window { AppSwitcher.shared.windowClosed(window) }
     }
 }
 

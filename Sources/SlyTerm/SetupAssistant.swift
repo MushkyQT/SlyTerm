@@ -116,6 +116,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
                   combos: combos, activityCards: Settings.shared.activityCards)
             window.center()
         }
+        AppSwitcher.shared.windowOpened(window)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         if opening { window.makeFirstResponder(nil) }
@@ -561,6 +562,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     // Ends a recording first, which re-registers the hotkeys; otherwise they stay off.
     func windowWillClose(_ notification: Notification) {
         window.makeFirstResponder(nil)
+        AppSwitcher.shared.windowClosed(window)
         generation += 1
         guard !closeReported else { return }
         closeReported = true
