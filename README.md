@@ -35,7 +35,9 @@ https://github.com/user-attachments/assets/420bb480-98c7-4931-8162-4ad74fbe23a5
 
 SlyTerm stays above your game, in borderless windowed mode or in macOS fullscreen. Drag it by its
 tab strip, resize it from its edges and choose how see-through it is. It has no Dock icon and lives
-in the menu bar. `⌃⌥H` shows or hides it from anywhere, even while the game has the keyboard.
+in the menu bar. While Settings or the setup assistant is open it shows in the Dock and in `⌘Tab`, so
+you can switch away and come back to it. `⌃⌥H` shows or hides it from anywhere, even while the game
+has the keyboard.
 
 ### Click through to the game
 

@@ -9,6 +9,9 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Added
 
+- While Settings or the setup assistant is open, SlyTerm shows in the Dock and in `⌘Tab`, with an
+  app menu, so switching to another app no longer leaves the window out of reach behind it.
+
 - Send a session back: right-click a tab and choose "Send Back to iTerm2" to stop its agent here
   and resume it in a new iTerm2 tab, or "Copy to iTerm2" for a fork. The menu bar item has "Send Tab
   Back to iTerm2", the quit dialog has "Send Back and Quit" whenever a tab runs an agent, and
@@ -49,6 +52,10 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Fixed
 
+- The quit confirmation could open behind the Settings window or the terminal and stay out of
+  sight; the same went for the confirmation before interrupting an agent. Both now open in front.
+- `⌘C`, `⌘V`, `⌘X`, `⌘A` and `⌘Z` work in the text fields of Settings and the setup assistant, and
+  `⌘W` closes them.
 - Closing a terminal tab ends its shell and whatever is running in it, as closing a terminal window
   does. They used to keep running, out of sight, until SlyTerm quit.
   ([#5](https://github.com/MushkyQT/slyterm/pull/5))

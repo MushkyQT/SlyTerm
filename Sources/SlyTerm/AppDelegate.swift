@@ -81,8 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.addButton(withTitle: "Cancel")
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = "Don't ask again"
-        alert.window.level = s.dialogLevel
-        let response = alert.runModal()
+        let response = alert.runModal(level: s.alertLevel)
         let sendBack = !agents.isEmpty && response == .alertFirstButtonReturn
         let quit = sendBack || response == (agents.isEmpty ? .alertFirstButtonReturn : .alertSecondButtonReturn)
         let suppress = alert.suppressionButton?.state == .on
@@ -376,4 +375,90 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showSettings() { openSettings() }
     @objc private func resetPosition() { controller.resetPosition() }
     @objc private func quit() { NSApp.terminate(nil) }
+}
+
+// Settings and the setup assistant fall behind other apps' windows when SlyTerm is not active, and
+// an accessory app is not in ⌘Tab, so the app is a regular one while either is open.
+final class AppSwitcher: NSObject, NSMenuItemValidation {
+    static let shared = AppSwitcher()
+
+    private var open: [NSWindow] = []
+
+    func windowOpened(_ window: NSWindow) {
+        if !open.contains(window) { open.append(window) }
+        guard NSApp.activationPolicy() != .regular else { return }
+        NSApp.mainMenu = makeMenu()
+        NSApp.setActivationPolicy(.regular)
+        // An app already active when it turns regular does not get the menu bar until it is
+        // activated again; the Dock has no windows, so handing it activation shows nothing.
+        guard NSApp.isActive,
+              let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first
+        else { return }
+        dock.activate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
+            guard open.contains(window) else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func windowClosed(_ window: NSWindow) {
+        guard let index = open.firstIndex(of: window) else { return }
+        open.remove(at: index)
+        guard open.isEmpty else { return }
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = nil
+    }
+
+    // Without an Edit menu ⌘V and ⌘C do nothing in a text field.
+    private func makeMenu() -> NSMenu {
+        let main = NSMenu()
+        func submenu(_ title: String, _ items: [NSMenuItem]) {
+            let menu = NSMenu(title: title)
+            items.forEach(menu.addItem)
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.submenu = menu
+            main.addItem(item)
+        }
+        submenu("SlyTerm", [NSMenuItem(title: "Quit SlyTerm", action: #selector(NSApplication.terminate(_:)),
+                                       keyEquivalent: "q")])
+        submenu("Edit", [forwarding("Undo", "undo:", "z"), forwarding("Redo", "redo:", "Z"), .separator(),
+                         forwarding("Cut", "cut:", "x"), forwarding("Copy", "copy:", "c"),
+                         forwarding("Paste", "paste:", "v"), forwarding("Select All", "selectAll:", "a")])
+        submenu("Window", [forwarding("Close", "performClose:", "w")])
+        return main
+    }
+
+    private func forwarding(_ title: String, _ action: String, _ key: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(forward(_:)), keyEquivalent: key)
+        item.target = self
+        item.representedObject = action
+        return item
+    }
+
+    @objc private func forward(_ sender: NSMenuItem) {
+        guard let action = sender.representedObject as? String else { return }
+        NSApp.sendAction(NSSelectorFromString(action), to: nil, from: sender)
+    }
+
+    // The menu sees a key before the overlay's own handler does, and a disabled item passes it on,
+    // so these work only in Settings, the assistant or a sheet on them.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard let key = NSApp.keyWindow else { return false }
+        return open.contains { $0 === key || $0 === key.sheetParent }
+    }
+}
+
+extension NSAlert {
+    // runModal, and each activation while it runs, put the alert back at the modal panel level,
+    // under the overlay and Settings. The main queue does not run during it; the run loop does.
+    func runModal(level: NSWindow.Level) -> NSApplication.ModalResponse {
+        let raise: () -> Void = { [weak self] in self?.window.level = level }
+        RunLoop.main.perform(inModes: [.modalPanel]) { raise() }
+        let center = NotificationCenter.default
+        let observers = [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification]
+            .map { center.addObserver(forName: $0, object: nil, queue: nil) { _ in raise() } }
+        defer { observers.forEach(center.removeObserver) }
+        return runModal()
+    }
 }

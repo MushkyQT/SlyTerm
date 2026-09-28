@@ -266,8 +266,7 @@ final class TeleportEngine {
         }
         alert.addButton(withTitle: sendingBack ? "Send Back" : "Move")
         alert.addButton(withTitle: "Cancel")
-        alert.window.level = Settings.shared.dialogLevel
-        return alert.runModal() == .alertFirstButtonReturn
+        return alert.runModal(level: Settings.shared.alertLevel) == .alertFirstButtonReturn
     }
 
     // Closes a second after the new tab opens: an Apple event arriving before the source shell's

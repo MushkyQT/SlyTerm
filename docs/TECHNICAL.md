@@ -1534,14 +1534,15 @@ target, `CMultitouch`, that declares the layout of the touch frames Apple's priv
 MultitouchSupport framework hands the trackpad tap. It
 links AppKit, Carbon, ScreenCaptureKit, Vision and WebKit. `build.sh` wraps the release binary,
 `Resources/Info.plist` and the icons into `dist/SlyTerm.app`; the app is `LSUIElement`, so it has no
-Dock icon, and it registers the `slyterm` URL scheme.
+Dock icon except while Settings or the setup assistant is open (see
+[Windows and focus](#windows-and-focus)), and it registers the `slyterm` URL scheme.
 
 ### Source map
 
 | File | What it holds |
 | --- | --- |
 | `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
-| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events |
+| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings or the assistant is open; `NSAlert.runModal(level:)` |
 | `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic, Fullscreen), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
@@ -1638,6 +1639,20 @@ swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/make-re
   when the overlay is interactive.
 - Global hotkeys use Carbon `RegisterEventHotKey`: no Accessibility permission, and they fire even
   while a fullscreen game has the keyboard.
+- Settings and the setup assistant are ordinary windows one level above the overlay while SlyTerm is
+  active, and at the normal level when it is not, so they go behind the app you switch to. While
+  either is open, `AppSwitcher` makes SlyTerm a regular app, with a Dock icon, a place in `⌘Tab` and
+  an app menu (Quit, an Edit menu, Close); when the last one closes it is an accessory again and the
+  menu is removed. The menu sees `⌘C`, `⌘V`, `⌘W` and the rest before the overlay's key handler,
+  so its Edit items and Close are enabled only while Settings, the assistant or a sheet on them is
+  key; a disabled item lets the key through to the terminal. An app that is already active when it
+  turns regular keeps the previous app's menu bar, so in that case activation goes to the Dock and
+  comes back 0.2 s later.
+- The quit confirmation and the confirmation before interrupting an agent run through
+  `NSAlert.runModal(level:)`, two levels above the overlay. `runModal` puts an alert at the modal
+  panel level, below the overlay and Settings, and does it again each time the app activates, so
+  the level is set once the modal session runs (on the run loop in `.modalPanel` mode; the main
+  queue is not served during it) and after each activation change.
 
 ### Tabs
 

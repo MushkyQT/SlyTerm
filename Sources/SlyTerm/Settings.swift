@@ -239,4 +239,7 @@ final class Settings {
     }
 
     var dialogLevel: NSWindow.Level { NSWindow.Level(rawValue: levelValue.rawValue + 1) }
+    // Above dialogLevel: Settings and the assistant go back up to it when the app activates, which
+    // can happen after an alert has opened and would put them in front of it.
+    var alertLevel: NSWindow.Level { NSWindow.Level(rawValue: levelValue.rawValue + 2) }
 }
