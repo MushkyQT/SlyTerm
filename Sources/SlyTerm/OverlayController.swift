@@ -1321,7 +1321,7 @@ final class OverlayController: NSObject, TabStripDelegate {
     func stripTabMenu(_ index: Int) -> NSMenu? {
         guard terminals.indices.contains(index) else { return nil }
         let tab = terminals[index]
-        let app = SendBackTerminal.current.name
+        let app = SendBackTerminal.destination(for: tab).name
         let menu = NSMenu()
         menu.autoenablesItems = false
         var items = [("Send Back to \(app)", #selector(sendTabBack(_:)))]

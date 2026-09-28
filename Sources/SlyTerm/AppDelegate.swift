@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let busy = controller.terminals.filter { $0.isRunningForegroundJob }.count
         if controller.terminals.count <= 1, busy == 0 { return .terminateNow }
 
+        let front = NSWorkspace.shared.frontmostApplication
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Quit SlyTerm?"
@@ -67,7 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if s.restoreSession { text += " Tabs and their folders come back at next launch." }
         let agents = controller.terminals.filter(TeleportEngine.sendsBackAgent)
-        let terminal = SendBackTerminal.current.name
+        let names = agents.map { SendBackTerminal.destination(for: $0).name }
+        let terminal = ListFormatter.localizedString(byJoining:
+            names.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } })
         if !agents.isEmpty {
             text += agents.count == 1 ? " Send Back and Quit resumes the agent in 1 tab in \(terminal)."
                 : " Send Back and Quit resumes the agents in \(agents.count) tabs in \(terminal)."
@@ -90,7 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return quit ? .terminateNow : .terminateCancel
         }
         quitPending = true
-        TeleportEngine.shared.sendBack(agents, copy: false, confirm: false) { [weak self] stayed in
+        TeleportEngine.shared.sendBack(agents, copy: false, confirm: false,
+                                       front: front) { [weak self] stayed in
             self?.quitPending = false
             guard let first = stayed.first else {
                 // Only now: the dialog is the only place Send Back and Quit is offered.
@@ -240,7 +244,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(controller.isVisible ? "Hide Terminal" : "Show Terminal", #selector(toggleVisible), hotkey: .toggle))
         menu.addItem(item("New Tab", #selector(newTab), key: "t", modifiers: .command))
         menu.addItem(item("Bring In a Session…", #selector(bringIn), key: "t", modifiers: [.command, .shift]))
-        let sendBack = item("Send Tab Back to \(SendBackTerminal.current.name)", #selector(sendTabBack))
+        let back = controller.selectedTerminal.map(SendBackTerminal.destination) ?? .current
+        let sendBack = item("Send Tab Back to \(back.name)", #selector(sendTabBack))
         sendBack.isEnabled = controller.selectedTerminal != nil
         menu.addItem(sendBack)
         menu.addItem(.separator())

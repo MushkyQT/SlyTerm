@@ -279,7 +279,7 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
             #selector(setTeleportConfirmBusy(_:)))
         sendBackTerminal.target = self
         sendBackTerminal.action = #selector(setSendBackTerminal)
-        for terminal in [SendBackTerminal.iTerm2, .terminal] {
+        for terminal in SendBackTerminal.allCases {
             let item = NSMenuItem(title: terminal.name, action: nil, keyEquivalent: "")
             item.representedObject = terminal.rawValue
             sendBackTerminal.menu?.addItem(item)
@@ -302,7 +302,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
                 teleportConfirmBusy,
                 row([NSTextField(labelWithString: "Send sessions back to"), sendBackTerminal]),
                 caption("Right-click a tab to send it back, or quit with Send Back and Quit. "
-                        + "Terminal is used when iTerm2 is not installed."),
+                        + "A session brought in from one of these goes back there. iTerm2, then "
+                        + "Terminal, is used when the one chosen is not installed; Ghostty needs "
+                        + "version 1.3 or later."),
             ]),
             section("Web tabs", [
                 row([NSTextField(labelWithString: "Search with"), searchURLField()]),

@@ -64,8 +64,12 @@ enum SessionsCLI {
             line = typed
         }
         lines.append("  open a tab in \(terminal.name) and type: \(line)")
-        lines.append(TeleportEngine.openScript(typing: line, in: terminal)
-            .split(separator: "\n").map { "    " + $0 }.joined(separator: "\n"))
+        let script = TeleportEngine.openScript(typing: line, in: terminal) ?? """
+            wezterm cli --no-auto-start list --format json
+            wezterm cli --no-auto-start spawn --window-id <first window listed, else --new-window>
+            wezterm cli --no-auto-start send-text --no-paste --pane-id <new pane> -- <line>
+            """
+        lines.append(script.split(separator: "\n").map { "    " + $0 }.joined(separator: "\n"))
         return lines.joined(separator: "\n")
     }
 

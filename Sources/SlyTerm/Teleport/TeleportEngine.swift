@@ -20,6 +20,8 @@ final class TeleportEngine {
     // entry removed.
     private static let sigtermGrace: TimeInterval = 5
     private static let interruptGrace: TimeInterval = 3
+    private static let weztermTimeout: TimeInterval = 5
+    private static let weztermLaunchGrace: TimeInterval = 10
 
     func perform(_ action: TeleportAction, on candidate: TeleportCandidate, closeSource: Bool,
                  completion: @escaping (Result<Void, TeleportError>) -> Void) {
@@ -108,6 +110,7 @@ final class TeleportEngine {
                 return
             }
             controller.newTab(directory: self.directory(session.cwd), typing: command, run: true)
+                .origin = SendBackTerminal(host: session.host)
             self.reveal(controller)
             Settings.log("teleport move: resumed \(Self.name(of: session)) (\(id)) here, from \(session.host.displayName)")
             if closeSource { self.closeSourceTab(host: session.host, tty: session.tty) }
@@ -129,6 +132,7 @@ final class TeleportEngine {
             return
         }
         controller.newTab(directory: directory(session.cwd), typing: command, run: true)
+            .origin = SendBackTerminal(host: session.host)
         reveal(controller)
         Settings.log("teleport copy: forked \(Self.name(of: session)) (\(id)) into a new tab, source untouched")
         finish(completion, .success(()))
@@ -143,6 +147,7 @@ final class TeleportEngine {
             return
         }
         controller.newTab(directory: directory(session.cwd), typing: "claude attach \(attachID)", run: true)
+            .origin = SendBackTerminal(host: session.host)
         reveal(controller)
         Settings.log("teleport attach: attached to \(Self.name(of: session)) (\(attachID)) here")
         finish(completion, .success(()))
@@ -152,6 +157,7 @@ final class TeleportEngine {
                             completion: @escaping (Result<Void, TeleportError>) -> Void) {
         guard case .shell(let tab) = candidate else {
             controller.newTab(directory: directory(candidate.cwd), typing: nil)
+                .origin = SendBackTerminal(host: candidate.host)
             reveal(controller)
             Settings.log("teleport open folder: new tab in \(candidate.cwd)")
             finish(completion, .success(()))
@@ -162,6 +168,7 @@ final class TeleportEngine {
         let command = tab.foregroundCommand.map(Self.printable)
         let note = command.map { Self.printable("Was running in \(tab.host.displayName): \($0)") }
         controller.newTab(directory: directory(tab.cwd), typing: command, run: false, note: note)
+            .origin = SendBackTerminal(host: tab.host)
         reveal(controller)
         Settings.log("teleport open folder: \(tab.cwd) from \(tab.host.displayName)" +
                      (command.map { ", \"\($0)\" typed but not run" } ?? ""))
@@ -338,14 +345,17 @@ final class TeleportEngine {
         }
     }
 
-    // Main thread. `done` gets the tabs that stayed here, and why.
+    // Main thread. `done` gets the tabs that stayed here, and why. `front` is the app to keep in
+    // front, when it is not the one in front now (the quit dialog has made SlyTerm active).
     func sendBack(_ tabs: [TerminalTab], copy: Bool, confirm: Bool,
+                  front: NSRunningApplication? = nil,
                   done: @escaping ([(tab: TerminalTab, error: TeleportError)]) -> Void) {
         guard let controller else {
             Settings.log("send back: asked for before the overlay exists")
-            done(tabs.map { ($0, .noController) })
+            DispatchQueue.main.async { done(tabs.map { ($0, .noController) }) }
             return
         }
+        let front = front ?? NSWorkspace.shared.frontmostApplication
         var stayed: [(tab: TerminalTab, error: TeleportError)] = []
         let tabs = tabs.filter { tab in
             guard controller.terminals.contains(where: { $0 === tab }) else { return false }
@@ -364,7 +374,8 @@ final class TeleportEngine {
             }
         }
         guard !tabs.isEmpty else { finish(); return }
-        let terminal = SendBackTerminal.current
+        let destinations = Dictionary(tabs.map { ($0.id, SendBackTerminal.destination(for: $0)) },
+                                      uniquingKeysWith: { first, _ in first })
         // Main thread: ptsname returns a shared static buffer.
         let probes = Dictionary(tabs.compactMap { tab in
             tab.ttyName.map { (tab.id, TabProbe(tty: $0, foregroundGroup: tab.foregroundProcessGroup,
@@ -373,7 +384,8 @@ final class TeleportEngine {
         DispatchQueue.global(qos: .userInitiated).async {
             let hosted = SessionDiscovery.hostedSessions(tabs: probes)
             DispatchQueue.main.async {
-                var plans: [(TerminalTab, SendBackPlan, pid_t?)] = []
+                var plans: [(tab: TerminalTab, plan: SendBackPlan, group: pid_t?,
+                             to: SendBackTerminal)] = []
                 for tab in tabs {
                     let found = hosted[tab.id]
                     // Without its session the plan would be a folder, and the agent would be left
@@ -387,14 +399,16 @@ final class TeleportEngine {
                     if let status = tab.activity?.status { session?.status = status }
                     switch Self.sendBackPlan(session: session, folder: tab.currentDirectory,
                                              busy: tab.isRunningForegroundJob, copy: copy) {
-                    case .success(let plan): plans.append((tab, plan, found?.processGroup))
+                    case .success(let plan):
+                        let terminal = destinations[tab.id] ?? .current
+                        plans.append((tab, plan, found?.processGroup, terminal))
                     case .failure(let error):
                         Settings.log("send back: tab \(tab.id.uuidString) stays: \(error.message)")
                         stayed.append((tab, error))
                     }
                 }
                 if confirm, Settings.shared.teleportConfirmBusy {
-                    plans.removeAll { tab, plan, _ in
+                    plans.removeAll { tab, plan, _, _ in
                         guard case .resume(let session, _, _) = plan, session.status.interrupts,
                               !session.turnsRunElsewhere,
                               !self.confirmInterrupt(session, sendingBack: true) else { return false }
@@ -405,18 +419,25 @@ final class TeleportEngine {
                 guard !plans.isEmpty else { finish(); return }
                 // Asked before anything is stopped: this is also what brings up the Automation
                 // prompt the first time.
-                self.run(appleScript: "tell application \"\(terminal.name)\" to count windows",
-                         what: "reaching \(terminal.name)", host: terminal.host) { reached in
-                    guard reached else {
-                        stayed += plans.map { ($0.0, .couldNotOpen(terminal.name)) }
-                        finish()
-                        return
+                var reached: Set<SendBackTerminal> = []
+                let reaching = DispatchGroup()
+                for terminal in Set(plans.map(\.to)) {
+                    reaching.enter()
+                    self.reach(terminal) { ok in
+                        if ok { reached.insert(terminal) }
+                        reaching.leave()
                     }
+                }
+                reaching.notify(queue: .main) {
                     let group = DispatchGroup()
-                    for (tab, plan, processGroup) in plans {
+                    for (tab, plan, processGroup, terminal) in plans {
+                        guard reached.contains(terminal) else {
+                            stayed.append((tab, .couldNotOpen(terminal.name)))
+                            continue
+                        }
                         group.enter()
                         self.carry(plan, from: tab, processGroup: processGroup, to: terminal,
-                                   controller: controller) { error in
+                                   front: front, controller: controller) { error in
                             if let error { stayed.append((tab, error)) }
                             group.leave()
                         }
@@ -428,7 +449,7 @@ final class TeleportEngine {
     }
 
     func sendBack(_ tab: TerminalTab, copy: Bool = false) {
-        let terminal = SendBackTerminal.current
+        let terminal = SendBackTerminal.destination(for: tab)
         sendBack([tab], copy: copy, confirm: true) { stayed in
             MainActor.assumeIsolated {
                 if let error = stayed.first?.error {
@@ -486,7 +507,8 @@ final class TeleportEngine {
         return [cd, command].compactMap { $0 }.joined(separator: "; ")
     }
 
-    static func openScript(typing line: String, in terminal: SendBackTerminal) -> String {
+    // WezTerm has none: it is driven through its command line, see `openInWezTerm`.
+    static func openScript(typing line: String, in terminal: SendBackTerminal) -> String? {
         let text = "\"" + line.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"") + "\""
         switch terminal {
@@ -504,15 +526,157 @@ final class TeleportEngine {
             """
         case .terminal:
             return "tell application \"Terminal\" to do script \(text)"
+        case .ghostty:
+            // `initial input` is typed into the new tab's shell, so the user's own shell and
+            // profile still run, as in iTerm2.
+            return """
+            tell application "Ghostty"
+                set cfg to new surface configuration
+                set initial input of cfg to \(text) & linefeed
+                if (count windows) is 0 then
+                    new window with configuration cfg
+                else
+                    new tab in front window with configuration cfg
+                end if
+            end tell
+            """
+        case .wezTerm:
+            return nil
         }
     }
 
+    private func reach(_ terminal: SendBackTerminal, then done: @escaping (Bool) -> Void) {
+        guard terminal == .wezTerm else {
+            run(appleScript: "tell application \"\(terminal.name)\" to count windows",
+                what: "reaching \(terminal.name)", host: terminal.host, then: done)
+            return
+        }
+        guard let cli = terminal.weztermCLI else { done(false); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            if Self.wezterm(cli, ["list", "--format", "json"]).output != nil {
+                DispatchQueue.main.async { done(true) }
+                return
+            }
+            // Not running: started without taking the screen from the game, then asked again
+            // until its socket answers.
+            let app = cli.deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            NSWorkspace.shared.openApplication(at: app, configuration: configuration)
+            let deadline = Date().addingTimeInterval(Self.weztermLaunchGrace)
+            var reached = false
+            while !reached, Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.2)
+                reached = Self.wezterm(cli, ["list", "--format", "json"]).output != nil
+            }
+            DispatchQueue.main.async {
+                Settings.log("send back: WezTerm " + (reached ? "started" : "did not answer"))
+                done(reached)
+            }
+        }
+    }
+
+    private func open(_ line: String, in terminal: SendBackTerminal, front: NSRunningApplication?,
+                      then opened: @escaping (Bool) -> Void) {
+        guard let script = Self.openScript(typing: line, in: terminal) else {
+            guard let cli = terminal.weztermCLI else { opened(false); return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let done = Self.openInWezTerm(cli, typing: line)
+                DispatchQueue.main.async { opened(done) }
+            }
+            return
+        }
+        let what = "opening a tab in \(terminal.name)"
+        run(appleScript: script, what: what, host: terminal.host) { ok in
+            guard ok, terminal == .ghostty, let front else { opened(ok); return }
+            self.giveFront(back: front, from: terminal) { opened(true) }
+        }
+    }
+
+    // Ghostty 1.3 brings itself to the front for a new tab or window, and has no option not to:
+    // the app that had the front gets it back, through LaunchServices, as `activate()` from a
+    // background app is refused since macOS 14. Not SlyTerm itself: it may be quitting. `done`
+    // waits for it, so a quit does not end the app before the front is back.
+    private func giveFront(back app: NSRunningApplication, from terminal: SendBackTerminal,
+                           then done: @escaping () -> Void) {
+        guard let taker = terminal.host.bundleIdentifier, app.bundleIdentifier != taker,
+              app != NSRunningApplication.current, let url = app.bundleURL else { done(); return }
+        let deadline = Date().addingTimeInterval(1)
+        let timer = Timer(timeInterval: 0.05, repeats: true) { timer in
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == taker {
+                timer.invalidate()
+                Settings.log("send back: \(terminal.name) took the front, given back to "
+                             + (app.localizedName ?? url.lastPathComponent))
+                NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, _ in
+                    DispatchQueue.main.async(execute: done)
+                }
+            } else if Date() >= deadline {
+                timer.invalidate()
+                done()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    // Off the main thread. With no pane of its own to go by, `spawn` needs a window named; the
+    // first one listed, or a new window when there is none.
+    private static func openInWezTerm(_ cli: URL, typing line: String) -> Bool {
+        guard let list = wezterm(cli, ["list", "--format", "json"]).output else { return false }
+        let json = try? JSONSerialization.jsonObject(with: Data(list.utf8))
+        let panes = json as? [[String: Any]] ?? []
+        let window = panes.lazy.compactMap { $0["window_id"] as? Int }.first
+        let place = window.map { ["--window-id", String($0)] } ?? ["--new-window"]
+        guard let output = wezterm(cli, ["spawn"] + place).output,
+              let pane = Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            Settings.log("send back: WezTerm did not open a tab")
+            return false
+        }
+        // `--no-paste`: a bracketed paste would leave the line waiting at the prompt, not run.
+        let sent = wezterm(cli, ["send-text", "--no-paste", "--pane-id", String(pane), "--",
+                                 line + "\n"])
+        // A hung send may have typed the line: counted as sent, since resuming here as well would
+        // put two clients on one session.
+        if sent.hung { Settings.log("send back: WezTerm hung after the line, taken as sent") }
+        guard sent.output != nil || sent.hung else {
+            Settings.log("send back: WezTerm opened pane \(pane) but did not take the line")
+            return false
+        }
+        return true
+    }
+
+    // Standard output, nil when it fails or hangs; `hung` when it was ended after the timeout.
+    // `--no-auto-start`: otherwise, with the app not running, the CLI starts a windowless server
+    // and the tab opens where nobody sees it.
+    private static func wezterm(_ cli: URL,
+                                _ arguments: [String]) -> (output: String?, hung: Bool) {
+        let process = Process()
+        process.executableURL = cli
+        process.arguments = ["cli", "--no-auto-start"] + arguments
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return (nil, false) }
+        let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + weztermTimeout, execute: timeout)
+        var data = Data()
+        while data.count < 1 << 20 {
+            let chunk = output.fileHandleForReading.availableData
+            if chunk.isEmpty { break }
+            data += chunk
+        }
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
+        timeout.cancel()
+        guard process.terminationReason == .exit else { return (nil, true) }
+        return (process.terminationStatus == 0 ? String(decoding: data, as: UTF8.self) : nil, false)
+    }
+
     private func carry(_ plan: SendBackPlan, from tab: TerminalTab, processGroup: pid_t?,
-                       to terminal: SendBackTerminal, controller: OverlayController,
-                       done: @escaping (TeleportError?) -> Void) {
+                       to terminal: SendBackTerminal, front: NSRunningApplication?,
+                       controller: OverlayController, done: @escaping (TeleportError?) -> Void) {
         func open(_ line: String, then opened: @escaping (Bool) -> Void) {
-            run(appleScript: Self.openScript(typing: line, in: terminal),
-                what: "opening a tab in \(terminal.name)", host: terminal.host, then: opened)
+            self.open(line, in: terminal, front: front, then: opened)
         }
         switch plan {
         case .resume(let session, let line, let command):
@@ -542,6 +706,7 @@ final class TeleportEngine {
                 guard opened else {
                     Settings.log("send back: \(terminal.name) did not open a tab, attaching here again")
                     controller.newTab(directory: self.directory(folder), typing: command, run: true)
+                        .origin = tab.origin
                     done(.couldNotOpen(terminal.name))
                     return
                 }
@@ -579,6 +744,7 @@ final class TeleportEngine {
                         tab.type(command, enter: true)
                     } else {
                         controller.newTab(directory: self.directory(session.cwd), typing: command, run: true)
+                            .origin = tab.origin
                     }
                     done(.couldNotOpen(terminal.name))
                     return
