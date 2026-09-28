@@ -700,7 +700,7 @@ can be asked is: a page named exactly the text wins over a near one, and among e
 higher up. The first source's search page is the fallback."
 
 **Text language** is what Apple's text recognition reads the screen in: Automatic, or one of its
-languages. A game set to several (the Dofus preset reads French and English) shows as an item of
+languages. A game set to several (the Dofus 3 preset reads English and French) shows as an item of
 its own. **Game app** is the app the game runs in, picked from what is running, or "Any (choose the
 game by hand)". "Detect the game from the app in front" is what uses it, and "Otherwise use" names
 the game that answers when nothing recognisable is in front. The menu bar's **Lookup Game** submenu
@@ -728,8 +728,9 @@ added.
   spell's tooltip lines in English and in French (`Sell Price`, `Prix de vente`, `Use:`, `Equip:`,
   `Binds when`, `Lié quand`, `Requires`, `Item Level`, `Durability`, `Unique`, `Rank 1`, `15 Mana`,
   `Instant`, `30 sec cooldown`, `Tools:`, `Reagents:` and so on).
-- Dofus knows the line under an item's name (`Niveau 56 • Poil`), `POIDS`, `PRIX MOYEN` and the
-  `Épingler l'infobulle` hint.
+- Dofus 3 knows the line under an item's name (`Level 56 • Hair`, `Niveau 56 • Poil`), `WEIGHT`
+  and `POIDS`, `AVERAGE PRICE` and `PRIX MOYEN`, and the tooltip's pin hint. Dofus Retro has none
+  yet.
 - Old School RuneScape and RuneScape know the mouseover text's `2 more options` and RuneLite's
   `Weight:`, and strip what the mouseover text and RuneLite's box by the pointer write around a
   name: the action in front of it (`Use`, `Take`, `Wield`, `Attack`, `Talk-to`, `Chop down`,
@@ -750,17 +751,29 @@ overwrite: it comes in with fresh identifiers and sits next to what you already 
 
 A fresh install starts with the first of them, Dofus, configured.
 
-- **Dofus** (Dofus pour les Noobs, then DofusDB). Dofus pour les Noobs is a Weebly site, whose
-  sitemap gives every page name away in its slugs: the quest under your pointer is matched offline
-  against ~2500 pages, and the site's own `apps/search` answers for the rest. An item has no guide
-  page there, which is what [DofusDB](https://dofusdb.fr/fr), the encyclopedia, is for: the name in
-  an item's tooltip opens its page, as `dofusdb.fr/fr/database/object/649` for `Poils de Wo
-  Wabbit`. DofusDB has no index (some 22 000 items, 50 to a request), but its API finds an item by
-  name, with the accents the recognition dropped and an `i` it read as `l` forgiven (`Polls de Wo
-  Wabblt` still finds it), and by the name's longest word when a slip elsewhere keeps the whole name
-  from matching. It is detected from its address, and the address's first part is the language it
-  is asked in: `https://dofusdb.fr/en/database/objects?q={query}` for English, and `es`, `de` and
-  `pt` the same.
+- **Dofus**, two presets in a submenu of their own, both in English and reading English then
+  French text:
+  - **Dofus 3** (the Dofus Wiki, then DofusDB), the current game. The
+    [Dofus Wiki](https://dofuswiki.fandom.com) is an English Fandom wiki of some 31 000 articles,
+    about 2 000 of them quests with their steps, and items and monsters besides: its titles are
+    matched offline like any MediaWiki's. [DofusDB](https://dofusdb.fr/en), the encyclopedia, is
+    asked about items: the name in an item's tooltip opens its page, as
+    `dofusdb.fr/en/database/object/336` for `Gwandpa Wabbit's Staff`. DofusDB has no index (some
+    22 000 items, 50 to a request), but its API finds an item by name, with the accents the
+    recognition dropped and an `i` it read as `l` forgiven (`Gwandpa Wabblt's Staff` still finds
+    it), and by the name's longest word when a slip elsewhere keeps the whole name from matching.
+    It is detected from its address, and the address's first part is the language it is asked in:
+    `https://dofusdb.fr/fr/database/items?q={query}` for French, and `es`, `de` and `pt` the same.
+  - **Dofus Retro** (the 129Dofus Wiki), the 1.29 game Ankama runs next to Dofus 3, sometimes
+    called Dofus Classic. The [129Dofus Wiki](https://129dofus.fandom.com) has some 5 000
+    articles: items, monsters and areas, and about half the quests. DofusDB has no Retro data. Its
+    app is not known to the preset, so pick the game by hand or set its app in Settings, and it has
+    no tooltip patterns yet.
+
+  For French guides, [Dofus pour les Noobs](https://www.dofuspourlesnoobs.com) works as a source
+  from `https://www.dofuspourlesnoobs.com/apps/search?q={query}`: a Weebly site, whose sitemap gives
+  every page name away in its slugs, so a quest is matched offline against ~2 500 pages, with a
+  reader stylesheet of its own.
 - **World of Warcraft** (Wowhead), one preset per version because Wowhead keeps one database per
   version: Retail at `wowhead.com`, Classic (the Anniversary, Era and Hardcore realms) at
   `wowhead.com/classic`, Burning Crusade Classic at `/tbc`, Mists of Pandaria Classic at
@@ -1006,7 +1019,8 @@ front in the SlyTerm window, or, if it floats, its window shows with the others.
 - **The reader is per site.** SlyTerm carries a stylesheet for each of the two sites it was tuned
   on, Dofus pour les Noobs and Wowhead; one for MediaWiki, which serves the OSRS and RuneScape
   wikis, warcraft.wiki.gg and any Fandom wiki, with chrome and rails gone and the article at the
-  full width of the tab; and a generic one for everything else, which hides the header, the nav,
+  full width of the tab (on Fandom also its navigation, cover image and featured video, and a dark
+  Fandom theme is left as it is); and a generic one for everything else, which hides the header, the nav,
   the footer, the sidebar and the cookie banner and reads the rest in the system font. A light page
   is inverted rather than recoloured, so the guides keep their own colours and the screenshots are
   inverted back; a page that was already dark, Wowhead or a wiki in night mode, is left as it is.
@@ -1288,8 +1302,8 @@ The lookup modes (everything before `--guide-snapshot` below) take `--game <name
 you have configured or one of the presets `dofus`, `wow` or `osrs`, made up on the spot so a site
 can be tried out before it is added to Settings; without it they use the game the hotkey would.
 `--preset <name>` is always the preset as this build ships it, even when a game you configured has
-that name, so `--preset dofus` tries DofusDB next to a Dofus game stored before it had it, without
-reading the games you configured at all.
+that name, so `--preset dofus` tries the English sources next to a Dofus game stored with the
+French ones, without reading the games you configured at all.
 
 ```sh
 B=dist/SlyTerm.app/Contents/MacOS/SlyTerm
@@ -1304,7 +1318,7 @@ $B --lookup                               # the whole pipeline at the pointer, o
 $B --lookup 360 531                       # same at a screen point (origin bottom-left)
 $B --search "Abyssal whip" --game osrs    # what each source that can be asked resolves it to,
                                           # and the answer the lookup would take
-$B --search "Poils de Wo Wabbit" --preset dofus
+$B --search "Gwandpa Wabbit's Staff" --preset dofus
                                           # the same with both of the Dofus preset's sites, as
                                           # this build ships it
 $B --index                                # every game's sources, their kind and their index size
@@ -1823,6 +1837,13 @@ first launch. Screen Recording has to be granted again, and any hook or script t
 `hoverterm://` or `$HOVERTERM_TAB_ID` needs the new spelling. The old
 `~/Library/Application Support/HoverTerm` cache, `~/Library/Logs/HoverTerm.log` and the
 `com.charlesmelki.hoverterm` preferences can be deleted once the old app is gone.
+
+### Dofus in English
+
+The Dofus preset was French (Dofus pour les Noobs and DofusDB in French) before it became Dofus 3
+in English. A Dofus game already stored keeps the sources it has; to switch, remove it and add
+Dofus 3 from `+`, or add the Dofus Wiki to it. A new list, and a game added from the preset, get
+the English ones.
 
 ### DofusDB in stored Dofus games
 

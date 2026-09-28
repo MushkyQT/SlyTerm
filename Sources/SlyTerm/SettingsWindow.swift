@@ -963,13 +963,16 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
             item.target = self
             item.representedObject = preset.rawValue
             if let family = preset.family {
+                let members = LookupPresets.Preset.allCases.filter { $0.family == family }
+                let sameSite = Set(members.map(\.siteName)).count == 1
                 if families[family] == nil {
-                    let parent = NSMenuItem(title: "\(family) (\(preset.siteName))", action: nil, keyEquivalent: "")
+                    let title = sameSite ? "\(family) (\(preset.siteName))" : family
+                    let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                     parent.submenu = NSMenu(title: family)
                     menu.addItem(parent)
                     families[family] = parent.submenu
                 }
-                item.title = preset.variant
+                item.title = sameSite ? preset.variant : "\(preset.variant) (\(preset.siteName))"
                 families[family]?.addItem(item)
             } else {
                 item.title = "\(preset.title) (\(preset.siteName))"

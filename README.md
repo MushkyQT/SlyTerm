@@ -89,7 +89,8 @@ key each.
 
 Presets are included for:
 
-- **Dofus**: Dofus pour les Noobs and DofusDB
+- **Dofus**: Dofus 3 with the Dofus Wiki and DofusDB, and Dofus Retro with the 129Dofus Wiki, in
+  English
 - **World of Warcraft**, every version Wowhead covers: Retail, Classic, Burning Crusade Classic,
   Mists of Pandaria Classic and WoW: Forever
 - **Old School RuneScape**: the OSRS Wiki
@@ -259,8 +260,9 @@ or each tap also opens a dictionary panel.
 ## Credits
 
 Terminal emulation is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza.
-The lookup presets open pages from [Dofus pour les Noobs](https://www.dofuspourlesnoobs.com),
-[DofusDB](https://dofusdb.fr), [Wowhead](https://www.wowhead.com), the
+The lookup presets open pages from the [Dofus Wiki](https://dofuswiki.fandom.com), the
+[129Dofus Wiki](https://129dofus.fandom.com), [DofusDB](https://dofusdb.fr),
+[Wowhead](https://www.wowhead.com), the
 [OSRS Wiki](https://oldschool.runescape.wiki) and the [RuneScape Wiki](https://runescape.wiki).
 SlyTerm is not affiliated with any of these sites, or with Ankama, Blizzard Entertainment or Jagex.
 

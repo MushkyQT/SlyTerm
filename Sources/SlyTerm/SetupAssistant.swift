@@ -731,8 +731,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         case .wowhead:
             searchURL = "\(home)/search?q={query}"
         case .dofusDB:
-            let path = LookupPresets.dofusDB().searchURL
-                .replacingOccurrences(of: LookupPresets.dofusDB().home.absoluteString, with: "")
+            let sample = LookupPresets.dofusDB(language: "en")
+            let path = sample.searchURL.replacingOccurrences(of: sample.home.absoluteString, with: "")
             searchURL = home + path
         case .weebly:
             searchURL = "\(home)/apps/search?q={query}"
