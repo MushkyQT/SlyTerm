@@ -19,7 +19,8 @@ final class ActivityMonitor: ActivityMonitoring {
 
     // Keyed with start time because pids are reused; `KERN_PROCARGS2` costs a megabyte per call.
     private var inspected: [pid_t: (started: Date?, arguments: SessionDiscovery.ProcessArguments?)] = [:]
-    private var tails: [String: (size: UInt64, modified: Date?, reading: TranscriptTail.Reading)] = [:]
+    private var tails: [String: (url: URL, size: UInt64, modified: Date?, reading: TranscriptTail.Reading)] = [:]
+    private let files = AgentDiscovery.Cache()
     private(set) var reads = 0
 
     func start(tabs: @escaping () -> [TerminalTab], visible: @escaping () -> Bool) {
@@ -69,11 +70,14 @@ final class ActivityMonitor: ActivityMonitoring {
         guard !terminals.isEmpty else { return finish() }
         scanning = true
         // Main thread: `ptsname` returns a shared static buffer.
-        let ttys = Dictionary(terminals.compactMap { tab in tab.ttyName.map { (tab.id, $0) } },
-                              uniquingKeysWith: { (first: String, _: String) in first })
+        let probes = Dictionary(terminals.compactMap { tab in
+            tab.ttyName.map {
+                (tab.id, TabProbe(tty: $0, foregroundGroup: tab.foregroundProcessGroup, titles: [:], screen: nil))
+            }
+        }, uniquingKeysWith: { (first: TabProbe, _: TabProbe) in first })
         queue.async { [weak self] in
             guard let self else { return }
-            let found = self.scan(tabs: ttys)
+            let found = self.scan(tabs: probes)
             DispatchQueue.main.async {
                 self.scanning = false
                 self.apply(found)
@@ -94,13 +98,14 @@ final class ActivityMonitor: ActivityMonitoring {
         for completion in waiting { completion() }
     }
 
-    private func scan(tabs: [UUID: String]) -> [UUID: AgentActivity] {
+    private func scan(tabs: [UUID: TabProbe]) -> [UUID: AgentActivity] {
         reads = 0
         var touched: Set<pid_t> = []
-        let hosted = SessionDiscovery.hostedSessions(tabs: tabs) { pid in
+        let hosted = SessionDiscovery.hostedSessions(tabs: tabs, inspect: { pid in
             touched.insert(pid)
             return inspect(pid)
-        }
+        }, files: files)
+        files.prune()
         var activities: [UUID: AgentActivity] = [:]
         for (tab, found) in hosted {
             activities[tab] = ActivityMonitor.activity(for: found.session, reading: reading(for: found.session),
@@ -116,10 +121,17 @@ final class ActivityMonitor: ActivityMonitoring {
     func scanEverything() -> [(session: AgentSessionInfo, activity: AgentActivity)] {
         reads = 0
         var touched: Set<pid_t> = []
-        let sessions = SessionDiscovery.liveSessions(inspect: { pid in
+        let table = SessionDiscovery.ProcessTable()
+        let inspect = { (pid: pid_t) -> SessionDiscovery.ProcessArguments? in
             touched.insert(pid)
-            return inspect(pid)
-        }).sorted { $0.startedAt > $1.startedAt }
+            return self.inspect(pid)
+        }
+        let claude = SessionDiscovery.liveSessions(in: table, inspect: inspect)
+            .sorted { $0.startedAt > $1.startedAt }
+        let agents = SessionDiscovery.runningAgents(in: table, besides: claude, inspect: inspect, cache: files)
+            .sorted { $0.startedAt > $1.startedAt }
+        files.prune()
+        let sessions = claude + agents
         let rows = sessions.map { ($0, ActivityMonitor.activity(for: $0, reading: reading(for: $0))) }
         inspected = inspected.filter { touched.contains($0.key) }
         let live = Set(sessions.map(\.sessionID))
@@ -136,34 +148,45 @@ final class ActivityMonitor: ActivityMonitoring {
     }
 
     private func reading(for session: AgentSessionInfo) -> TranscriptTail.Reading? {
-        guard let url = SessionDiscovery.transcriptURL(cwd: session.cwd, sessionID: session.sessionID) else {
-            return nil
-        }
+        let found = session.agent == .claude
+            ? SessionDiscovery.transcriptURL(cwd: session.cwd, sessionID: session.sessionID)
+            : session.transcript
+        guard let url = found else { return nil }
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         let size = (attributes?[.size] as? NSNumber)?.uint64Value ?? 0
         let modified = attributes?[.modificationDate] as? Date
-        if let cached = tails[session.sessionID], cached.size == size, cached.modified == modified {
+        if let cached = tails[session.sessionID], cached.url == url, cached.size == size,
+           cached.modified == modified {
             return cached.reading
         }
-        let reading = TranscriptTail.read(url)
+        let reading: TranscriptTail.Reading
+        switch session.agent {
+        case .claude: reading = TranscriptTail.read(url)
+        case .codex: reading = CodexRollout.read(url)
+        case .omp, .pi: reading = PiSession.read(url)
+        case .gemini, .qwen: return nil
+        }
         reads += 1
-        tails[session.sessionID] = (size, modified, reading)
+        tails[session.sessionID] = (url, size, modified, reading)
         return reading
     }
 
+    // Claude's status is its registry's; the other agents' is read from their session files.
     static func activity(for session: AgentSessionInfo, reading: TranscriptTail.Reading?,
                          processGroup: pid_t? = nil) -> AgentActivity {
-        AgentActivity(agent: session.agent,
-                      status: session.status,
-                       since: session.statusUpdatedAt,
-                       sessionID: session.sessionID,
-                       pid: session.pid,
-                       isBackground: session.isBackground,
-                       processGroup: processGroup,
-                       doing: session.status == .working ? reading?.doing : nil,
-                       request: session.status == .waiting ? (reading?.request ?? .unknown) : nil,
-                       lastMessage: reading?.lastMessage,
-                       lastTurnDuration: reading?.lastTurnDuration)
+        let claude = session.agent == .claude
+        let status = claude ? session.status : (reading?.status ?? .unknown)
+        return AgentActivity(agent: session.agent,
+                             status: status,
+                             since: claude ? session.statusUpdatedAt : reading?.statusSince,
+                             sessionID: session.sessionID,
+                             pid: session.pid,
+                             isBackground: session.isBackground,
+                             processGroup: processGroup,
+                             doing: status == .working ? reading?.doing : nil,
+                             request: status == .waiting ? (reading?.request ?? .unknown) : nil,
+                             lastMessage: reading?.lastMessage,
+                             lastTurnDuration: reading?.lastTurnDuration)
     }
 
     private func apply(_ found: [UUID: AgentActivity]) {

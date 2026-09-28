@@ -23,7 +23,8 @@ enum SessionsCLI {
             return SessionDiscovery.agentSession(pid: pid).map { [.agent($0)] } ?? []
         }
         if let tty = value(of: "--tty", in: args) {
-            return SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? []
+            let agents = SessionDiscovery.agentSessions(tty: tty).map(TeleportCandidate.agent)
+            return agents + (SessionDiscovery.shellTab(tty: tty).map { [.shell($0)] } ?? [])
         }
         return nil
     }
@@ -54,7 +55,7 @@ enum SessionsCLI {
         let action = TeleportAction.primary(for: candidate).title
         switch candidate {
         case .agent(let session):
-            return [session.isBackground ? "bg" : "claude",
+            return [kind(session),
                     session.host.displayName,
                     name(session.status),
                     String(session.pid),
@@ -74,6 +75,11 @@ enum SessionsCLI {
                     action,
                     tab.foregroundCommand ?? tab.shellName]
         }
+    }
+
+    private static func kind(_ session: AgentSessionInfo) -> String {
+        guard session.agent == .claude else { return session.agent.rawValue }
+        return session.isBackground ? "bg" : "claude"
     }
 
     private static func folder(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
@@ -102,7 +108,10 @@ enum SessionsCLI {
             ]
             switch candidate {
             case .agent(let session):
-                object["kind"] = session.isBackground ? "bg" : "claude"
+                object["kind"] = kind(session)
+                object["agent"] = session.agent.rawValue
+                object["transcript"] = session.transcript?.path ?? NSNull()
+                object["turnsRunElsewhere"] = session.turnsRunElsewhere
                 object["pid"] = session.pid
                 object["sessionId"] = session.sessionID
                 object["name"] = session.name

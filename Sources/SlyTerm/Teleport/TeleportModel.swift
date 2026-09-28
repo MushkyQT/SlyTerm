@@ -100,6 +100,8 @@ struct AgentSessionInfo: Equatable {
     var statusUpdatedAt: Date?
     var agent: AgentKind = .claude
     var transcript: URL? = nil
+    // Codex in server mode: stopping this process leaves the turn running in `codex app-server`.
+    var turnsRunElsewhere: Bool = false
 }
 
 struct ShellTabInfo: Equatable {
@@ -159,13 +161,15 @@ enum TeleportAction: Equatable {
     static func primary(for candidate: TeleportCandidate) -> TeleportAction {
         if candidate.isAlreadyHere { return .switchTo }
         switch candidate {
-        case .agent(let s): return s.isBackground ? .attach : .move
+        case .agent(let s): return s.agent == .claude && s.isBackground ? .attach : .move
         case .shell: return .openFolder
         }
     }
 
     static func secondary(for candidate: TeleportCandidate) -> TeleportAction? {
-        guard case .agent(let s) = candidate, !s.isBackground else { return nil }
+        guard case .agent(let s) = candidate, !s.isBackground, s.agent.copyCommand(id: s.sessionID) != nil else {
+            return nil
+        }
         return .copy
     }
 
