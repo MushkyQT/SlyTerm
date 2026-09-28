@@ -349,15 +349,20 @@ final class TeleportEngine {
         }
         var stayed: [(tab: TerminalTab, error: TeleportError)] = []
         let tabs = tabs.filter { tab in
+            guard controller.terminals.contains(where: { $0 === tab }) else { return false }
             guard inFlight.insert("tab:" + tab.id.uuidString).inserted else {
-                stayed.append((tab, .inProgress))
+                stayed.append((tab, .alreadySending))
                 return false
             }
             return true
         }
+        // Always later, never from inside this call: a quit replies to AppKit from `done`, and a
+        // reply before `.terminateLater` is returned is lost.
         let finish: () -> Void = { [weak self] in
-            tabs.forEach { self?.inFlight.remove("tab:" + $0.id.uuidString) }
-            done(stayed)
+            DispatchQueue.main.async {
+                tabs.forEach { self?.inFlight.remove("tab:" + $0.id.uuidString) }
+                done(stayed)
+            }
         }
         guard !tabs.isEmpty else { finish(); return }
         let terminal = SendBackTerminal.current
@@ -372,6 +377,13 @@ final class TeleportEngine {
                 var plans: [(TerminalTab, SendBackPlan, pid_t?)] = []
                 for tab in tabs {
                     let found = hosted[tab.id]
+                    // Without its session the plan would be a folder, and the agent would be left
+                    // running here, or killed by the quit.
+                    if found == nil, Self.sendsBackAgent(tab) {
+                        Settings.log("send back: tab \(tab.id.uuidString)'s agent was not found, stays")
+                        stayed.append((tab, .notFound("That session")))
+                        continue
+                    }
                     var session = found?.session
                     if let status = tab.activity?.status { session?.status = status }
                     switch Self.sendBackPlan(session: session, folder: tab.currentDirectory,
@@ -467,11 +479,12 @@ final class TeleportEngine {
     }
 
     // The folder comes from another process's registry or cwd: quoted for the shell, and left
-    // out if it holds anything that could end the line.
+    // out if it holds anything that could end the line. `;`, not `&&`: the other terminal may not
+    // be allowed into the folder, and every agent finds its session from anywhere.
     static func sendBackLine(_ command: String?, in folder: String) -> String {
         let cd = folder.hasPrefix("/") && printable(folder) == folder && !folder.contains("\t")
             ? "cd '" + folder.replacingOccurrences(of: "'", with: #"'\''"#) + "'" : nil
-        return [cd, command].compactMap { $0 }.joined(separator: " && ")
+        return [cd, command].compactMap { $0 }.joined(separator: "; ")
     }
 
     static func openScript(typing line: String, in terminal: SendBackTerminal) -> String {
@@ -504,29 +517,17 @@ final class TeleportEngine {
         }
         switch plan {
         case .resume(let session, let line, let command):
-            guard SessionDiscovery.isRunning(session) else {
-                Settings.log("send back: \(Self.name(of: session)) (pid \(session.pid)) is gone")
-                done(.notFound(Self.name(of: session)))
-                return
-            }
-            Settings.log("send back: stopping \(Self.name(of: session)) (pid \(session.pid)) "
-                         + "in tab \(tab.id.uuidString)")
-            stopHere(session, in: tab, processGroup: processGroup) { stopped in
-                guard stopped else {
-                    Settings.log("send back: pid \(session.pid) would not stop, left here")
-                    done(.couldNotStopHere(pid: session.pid, agent: session.agent))
-                    return
-                }
-                open(line) { opened in
-                    guard opened else {
-                        Settings.log("send back: \(terminal.name) did not open a tab, resuming here again")
-                        tab.type(command, enter: true)
-                        done(.couldNotOpen(terminal.name))
+            DispatchQueue.global(qos: .userInitiated).async {
+                let running = SessionDiscovery.isRunning(session)
+                DispatchQueue.main.async {
+                    guard running else {
+                        Settings.log("send back: \(Self.name(of: session)) (pid \(session.pid)) is gone")
+                        done(.notFound(Self.name(of: session)))
                         return
                     }
-                    Settings.log("send back: \(Self.name(of: session)) resumed in \(terminal.name)")
-                    controller.close(tab)
-                    done(nil)
+                    self.resume(session, line: line, command: command, from: tab,
+                                processGroup: processGroup, to: terminal, controller: controller,
+                                open: open, done: done)
                 }
             }
         case .fork(let line):
@@ -537,7 +538,7 @@ final class TeleportEngine {
             }
         case .attach(let line, let command, let folder):
             // Detached first, so the session never has two clients at once.
-            controller.close(tab)
+            controller.close(tab, replacementRunsStartup: false)
             open(line) { opened in
                 guard opened else {
                     Settings.log("send back: \(terminal.name) did not open a tab, attaching here again")
@@ -553,7 +554,38 @@ final class TeleportEngine {
                 guard opened else { done(.couldNotOpen(terminal.name)); return }
                 Settings.log("send back: opened \(tab.currentDirectory) in \(terminal.name)"
                              + (closesTab ? "" : ", tab kept for what it is running"))
-                if closesTab { controller.close(tab) }
+                if closesTab { controller.close(tab, replacementRunsStartup: false) }
+                done(nil)
+            }
+        }
+    }
+
+    private func resume(_ session: AgentSessionInfo, line: String, command: String, from tab: TerminalTab,
+                        processGroup: pid_t?, to terminal: SendBackTerminal, controller: OverlayController,
+                        open: @escaping (String, @escaping (Bool) -> Void) -> Void,
+                        done: @escaping (TeleportError?) -> Void) {
+        Settings.log("send back: stopping \(Self.name(of: session)) (pid \(session.pid)) "
+                     + "in tab \(tab.id.uuidString)")
+        stopHere(session, in: tab, processGroup: processGroup) { stopped in
+            guard stopped else {
+                Settings.log("send back: pid \(session.pid) would not stop, left here")
+                done(.couldNotStopHere(pid: session.pid, agent: session.agent))
+                return
+            }
+            open(line) { opened in
+                guard opened else {
+                    Settings.log("send back: \(terminal.name) did not open a tab, resuming here again")
+                    // Only at the tab's own prompt: after `claude && …` something else is in front.
+                    if controller.terminals.contains(where: { $0 === tab }), !tab.isRunningForegroundJob {
+                        tab.type(command, enter: true)
+                    } else {
+                        controller.newTab(directory: self.directory(session.cwd), typing: command, run: true)
+                    }
+                    done(.couldNotOpen(terminal.name))
+                    return
+                }
+                Settings.log("send back: \(Self.name(of: session)) resumed in \(terminal.name)")
+                controller.close(tab, replacementRunsStartup: false)
                 done(nil)
             }
         }

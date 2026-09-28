@@ -828,7 +828,8 @@ final class OverlayController: NSObject, TabStripDelegate {
         syncFocusReports()
     }
 
-    func close(_ tab: Tab) {
+    // A tab sent elsewhere is not replaced by a fresh `claude` from the startup command.
+    func close(_ tab: Tab, replacementRunsStartup: Bool = true) {
         if let web = tab as? GuideTab { closeWebTab(web); return }
         guard let index = terminals.firstIndex(where: { $0.id == tab.id }) else { return }
         // Read before terminate(): a killed shell has no cwd left.
@@ -842,7 +843,7 @@ final class OverlayController: NSObject, TabStripDelegate {
         ActivityAnswer.forget(tab: tab.id)
         attentionDidChange()
         if terminals.isEmpty {
-            newTab(directory: replacement)
+            newTab(directory: replacement, runStartupCommand: replacementRunsStartup)
         } else if webInFront != nil {
             selectedIndex = min(selectedIndex > index ? selectedIndex - 1 : selectedIndex, terminals.count - 1)
         } else {

@@ -526,8 +526,9 @@ installed. No other terminal can be told to open a tab and type into it.
 - **An agent's conversation** is stopped here the way a move stops it (`SIGTERM`, 5 s, then for
   Claude Code two Ctrl-C into SlyTerm's own tab while Claude is still in front of it, 3 s more).
   Then a new tab opens in iTerm2's front window, or a new iTerm2 window when there is none, or a new
-  Terminal window, and `cd '<folder>' && <resume command>` is typed and run there. SlyTerm's tab
-  closes. It asks before interrupting a session that is working or waiting, like a move, with the
+  Terminal window, and `cd '<folder>'; <resume command>` is typed and run there (`;`, so the
+  session still resumes where that terminal is not allowed into the folder). SlyTerm's tab closes,
+  and when it was the last one the tab that replaces it does not run the startup command. It asks before interrupting a session that is working or waiting, like a move, with the
   same setting.
 - **A background Claude you attached** is not stopped: SlyTerm closes its tab, which detaches it,
   and runs `claude attach <id>` in the other terminal.
@@ -540,12 +541,14 @@ and leaves the SlyTerm tab running.
 
 Nothing is stopped until the other terminal has answered an Apple event, which is also when macOS
 asks, the first time, whether SlyTerm may control it. If the tab still does not open after the agent
-has stopped, the resume command is typed back into SlyTerm's tab and a toast says so. The other
+has stopped, the resume command is typed back into SlyTerm's tab, or into a new one when something
+else is in front of that tab's shell, and a toast says so. The other
 terminal is not brought to the front, so the game keeps the screen. The folder is shell-quoted,
 and left out if it contains a control character; the session id is checked as for a move.
 
 "Send Back and Quit" is in the quit dialog, as its default button, whenever a tab runs an agent that
-can be resumed elsewhere. It sends every such tab back at once, then quits; if one of them could not
+can be resumed elsewhere. It sends every such tab back at once, without asking about each agent
+again (the dialog says a turn under way is interrupted), then quits; if one of them could not
 be sent, SlyTerm stays open, the others are already gone, and a toast says why. The other tabs come
 back at the next launch as usual. The dialog only appears while "Ask before quitting" is on.
 
@@ -1310,9 +1313,6 @@ open -g "slyterm://send-back?tab=2&mode=copy" # a forked copy of tab 2's session
 Inside a Claude Code conversation in SlyTerm, `! open -g
 "slyterm://send-back?session=$CLAUDE_CODE_SESSION_ID"` sends it back. `tab=` takes a tab's
 `SLYTERM_TAB_ID` or its number; with neither `tab=` nor `session=` nothing happens.
-
-```sh
-```
 
 `-g` keeps the current app in front.
 

@@ -218,6 +218,7 @@ enum TeleportError: Error, Equatable {
     case noController
     case inProgress
     case cannotSendBack(AgentKind)
+    case alreadySending
     case couldNotStopHere(pid: pid_t, agent: AgentKind)
     case couldNotOpen(String)
 
@@ -231,6 +232,7 @@ enum TeleportError: Error, Equatable {
         case .noAttachID: return "That background session has no id to attach to"
         case .noController: return "SlyTerm is not ready yet"
         case .inProgress: return "Already bringing that one in"
+        case .alreadySending: return "Already sending that one back"
         case .cannotSendBack(let agent): return "\(agent.name) has no saved session to resume elsewhere"
         case .couldNotStopHere(let pid, let agent):
             return "Couldn't stop \(agent.name) (pid \(pid)), it is still running here"

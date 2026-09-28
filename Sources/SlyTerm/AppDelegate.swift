@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var hotkeyOK: [String: Bool] = [:]
     private var pendingURLs: [URL] = []
+    private var quitPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.shared.decideSetup()
@@ -49,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let s = Settings.shared
+        // A second ⌘Q while tabs are being sent back.
+        guard !quitPending else { return .terminateCancel }
         guard s.confirmQuit, !isSystemInitiatedQuit else { return .terminateNow }
         let busy = controller.terminals.filter { $0.isRunningForegroundJob }.count
         if controller.terminals.count <= 1, busy == 0 { return .terminateNow }
@@ -82,10 +85,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let response = alert.runModal()
         let sendBack = !agents.isEmpty && response == .alertFirstButtonReturn
         let quit = sendBack || response == (agents.isEmpty ? .alertFirstButtonReturn : .alertSecondButtonReturn)
-        if quit, alert.suppressionButton?.state == .on { s.confirmQuit = false }
-        guard sendBack else { return quit ? .terminateNow : .terminateCancel }
-        TeleportEngine.shared.sendBack(agents, copy: false, confirm: false) { stayed in
+        let suppress = alert.suppressionButton?.state == .on
+        guard sendBack else {
+            if quit, suppress { s.confirmQuit = false }
+            return quit ? .terminateNow : .terminateCancel
+        }
+        quitPending = true
+        TeleportEngine.shared.sendBack(agents, copy: false, confirm: false) { [weak self] stayed in
+            self?.quitPending = false
             guard let first = stayed.first else {
+                // Only now: the dialog is the only place Send Back and Quit is offered.
+                if suppress { s.confirmQuit = false }
                 NSApp.reply(toApplicationShouldTerminate: true)
                 return
             }
