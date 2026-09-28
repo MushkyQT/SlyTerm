@@ -9,6 +9,11 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Added
 
+- Send a session back: right-click a tab and choose "Send Back to iTerm2" to stop its agent here
+  and resume it in a new iTerm2 tab, or "Copy to iTerm2" for a fork. The menu bar item has "Send Tab
+  Back to iTerm2", the quit dialog has "Send Back and Quit" whenever a tab runs an agent, and
+  `slyterm://send-back?session=<id>` does it from a script. Settings › General › Other terminals
+  chooses iTerm2 or Terminal. `--sessions … --send-back` prints what it would do.
 - A setup assistant on the first launch of a fresh install: whether you play games with SlyTerm
   open and which presets to add, a short form for another game (a name and a wiki or site
   address, probed for its search and index), and the main shortcuts. Settings › General › Run Setup

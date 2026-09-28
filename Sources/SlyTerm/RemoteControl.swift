@@ -57,6 +57,7 @@ enum RemoteControl {
                 controller.openWebTab(page, select: true, focusAddress: false)
             case "playpause": controller.playPause()
             case "teleport": TeleportEngine.shared.handleRemote(url)
+            case "send-back", "sendback": TeleportEngine.shared.handleSendBack(url)
             default: break
             }
         }

@@ -232,11 +232,13 @@ final class TeleportEngine {
     private func waitForExit(of pid: pid_t, upTo timeout: TimeInterval, then done: @escaping (Bool) -> Void) {
         if Self.hasExited(pid) { done(true); return }
         let deadline = Date().addingTimeInterval(timeout)
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { timer in
             if Self.hasExited(pid) { timer.invalidate(); done(true); return }
             if Date() >= deadline { timer.invalidate(); done(false) }
         }
         timer.tolerance = 0.02
+        // `.common`: while a quit waits on a send-back, the run loop is in a modal mode.
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     // A zombie counts as gone: its transcript is complete, and its shell may not reap it until
@@ -249,17 +251,20 @@ final class TeleportEngine {
         return info.kp_proc.p_stat == SZOMB
     }
 
-    private func confirmInterrupt(_ session: AgentSessionInfo) -> Bool {
+    private func confirmInterrupt(_ session: AgentSessionInfo, sendingBack: Bool = false) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
         let name = session.agent.name
         let alert = NSAlert()
         alert.messageText = session.status == .working ? "\(name) is working in that tab"
             : "\(name) is waiting for your answer in that tab"
-        alert.informativeText = "Moving it now interrupts the current turn; what \(name) has said "
-            + "so far is kept."
-            + (session.agent == .claude ? " To move it without interrupting, type /bg in that tab "
-                + "first and attach it here instead." : "")
-        alert.addButton(withTitle: "Move")
+        alert.informativeText = (sendingBack ? "Sending it back" : "Moving it")
+            + " now interrupts the current turn; what \(name) has said so far is kept."
+        if session.agent == .claude {
+            alert.informativeText += sendingBack
+                ? " To send it without interrupting, type /bg in that tab first."
+                : " To move it without interrupting, type /bg in that tab first and attach it here instead."
+        }
+        alert.addButton(withTitle: sendingBack ? "Send Back" : "Move")
         alert.addButton(withTitle: "Cancel")
         alert.window.level = Settings.shared.dialogLevel
         return alert.runModal() == .alertFirstButtonReturn
@@ -310,15 +315,21 @@ final class TeleportEngine {
         }
     }
 
-    private func run(appleScript source: String, what: String, host: TeleportHost) {
+    private func run(appleScript source: String, what: String, host: TeleportHost,
+                     then done: ((Bool) -> Void)? = nil) {
         appleScript.async { [weak self] in
             var error: NSDictionary?
-            _ = NSAppleScript(source: source)?.executeAndReturnError(&error)
-            guard let error else { return }
+            let script = NSAppleScript(source: source)
+            _ = script?.executeAndReturnError(&error)
+            guard script != nil, let error else {
+                DispatchQueue.main.async { done?(script != nil) }
+                return
+            }
             let code = error[NSAppleScript.errorNumber] as? Int
             let message = error[NSAppleScript.errorMessage] as? String ?? "\(error)"
             DispatchQueue.main.async {
                 Settings.log("teleport: \(what) failed (\(code.map(String.init) ?? "?")): \(message)")
+                done?(false)
                 guard code == Self.notPermitted, let self, !self.toldAboutAutomation else { return }
                 self.toldAboutAutomation = true
                 Toast.shared.show("Allow SlyTerm to control \(host.displayName) in " +
@@ -326,6 +337,276 @@ final class TeleportEngine {
                                   near: NSEvent.mouseLocation, tint: .systemOrange)
             }
         }
+    }
+
+    // Main thread. `done` gets the tabs that stayed here, and why.
+    func sendBack(_ tabs: [TerminalTab], copy: Bool, confirm: Bool,
+                  done: @escaping ([(tab: TerminalTab, error: TeleportError)]) -> Void) {
+        guard let controller else {
+            Settings.log("send back: asked for before the overlay exists")
+            done(tabs.map { ($0, .noController) })
+            return
+        }
+        var stayed: [(tab: TerminalTab, error: TeleportError)] = []
+        let tabs = tabs.filter { tab in
+            guard inFlight.insert("tab:" + tab.id.uuidString).inserted else {
+                stayed.append((tab, .inProgress))
+                return false
+            }
+            return true
+        }
+        let finish: () -> Void = { [weak self] in
+            tabs.forEach { self?.inFlight.remove("tab:" + $0.id.uuidString) }
+            done(stayed)
+        }
+        guard !tabs.isEmpty else { finish(); return }
+        let terminal = SendBackTerminal.current
+        // Main thread: ptsname returns a shared static buffer.
+        let probes = Dictionary(tabs.compactMap { tab in
+            tab.ttyName.map { (tab.id, TabProbe(tty: $0, foregroundGroup: tab.foregroundProcessGroup,
+                                                titles: tab.titleStates, screen: nil)) }
+        }, uniquingKeysWith: { first, _ in first })
+        DispatchQueue.global(qos: .userInitiated).async {
+            let hosted = SessionDiscovery.hostedSessions(tabs: probes)
+            DispatchQueue.main.async {
+                var plans: [(TerminalTab, SendBackPlan, pid_t?)] = []
+                for tab in tabs {
+                    let found = hosted[tab.id]
+                    var session = found?.session
+                    if let status = tab.activity?.status { session?.status = status }
+                    switch Self.sendBackPlan(session: session, folder: tab.currentDirectory,
+                                             busy: tab.isRunningForegroundJob, copy: copy) {
+                    case .success(let plan): plans.append((tab, plan, found?.processGroup))
+                    case .failure(let error):
+                        Settings.log("send back: tab \(tab.id.uuidString) stays: \(error.message)")
+                        stayed.append((tab, error))
+                    }
+                }
+                if confirm, Settings.shared.teleportConfirmBusy {
+                    plans.removeAll { tab, plan, _ in
+                        guard case .resume(let session, _, _) = plan, session.status.interrupts,
+                              !session.turnsRunElsewhere,
+                              !self.confirmInterrupt(session, sendingBack: true) else { return false }
+                        stayed.append((tab, .declined))
+                        return true
+                    }
+                }
+                guard !plans.isEmpty else { finish(); return }
+                // Asked before anything is stopped: this is also what brings up the Automation
+                // prompt the first time.
+                self.run(appleScript: "tell application \"\(terminal.name)\" to count windows",
+                         what: "reaching \(terminal.name)", host: terminal.host) { reached in
+                    guard reached else {
+                        stayed += plans.map { ($0.0, .couldNotOpen(terminal.name)) }
+                        finish()
+                        return
+                    }
+                    let group = DispatchGroup()
+                    for (tab, plan, processGroup) in plans {
+                        group.enter()
+                        self.carry(plan, from: tab, processGroup: processGroup, to: terminal,
+                                   controller: controller) { error in
+                            if let error { stayed.append((tab, error)) }
+                            group.leave()
+                        }
+                    }
+                    group.notify(queue: .main, execute: finish)
+                }
+            }
+        }
+    }
+
+    func sendBack(_ tab: TerminalTab, copy: Bool = false) {
+        let terminal = SendBackTerminal.current
+        sendBack([tab], copy: copy, confirm: true) { stayed in
+            MainActor.assumeIsolated {
+                if let error = stayed.first?.error {
+                    Toast.shared.show(error.message, near: NSEvent.mouseLocation, tint: .systemOrange)
+                } else {
+                    Toast.shared.show((copy ? "Copied to " : "Sent to ") + terminal.name,
+                                      near: NSEvent.mouseLocation)
+                }
+            }
+        }
+    }
+
+    // A tab counts when its agent can be resumed elsewhere; the quit alert offers it.
+    static func sendsBackAgent(_ tab: TerminalTab) -> Bool {
+        guard let activity = tab.activity else { return false }
+        if activity.agent == .claude, activity.isBackground { return true }
+        return Safe.sessionID(activity.sessionID)
+            .flatMap { activity.agent.resumeCommand(id: $0) } != nil
+    }
+
+    static func sendBackPlan(session: AgentSessionInfo?, folder: String, busy: Bool,
+                             copy: Bool) -> Result<SendBackPlan, TeleportError> {
+        guard let session else {
+            return .success(.folder(line: sendBackLine(nil, in: folder), closesTab: !copy && !busy))
+        }
+        let folder = TerminalTab.isUsableDirectory(session.cwd) ? session.cwd : folder
+        if session.agent == .claude, session.isBackground {
+            guard !copy else { return .failure(.cannotCopy(session.agent)) }
+            guard let job = session.attachID.flatMap(Safe.attachID) else { return .failure(.noAttachID) }
+            let command = "claude attach \(job)"
+            return .success(.attach(line: sendBackLine(command, in: folder), command: command,
+                                    folder: folder))
+        }
+        guard let id = Safe.sessionID(session.sessionID) else {
+            return .failure(.cannotSendBack(session.agent))
+        }
+        if copy {
+            guard let command = session.agent.copyCommand(id: id) else {
+                return .failure(.cannotCopy(session.agent))
+            }
+            return .success(.fork(line: sendBackLine(command, in: folder)))
+        }
+        guard let command = session.agent.resumeCommand(id: id) else {
+            return .failure(.cannotSendBack(session.agent))
+        }
+        return .success(.resume(session, line: sendBackLine(command, in: folder), command: command))
+    }
+
+    // The folder comes from another process's registry or cwd: quoted for the shell, and left
+    // out if it holds anything that could end the line.
+    static func sendBackLine(_ command: String?, in folder: String) -> String {
+        let cd = folder.hasPrefix("/") && printable(folder) == folder && !folder.contains("\t")
+            ? "cd '" + folder.replacingOccurrences(of: "'", with: #"'\''"#) + "'" : nil
+        return [cd, command].compactMap { $0 }.joined(separator: " && ")
+    }
+
+    static func openScript(typing line: String, in terminal: SendBackTerminal) -> String {
+        let text = "\"" + line.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        switch terminal {
+        case .iTerm2:
+            return """
+            tell application "iTerm2"
+                set w to current window
+                if w is missing value then
+                    set s to current session of (create window with default profile)
+                else
+                    tell w to set s to current session of (create tab with default profile)
+                end if
+                tell s to write text \(text)
+            end tell
+            """
+        case .terminal:
+            return "tell application \"Terminal\" to do script \(text)"
+        }
+    }
+
+    private func carry(_ plan: SendBackPlan, from tab: TerminalTab, processGroup: pid_t?,
+                       to terminal: SendBackTerminal, controller: OverlayController,
+                       done: @escaping (TeleportError?) -> Void) {
+        func open(_ line: String, then opened: @escaping (Bool) -> Void) {
+            run(appleScript: Self.openScript(typing: line, in: terminal),
+                what: "opening a tab in \(terminal.name)", host: terminal.host, then: opened)
+        }
+        switch plan {
+        case .resume(let session, let line, let command):
+            guard SessionDiscovery.isRunning(session) else {
+                Settings.log("send back: \(Self.name(of: session)) (pid \(session.pid)) is gone")
+                done(.notFound(Self.name(of: session)))
+                return
+            }
+            Settings.log("send back: stopping \(Self.name(of: session)) (pid \(session.pid)) "
+                         + "in tab \(tab.id.uuidString)")
+            stopHere(session, in: tab, processGroup: processGroup) { stopped in
+                guard stopped else {
+                    Settings.log("send back: pid \(session.pid) would not stop, left here")
+                    done(.couldNotStopHere(pid: session.pid, agent: session.agent))
+                    return
+                }
+                open(line) { opened in
+                    guard opened else {
+                        Settings.log("send back: \(terminal.name) did not open a tab, resuming here again")
+                        tab.type(command, enter: true)
+                        done(.couldNotOpen(terminal.name))
+                        return
+                    }
+                    Settings.log("send back: \(Self.name(of: session)) resumed in \(terminal.name)")
+                    controller.close(tab)
+                    done(nil)
+                }
+            }
+        case .fork(let line):
+            open(line) { opened in
+                Settings.log("send back: " + (opened ? "copied tab \(tab.id.uuidString) to \(terminal.name)"
+                                                     : "\(terminal.name) did not open the copy"))
+                done(opened ? nil : .couldNotOpen(terminal.name))
+            }
+        case .attach(let line, let command, let folder):
+            // Detached first, so the session never has two clients at once.
+            controller.close(tab)
+            open(line) { opened in
+                guard opened else {
+                    Settings.log("send back: \(terminal.name) did not open a tab, attaching here again")
+                    controller.newTab(directory: self.directory(folder), typing: command, run: true)
+                    done(.couldNotOpen(terminal.name))
+                    return
+                }
+                Settings.log("send back: attached in \(terminal.name)")
+                done(nil)
+            }
+        case .folder(let line, let closesTab):
+            open(line) { opened in
+                guard opened else { done(.couldNotOpen(terminal.name)); return }
+                Settings.log("send back: opened \(tab.currentDirectory) in \(terminal.name)"
+                             + (closesTab ? "" : ", tab kept for what it is running"))
+                if closesTab { controller.close(tab) }
+                done(nil)
+            }
+        }
+    }
+
+    // Ctrl-C goes into SlyTerm's own pty, and only while the agent is still in front of it.
+    private func stopHere(_ session: AgentSessionInfo, in tab: TerminalTab, processGroup: pid_t?,
+                          then done: @escaping (Bool) -> Void) {
+        kill(session.pid, SIGTERM)
+        waitForExit(of: session.pid, upTo: Self.sigtermGrace) { [weak self, weak tab] gone in
+            guard let self else { done(false); return }
+            if gone { done(true); return }
+            let inFront = { tab.map { $0.foregroundProcessGroup == processGroup } ?? false }
+            guard session.agent == .claude, processGroup != nil, inFront(), let tab else {
+                done(false)
+                return
+            }
+            Settings.log("send back: pid \(session.pid) survived SIGTERM, sending Ctrl-C twice")
+            tab.send(raw: "\u{3}")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if inFront() { tab.send(raw: "\u{3}") }
+                self.waitForExit(of: session.pid, upTo: Self.interruptGrace, then: done)
+            }
+        }
+    }
+
+    func handleSendBack(_ url: URL) {
+        guard let controller else { return }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? {
+            let raw = items.first { $0.name.lowercased() == name }?.value?.trimmingCharacters(in: .whitespaces)
+            return (raw?.isEmpty ?? true) ? nil : raw
+        }
+        let copy = value("mode")?.lowercased() == "copy"
+        let tab: TerminalTab?
+        if let named = value("tab") {
+            tab = UUID(uuidString: named).flatMap { id in controller.terminals.first { $0.id == id } }
+                ?? Int(named).flatMap { n in controller.terminals.indices.contains(n - 1) ? controller.terminals[n - 1] : nil }
+        } else if let id = value("session").flatMap(Safe.sessionID) {
+            tab = controller.terminals.first {
+                $0.activity?.sessionID.caseInsensitiveCompare(id) == .orderedSame
+            }
+        } else {
+            Settings.log("send back: no tab or session named, nothing done")
+            toast("Name a tab or a session to send back")
+            return
+        }
+        guard let tab else {
+            Settings.log("send back: no tab of ours matches \(url.query ?? "")")
+            toast("No SlyTerm tab matches that")
+            return
+        }
+        sendBack(tab, copy: copy)
     }
 
     enum RemoteRequest: Equatable {

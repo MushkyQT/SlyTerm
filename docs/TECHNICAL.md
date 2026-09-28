@@ -177,6 +177,7 @@ logo animation", key `startupAnimation`).
 | In a web tab: back / forward / reload | `⌘←` / `⌘→` / `⌘R` |
 | In a web tab: find in page | `⌘F`, then `Return` / `⇧Return` or `⌘G` / `⌘⇧G` for the next / previous match, `Esc` to close; `⌘E` searches for the selection |
 | Bring a session in from another terminal | `⌘⇧T` in a terminal, "Bring In a Session…" in the menu bar item, or a right-click on `+` |
+| Send a tab's session back to iTerm2 or Terminal | Right-click the tab, "Send Tab Back to …" in the menu bar item, or "Send Back and Quit" when quitting |
 | Newline in Claude Code, Codex, omp and pi | `⇧Return` or `⌥Return` |
 | Open Settings | `⌘,` in the SlyTerm window or a floating web tab, or "Settings…" in the menu bar item |
 | Quit | `⌘Q` while the terminal or a web tab has focus, or the menu bar item |
@@ -513,6 +514,40 @@ open -g "slyterm://teleport?tty=$(tty)"                            # from a plai
 `-g` keeps the terminal you typed it in at the front, so handing a session over never takes the
 screen from the game. `session=` takes a Codex, omp or pi session id too, and `pid=` the pid of
 any agent in the picker.
+
+### Sending a session back
+
+A session can go the other way, from a SlyTerm tab to iTerm2 or Terminal: right-click the tab in the
+strip (or Control-click it) and choose "Send Back to iTerm2", choose "Send Tab Back to iTerm2" in the
+menu bar item for the tab in front, or quit with "Send Back and Quit". Settings › General › Other
+terminals chooses iTerm2 or Terminal ("Send sessions back to"); Terminal is used when iTerm2 is not
+installed. No other terminal can be told to open a tab and type into it.
+
+- **An agent's conversation** is stopped here the way a move stops it (`SIGTERM`, 5 s, then for
+  Claude Code two Ctrl-C into SlyTerm's own tab while Claude is still in front of it, 3 s more).
+  Then a new tab opens in iTerm2's front window, or a new iTerm2 window when there is none, or a new
+  Terminal window, and `cd '<folder>' && <resume command>` is typed and run there. SlyTerm's tab
+  closes. It asks before interrupting a session that is working or waiting, like a move, with the
+  same setting.
+- **A background Claude you attached** is not stopped: SlyTerm closes its tab, which detaches it,
+  and runs `claude attach <id>` in the other terminal.
+- **A plain shell** gets a new tab in its folder there. SlyTerm's tab closes, unless something is
+  running in it.
+
+"Copy to iTerm2", in the same menu for a Claude Code, Codex or pi conversation, runs the fork
+command there instead (`claude --resume <id> --fork-session`, `codex fork <id>`, `pi --fork <id>`)
+and leaves the SlyTerm tab running.
+
+Nothing is stopped until the other terminal has answered an Apple event, which is also when macOS
+asks, the first time, whether SlyTerm may control it. If the tab still does not open after the agent
+has stopped, the resume command is typed back into SlyTerm's tab and a toast says so. The other
+terminal is not brought to the front, so the game keeps the screen. The folder is shell-quoted,
+and left out if it contains a control character; the session id is checked as for a move.
+
+"Send Back and Quit" is in the quit dialog, as its default button, whenever a tab runs an agent that
+can be resumed elsewhere. It sends every such tab back at once, then quits; if one of them could not
+be sent, SlyTerm stays open, the others are already gone, and a toast says why. The other tabs come
+back at the next launch as usual. The dialog only appears while "Ask before quitting" is on.
 
 ### Attached sessions and hooks
 
@@ -1086,7 +1121,7 @@ Everything that configures the app is behind **Settings…** in it, in five tabs
   Assistant…** (see [The setup assistant](#the-setup-assistant)), the quit
   confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
   or asks, what bringing a session in from another terminal does about the tab it came from and
-  about interrupting an agent mid-turn, and, under Web tabs, "Search with": the address that words
+  about interrupting an agent mid-turn, which terminal sessions are sent back to, and, under Web tabs, "Search with": the address that words
   typed into a web tab's address field go to, with `{query}` where they go. An address without
   `{query}` shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under
   Web tabs, pausing videos when a guide opens or they go out of view (see
@@ -1216,6 +1251,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `lookupAutoDetect` | `true` | Let the app in front pick the game |
 | `teleportClosesSource` | `true` | Close the tab a session came from after moving it (iTerm2 and Terminal only) |
 | `teleportConfirmBusy` | `true` | Ask before interrupting an agent that is working or waiting for an answer |
+| `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to: `iterm2` or `terminal` (Terminal when iTerm2 is not installed) |
 | `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
 | `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
@@ -1267,6 +1303,15 @@ open -g "slyterm://teleport?session=<uuid>&mode=copy"   # a forked copy, the sou
 open -g "slyterm://teleport?pid=<pid>"        # the agent with that pid
 open -g "slyterm://teleport?tty=ttys003"      # the shell on that tty: its folder, its command typed
 open -g "slyterm://teleport?cwd=/some/folder" # a new tab in that folder
+open -g "slyterm://send-back?session=<uuid>"  # send the SlyTerm tab running that session back
+open -g "slyterm://send-back?tab=2&mode=copy" # a forked copy of tab 2's session there, the tab untouched
+```
+
+Inside a Claude Code conversation in SlyTerm, `! open -g
+"slyterm://send-back?session=$CLAUDE_CODE_SESSION_ID"` sends it back. `tab=` takes a tab's
+`SLYTERM_TAB_ID` or its number; with neither `tab=` nor `session=` nothing happens.
+
+```sh
 ```
 
 `-g` keeps the current app in front.
@@ -1344,6 +1389,8 @@ $B --float-snapshot float.png             # draw a floating web tab offscreen, a
 $B --card-snapshot card.png               # draw the kinds of card offscreen, stacked, truncation included
 $B --sessions                             # what "Bring In a Session" would offer, as a table
 $B --sessions --json                      # the same, for scripts
+$B --sessions --session <uuid> --send-back   # what sending it back would do, the AppleScript
+                                          # included; `--copy` for the fork. Stops and opens nothing
 $B --picker-snapshot picker.png           # draw the picker offscreen with sample rows, plus a
                                           # second PNG with an `-empty` suffix for the empty state
 $B --setup-snapshot setup.png             # draw every step of the setup assistant offscreen, in one
@@ -1385,7 +1432,9 @@ $B --activity --poll --times 4            # scan repeatedly and time it; a quiet
   `shell`), host, status, pid, tty, folder, session or attach id, the action Return would take, and
   the label. `--session <uuid>`, `--pid <pid>` and `--tty ttys003` narrow it to the one a
   `slyterm://teleport` URL would pick, so a URL can be checked before it is fired at a live session;
-  `--tty` lists that terminal's agent, then its shell.
+  `--tty` lists that terminal's agent, then its shell. With `--send-back` it prints, for each one,
+  what "Send Back" would do with it and the script it would send to the terminal chosen in
+  Settings; for a session outside SlyTerm it says the app would not offer it.
 - `--activity --transcript` tells the file's kind from its first line (a Codex rollout starts with
   `session_meta`, an omp session with its title, a pi session with its header, anything else is
   taken for Claude Code's), and `--agent <name>` forces it: `claude`, `codex`, `omp`, `pi`,
@@ -1529,7 +1578,7 @@ Dock icon, and it registers the `slyterm` URL scheme.
 | `Teleport/TeleportModel.swift` | The types discovery, engine and picker share |
 | `Teleport/SessionDiscovery.swift` | What is running in other terminals, from Claude Code's registry, the process table and the agents' session files; which session each tab hosts |
 | `Teleport/AgentDiscovery.swift` | The Codex, omp, pi, Gemini CLI and Qwen Code processes in front on a terminal, and the session file each one writes |
-| `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source |
+| `Teleport/TeleportEngine.swift` | Bringing a candidate in: stop, open a tab, type the command, close the source; sending a tab back to iTerm2 or Terminal |
 | `Teleport/TeleportPicker.swift` | The "Bring In a Session" panel; `--picker-snapshot` |
 | `Teleport/SessionsCLI.swift` | `--sessions` |
 | `SetupAssistant.swift` | The first-launch setup window: its steps, the short game form, applying the choices; `--setup-snapshot` |

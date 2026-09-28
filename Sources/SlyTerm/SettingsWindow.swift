@@ -259,6 +259,7 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     private var activityCards = NSButton()
     private var teleportClosesSource = NSButton()
     private var teleportConfirmBusy = NSButton()
+    private let sendBackTerminal = NSPopUpButton()
     private var autoPauseVideo = NSButton()
     private let searchURL = NSTextField(string: "")
 
@@ -274,6 +275,13 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         teleportConfirmBusy = checkbox(
             "Ask before interrupting an agent that is working or waiting for an answer",
             #selector(setTeleportConfirmBusy(_:)))
+        sendBackTerminal.target = self
+        sendBackTerminal.action = #selector(setSendBackTerminal)
+        for terminal in [SendBackTerminal.iTerm2, .terminal] {
+            let item = NSMenuItem(title: terminal.name, action: nil, keyEquivalent: "")
+            item.representedObject = terminal.rawValue
+            sendBackTerminal.menu?.addItem(item)
+        }
         autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
                                   #selector(setAutoPauseVideo(_:)))
         return grid([
@@ -287,7 +295,13 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
                         + "and a hidden terminal stays hidden. The Allow and Refuse shortcuts go "
                         + "with it."),
             ]),
-            section("Bring In", [teleportClosesSource, teleportConfirmBusy]),
+            section("Other terminals", [
+                teleportClosesSource,
+                teleportConfirmBusy,
+                row([NSTextField(labelWithString: "Send sessions back to"), sendBackTerminal]),
+                caption("Right-click a tab to send it back, or quit with Send Back and Quit. "
+                        + "Terminal is used when iTerm2 is not installed."),
+            ]),
             section("Web tabs", [
                 row([NSTextField(labelWithString: "Search with"), searchURLField()]),
                 caption("Words typed into a web tab's address field go to this address, {query} where they go."),
@@ -317,6 +331,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         teleportClosesSource.state = settings.teleportClosesSource ? .on : .off
         teleportConfirmBusy.state = settings.teleportConfirmBusy ? .on : .off
         autoPauseVideo.state = settings.autoPauseVideo ? .on : .off
+        sendBackTerminal.select(sendBackTerminal.itemArray.first {
+            ($0.representedObject as? String) == settings.sendBackTerminal
+        } ?? sendBackTerminal.itemArray.first)
         if !isEditing(searchURL), isUsable(searchURL.stringValue) {
             searchURL.stringValue = settings.webSearchURL
         }
@@ -363,6 +380,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     @objc private func setTeleportClosesSource(_ sender: NSButton) { settings.teleportClosesSource = sender.state == .on }
     @objc private func setTeleportConfirmBusy(_ sender: NSButton) { settings.teleportConfirmBusy = sender.state == .on }
     @objc private func setAutoPauseVideo(_ sender: NSButton) { settings.autoPauseVideo = sender.state == .on }
+    @objc private func setSendBackTerminal() {
+        settings.sendBackTerminal = sendBackTerminal.selectedItem?.representedObject as? String ?? "iterm2"
+    }
 }
 
 final class TerminalPane: SettingsPane, NSTextFieldDelegate {

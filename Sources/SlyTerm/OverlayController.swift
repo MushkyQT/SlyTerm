@@ -1317,6 +1317,36 @@ final class OverlayController: NSObject, TabStripDelegate {
         return line.prefix(limit).trimmingCharacters(in: .whitespaces) + "…"
     }
 
+    func stripTabMenu(_ index: Int) -> NSMenu? {
+        guard terminals.indices.contains(index) else { return nil }
+        let tab = terminals[index]
+        let app = SendBackTerminal.current.name
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        var items = [("Send Back to \(app)", #selector(sendTabBack(_:)))]
+        if let activity = tab.activity, !activity.isBackground,
+           activity.agent.copyCommand(id: activity.sessionID) != nil {
+            items.append(("Copy to \(app)", #selector(copyTabBack(_:))))
+        }
+        for (title, action) in items {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.representedObject = tab.id
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc private func sendTabBack(_ sender: NSMenuItem) {
+        guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
+        TeleportEngine.shared.sendBack(tab)
+    }
+
+    @objc private func copyTabBack(_ sender: NSMenuItem) {
+        guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
+        TeleportEngine.shared.sendBack(tab, copy: true)
+    }
+
     func stripSelectTab(_ index: Int) { select(index); focusTerminalUnlessGhost() }
     func stripCloseTab(_ index: Int) { if terminals.indices.contains(index) { close(terminals[index]) } }
     func stripSelectWeb(_ index: Int) {

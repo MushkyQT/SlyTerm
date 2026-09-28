@@ -83,6 +83,32 @@ enum TeleportHost: Equatable {
 
 enum TeleportStatus: Equatable { case working, waiting, idle, unknown }
 
+// Only these two can be told to open a tab and type into it.
+enum SendBackTerminal: String {
+    case iTerm2 = "iterm2"
+    case terminal = "terminal"
+
+    var host: TeleportHost { self == .iTerm2 ? .iTerm2(sessionID: nil) : .appleTerminal(sessionID: nil) }
+    var name: String { host.displayName }
+
+    // The one chosen in Settings, or Terminal when iTerm2 is not installed.
+    static var current: SendBackTerminal {
+        let chosen = SendBackTerminal(rawValue: Settings.shared.sendBackTerminal) ?? .iTerm2
+        guard chosen == .iTerm2, let id = chosen.host.bundleIdentifier,
+              NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) == nil else { return chosen }
+        return .terminal
+    }
+}
+
+enum SendBackPlan: Equatable {
+    // Stop the agent here, then type `line` there; `command` is typed back here if that fails.
+    case resume(AgentSessionInfo, line: String, command: String)
+    case fork(line: String)
+    // Closing the tab detaches `claude attach`; the session goes on in Claude's daemon.
+    case attach(line: String, command: String, folder: String)
+    case folder(line: String, closesTab: Bool)
+}
+
 struct AgentSessionInfo: Equatable {
     var pid: pid_t
     var sessionID: String
@@ -191,6 +217,9 @@ enum TeleportError: Error, Equatable {
     case noAttachID
     case noController
     case inProgress
+    case cannotSendBack(AgentKind)
+    case couldNotStopHere(pid: pid_t, agent: AgentKind)
+    case couldNotOpen(String)
 
     var message: String {
         switch self {
@@ -202,6 +231,10 @@ enum TeleportError: Error, Equatable {
         case .noAttachID: return "That background session has no id to attach to"
         case .noController: return "SlyTerm is not ready yet"
         case .inProgress: return "Already bringing that one in"
+        case .cannotSendBack(let agent): return "\(agent.name) has no saved session to resume elsewhere"
+        case .couldNotStopHere(let pid, let agent):
+            return "Couldn't stop \(agent.name) (pid \(pid)), it is still running here"
+        case .couldNotOpen(let app): return "Couldn't open a tab in \(app)"
         }
     }
 }

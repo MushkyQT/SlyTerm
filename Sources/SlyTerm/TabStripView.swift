@@ -20,6 +20,7 @@ protocol TabStripDelegate: AnyObject {
     func stripOpenWeb()
     func stripNewTab()
     func stripBringIn()
+    func stripTabMenu(_ index: Int) -> NSMenu?
     func stripToggleGhost()
     func stripToggleFullscreen()
     func stripHide()
@@ -30,6 +31,7 @@ protocol TabStripDelegate: AnyObject {
 
 extension TabStripDelegate {
     func stripBringIn() { TeleportPicker.shared.show() }
+    func stripTabMenu(_ index: Int) -> NSMenu? { nil }
 }
 
 final class TabStripView: NSView {
@@ -531,6 +533,8 @@ final class TabStripView: NSView {
         defer { pressed = .none }
         if didDrag { delegate?.stripDragEnded(); return }
         switch pressed {
+        case .tab(let i) where event.modifierFlags.contains(.control):
+            showTabMenu(i, at: convert(event.locationInWindow, from: nil))
         case .tab(let i): delegate?.stripSelectTab(i)
         case .close(let i): delegate?.stripCloseTab(i)
         case .web(let i): delegate?.stripSelectWeb(i)
@@ -547,7 +551,16 @@ final class TabStripView: NSView {
     }
 
     override func rightMouseUp(with event: NSEvent) {
-        if region(at: convert(event.locationInWindow, from: nil)) == .newTab { delegate?.stripBringIn() }
+        let point = convert(event.locationInWindow, from: nil)
+        switch region(at: point) {
+        case .newTab: delegate?.stripBringIn()
+        case .tab(let i): showTabMenu(i, at: point)
+        default: break
+        }
+    }
+
+    private func showTabMenu(_ index: Int, at point: NSPoint) {
+        delegate?.stripTabMenu(index)?.popUp(positioning: nil, at: point, in: self)
     }
 
     override func otherMouseUp(with event: NSEvent) {
