@@ -7,6 +7,25 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## [Unreleased]
 
+### Added
+
+- Fullscreen: `⌃⌥M` fills the screen with the window that has the keyboard, the SlyTerm window with
+  the tab in front or a floating web tab, opaque and in interact mode. Nothing pauses, hides or
+  switches. `⌘Return` in the SlyTerm window or a floating web tab, the strip's expand button,
+  "Fullscreen" in the menu bar item, `slyterm://fullscreen` and the trackpad tap toggle it too;
+  click-through and hiding leave it first. The shortcut is set in Settings › Shortcuts.
+  ([#2](https://github.com/MushkyQT/slyterm/pull/2))
+
+### Changed
+
+- Panic hides the web tabs from the tab strip, and `⌘G`, `⌥⌘1`…`⌥⌘9`, `⌘L` and "New Web Tab" do
+  nothing until it ends. A guide that arrives during panic loads out of sight and is in front when
+  panic ends.
+  ([#2](https://github.com/MushkyQT/slyterm/pull/2))
+- `⌘Return` and the strip's expand button toggle Fullscreen instead of panic. Panic stays on
+  `⌃⌥P`, "Panic Mode" in the menu bar item, `slyterm://panic` and the trackpad tap.
+  ([#2](https://github.com/MushkyQT/slyterm/pull/2))
+
 ## [1.1.0] - 2026-09-28
 
 ### Added

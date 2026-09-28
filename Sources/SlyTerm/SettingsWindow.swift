@@ -642,7 +642,8 @@ final class ShortcutsPane: SettingsPane {
         gesture.target = self
         gesture.action = #selector(setGesture)
         for (title, value) in [("Off", ""), ("Toggle click-through", "ghost"),
-                               ("Show or hide the terminal", "toggle"), ("Panic mode", "panic")] {
+                               ("Show or hide the terminal", "toggle"), ("Panic mode", "panic"),
+                               ("Fullscreen", "fullscreen")] {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.representedObject = value
             gesture.menu?.addItem(item)

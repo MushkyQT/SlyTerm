@@ -1,13 +1,14 @@
 import AppKit
 
 enum HotkeyAction: String, CaseIterable {
-    case toggle, ghost, panic, quest, pick, allow, refuse, playPause
+    case toggle, ghost, panic, fullscreen, quest, pick, allow, refuse, playPause
 
     var title: String {
         switch self {
         case .toggle: return "Show / hide terminal"
         case .ghost: return "Toggle click-through"
         case .panic: return "Panic mode"
+        case .fullscreen: return "Fullscreen"
         case .quest: return "Look up what's under the pointer"
         case .pick: return "Pick text near the pointer"
         case .allow: return "Allow what the agent asks"
@@ -21,6 +22,7 @@ enum HotkeyAction: String, CaseIterable {
         case .toggle: return "hotkeyToggle"
         case .ghost: return "hotkeyGhost"
         case .panic: return "hotkeyPanic"
+        case .fullscreen: return "hotkeyFullscreen"
         case .quest: return "hotkeyQuest"
         case .pick: return "hotkeyPick"
         case .allow: return "hotkeyAllow"
@@ -34,6 +36,7 @@ enum HotkeyAction: String, CaseIterable {
         case .toggle: return "ctrl+alt+h"
         case .ghost: return "ctrl+alt+tab"
         case .panic: return "ctrl+alt+p"
+        case .fullscreen: return "ctrl+alt+m"
         case .quest: return "ctrl+alt+q"
         case .pick: return "ctrl+alt+shift+q"
         case .allow: return "ctrl+alt+y"
