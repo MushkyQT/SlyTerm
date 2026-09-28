@@ -14,6 +14,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   Back to iTerm2", the quit dialog has "Send Back and Quit" whenever a tab runs an agent, and
   `slyterm://send-back?session=<id>` does it from a script. Settings › General › Other terminals
   chooses iTerm2 or Terminal. `--sessions … --send-back` prints what it would do.
+  ([#5](https://github.com/MushkyQT/slyterm/pull/5))
 - A setup assistant on the first launch of a fresh install: whether you play games with SlyTerm
   open and which presets to add, a short form for another game (a name and a wiki or site
   address, probed for its search and index), and the main shortcuts. Settings › General › Run Setup
@@ -50,6 +51,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 - Closing a terminal tab ends its shell and whatever is running in it, as closing a terminal window
   does. They used to keep running, out of sight, until SlyTerm quit.
+  ([#5](https://github.com/MushkyQT/slyterm/pull/5))
 - Clicking a shortcut field in Settings › Shortcuts started recording and stopped it at once on
   macOS 26, so no new shortcut could be typed.
   ([#4](https://github.com/MushkyQT/slyterm/pull/4))
