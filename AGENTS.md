@@ -6,7 +6,8 @@ in [CONTRIBUTING.md](CONTRIBUTING.md).
 SlyTerm is a macOS menu bar app, one Swift package (`Package.swift`, Swift 5.9, macOS 14): a
 terminal that floats over games, with click-through, global hotkeys, coding agent session status and
 answers (Claude Code, Codex, omp, pi, and Gemini CLI and Qwen Code from their titles), web tabs that show guides and video and can float over the game, an OCR lookup that opens a
-game's wiki in one, and bringing sessions in from other terminals. Its only dependency is SwiftTerm.
+game's wiki in one, and bringing sessions in from other terminals. Its dependencies are SwiftTerm
+and Sparkle, for updates.
 Behaviour and architecture are in [docs/TECHNICAL.md](docs/TECHNICAL.md); the
 [source map](docs/TECHNICAL.md#source-map) says which file holds what.
 
@@ -14,9 +15,13 @@ Behaviour and architecture are in [docs/TECHNICAL.md](docs/TECHNICAL.md); the
 
 ```sh
 swift build                          # the build check; binary at .build/debug/SlyTerm
-./build.sh                           # release app bundle at dist/SlyTerm.app
+./build.sh                           # app bundle at dist/SlyTerm.app, signed ad hoc, no updates
+./build.sh --release                 # signed, notarized app and DMG in dist/: only when asked
 .build/debug/SlyTerm --strip-snapshot /tmp/strip.png   # an offline check (full list below)
 ```
+
+Signing, notarizing and publishing are in
+[Building and releasing](docs/TECHNICAL.md#building-and-releasing).
 
 There is no test target. A change is verified with the binary's command-line modes, which run
 offscreen and never type into anything:
@@ -37,7 +42,11 @@ and look at it: for drawing changes that is the test.
 
 CI (`.github/workflows/ci.yml`) runs `swift build`, the strip, float, card, picker and setup
 snapshots, and pick mode over every lookup fixture on each pull request, and attaches the PNGs to
-the run as `snapshots`. It checks that they were written, not what they show.
+the run as `snapshots`. It checks that they were written, not what they show. Its App bundle step
+runs `./build.sh`, verifies the signature and runs a snapshot from the bundle's binary, which fails
+if the bundle cannot load Sparkle. A pull request that touches the release inputs (the `paths` in
+`.github/workflows/release.yml`: `build.sh`, `Info.plist`, `Package.swift` and the like) also gets
+a dry run of the Release workflow, signed and notarized but never published.
 
 ## Hazards
 
@@ -54,6 +63,12 @@ Read these before running anything.
   `com.charlesmelki.slyterm` domain; `.build/debug/SlyTerm` uses its own `SlyTerm` domain. Before a
   live run of the bundle, `defaults export` the domain to a backup, and afterwards `defaults
   delete` it and `defaults import` the backup.
+- **Releases use the owner's identity.** `./build.sh --release` signs with the owner's Developer
+  ID and submits to Apple's notary service: run it only when asked, and use `NOTARIZE=0` to check
+  signing without submitting. `Tools/make-appcast.sh` without `--ed-key-file` reads the update key
+  from the login keychain and puts a keychain dialog on the user's screen. Never dispatch the
+  Release workflow, publish a release or push a tag unless asked. A release-built copy launched
+  live checks the real feed: point `SLYTERM_FEED_URL` at a local feed for tests.
 - **`open slyterm://…` reaches the registered copy,** usually the installed one. Target the build
   under test with `open -g -a dist/SlyTerm.app "slyterm://…"`.
 - **Agent sessions and terminal tabs you did not create are off limits.** The activity and
@@ -119,8 +134,9 @@ A change that breaks one of these is wrong, whatever it fixes.
   [CHANGELOG.md](CHANGELOG.md) and leaves the version alone. A release is its own change: it
   raises the semantic version in `Resources/Info.plist` (patch if only fixes are unreleased, minor
   for something new, major for something taken away; `CFBundleVersion` up by one) and renames
-  `[Unreleased]` to that version with the date. The Tag workflow tags `main` with `vX.Y.Z` once
-  the release is merged. Release only when asked.
+  `[Unreleased]` to that version with the date. Its pull request's Release dry run has to pass
+  before it is merged. Once it is, the Tag workflow tags `main` with `vX.Y.Z` and publishes the
+  signed DMG and the appcast through the Release workflow. Release only when asked.
 - **Plain words.** UI strings and docs are short statements of what happens, with no marketing
   tone, rhetorical questions or punchlines.
 - **Commits.** The subject is a plain imperative sentence saying what the change does, with no

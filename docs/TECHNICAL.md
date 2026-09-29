@@ -15,6 +15,7 @@ a change, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 - [Scripting](#scripting)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
+- [Building and releasing](#building-and-releasing)
 - [Migration notes](#migration-notes)
 
 ## Principles
@@ -27,9 +28,9 @@ These hold for every feature, and a change that breaks one of them is a bug:
   its hotkey (or its URL) fires, with SlyTerm's own windows excluded, and reads it on device.
   Nothing is captured at any other time.
 - **The game keeps the keyboard.** A finished turn, a permission prompt, a bell, a terminal
-  notification or a page arriving in a web tab never takes focus from the game, and a floating web
-  tab never takes it on its own. A hidden overlay that has news comes back in click-through, so the
-  next click and keystroke still reach the game.
+  notification, a page arriving in a web tab or an update found by the daily check never takes
+  focus from the game, and a floating web tab never takes it on its own. A hidden overlay that has
+  news comes back in click-through, so the next click and keystroke still reach the game.
 - **Nothing is typed into a conversation on a guess.** Allow and refuse type one key, and only
   after a fresh check that the prompt up is the one the user read. Any doubt ends in a toast.
 - **Agents' files are read, never written.** Claude Code's session registry and transcripts,
@@ -765,6 +766,11 @@ The lookup needs the **Screen Recording** permission. The first press asks for i
 System Settings › Privacy & Security › Screen Recording and relaunch the app. Nothing is captured
 outside a hotkey press.
 
+macOS ties the grant to the app's signature. The app from GitHub Releases is signed with a
+Developer ID, and its updates keep the grant; a copy built ad hoc loses it at every build (see
+[Troubleshooting](#troubleshooting)), and going from one to the other asks once more (see
+[Migration notes](#from-a-copy-you-built-to-the-signed-app)).
+
 macOS applies a grant only to a process started after it, so SlyTerm notes at launch whether it
 had one (`CGPreflightScreenCaptureAccess`, which captures nothing). Settings › Lookup › Permission
 and the setup assistant's Games step then show one of three lines: "Screen Recording: not granted"
@@ -1201,14 +1207,18 @@ lookup and which game it asks, a new web tab, play / pause, opacity (terminal, c
 **Shortcuts…** (Settings on its Shortcuts tab), **Help** (the README's
 [shortcut list](https://github.com/MushkyQT/slyterm#shortcuts) in your browser), resetting the
 window position, **About SlyTerm** (the standard panel, with the version from `Info.plist`; the app
-is in the Dock and ⌘Tab while it is open, as for Settings), quitting.
+is in the Dock and ⌘Tab while it is open, as for Settings), **Check for Updates…** in a copy that
+updates itself, quitting. While an update found by the daily check waits, **Update to SlyTerm
+X…** comes first, above a separator (see [Updates](#updates)).
 Everything that configures the app is behind **Settings…** in it, in six tabs:
 
 - **General**: under Launch, restoring the last session's tabs, the logo animation and **Run Setup
   Assistant…** (see [The setup assistant](#the-setup-assistant)); under Agents, the card that says
   what an agent finished or asks, the sound a tab plays when it needs you, how long a finished card
   stays, asking before interrupting an agent mid-turn, closing the tab a session was brought in
-  from, and which terminal sessions are sent back to; under Quitting, the quit confirmation.
+  from, and which terminal sessions are sent back to; under Quitting, the quit confirmation; under
+  Updates, checking for updates and installing them automatically, and **Check Now** (see
+  [Updates](#updates)).
 - **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
   the current one's, the startup command, the scrollback (1,000 to 100,000 lines kept per tab, for
   tabs opened after the change), Option as Meta.
@@ -1278,6 +1288,72 @@ the app quits, so the assistant ignores that close rather than take it for finis
 launch of a version that has it stores `setupDone` as false on a fresh install and as true on one that already
 ran an earlier version (it has `frameEdge`, `sessionDirectories` or `lookupGamesVersion` stored), so
 existing installs never see it.
+
+### Updates
+
+The app from GitHub Releases updates itself with [Sparkle](https://sparkle-project.org). Only a
+bundle made by `./build.sh --release` has an `SUFeedURL` in its `Info.plist`, and only then does
+`Updater` create a Sparkle updater at launch. A copy built any other way (`swift build`, a plain
+`./build.sh`) creates no Sparkle object, has no update items in the menu, and Settings › General ›
+Updates says only "This copy was built from source and does not update itself." The feed is
+`https://github.com/MushkyQT/SlyTerm/releases/latest/download/appcast.xml`, the appcast of the
+latest release (see [Releases on GitHub](#releases-on-github)).
+
+- **When it checks.** On Sparkle's schedule, once a day, while "Check for updates automatically"
+  is on. `SUEnableAutomaticChecks` is set in `Info.plist`, so Sparkle does not ask at the second
+  launch whether to check, as it otherwise would: the checks are on from the start.
+- **An update found by a scheduled check opens nothing.** Sparkle's gentle reminders are on and
+  its standard user driver is told not to show a scheduled update, so no window comes up over the
+  game. The version waits instead as **Update to SlyTerm X…** at the top of the menu bar item,
+  above a separator, until the player opens it or Sparkle's update session ends.
+- **The menu items and Check Now.** **Update to SlyTerm X…**, **Check for Updates…** (after About
+  SlyTerm) and Check Now in Settings all start a check the player asked for, which opens Sparkle's
+  window. They are disabled while Sparkle cannot check, as during a check already running.
+- **Settings › General › Updates.** "Check for updates automatically", "Download and install
+  updates automatically" (enabled only while the first is on), a caption saying that an update
+  found by an automatic check waits in the menu bar item and that one downloaded automatically is
+  installed when SlyTerm quits, and **Check Now**. The two checkboxes are Sparkle's own settings,
+  `SUEnableAutomaticChecks` and `SUAutomaticallyUpdate` in the app's defaults domain; SlyTerm adds
+  no key for them, and the checkboxes follow Sparkle when it changes them.
+- **Sparkle's windows.** The update window and the progress window come up like About: one level
+  above the overlay, hidden while another app is active, with SlyTerm in the Dock and ⌘Tab while
+  one is open. A click in the menu bar item leaves SlyTerm inactive, so the first window after one
+  of the clicks above brings SlyTerm to the front. `Updater` does not bring later ones forward, but
+  Sparkle does in one case: when a check the player started finds an update, Sparkle activates
+  SlyTerm to show it, even if the player went back to the game during the second or two the check
+  took, and no delegate call can stop that. A download that finishes after the player went back
+  to the game does not take the keyboard: its window waits behind the Dock icon, which bounces
+  once. `Updater` finds Sparkle's windows by their window controllers when they become key or
+  visible. When one closes it leaves `AppSwitcher` at once, and `AppSwitcher.hold(for:)` keeps
+  SlyTerm in the Dock for half a second, since Sparkle closes one window just before it opens the
+  next; a closed window kept registered was brought back by the Dock hand-off below, with nothing
+  behind it.
+  Sparkle's alerts (up to date, errors) are `NSAlert`s run modally, raised the way the quit
+  confirmation is: to the alert level, two above the overlay, once the modal session runs and
+  after each activation change (see [Windows and focus](#windows-and-focus)). They put SlyTerm in
+  the Dock too, and are not hidden while another app is active: the overlay takes no input while
+  one runs, and a hidden alert would leave nothing on screen to say why.
+- **An alert nobody asked for is closed.** Sparkle counts a gentle reminder as shown, so an
+  installer error in a session the player never opened would put an alert over the game. A modal
+  alert that comes up when the player has not asked for an update in the current session is
+  closed at once.
+- **Installing.** An update installed from Sparkle's window relaunches SlyTerm through the usual
+  quit: the quit confirmation comes up when several tabs are open or one runs a command, with Send
+  Back and Quit when a tab runs an agent. Cancel keeps SlyTerm open, and Sparkle's installer keeps
+  waiting: the update is installed at the next quit, and SlyTerm relaunches. The tabs are saved as
+  for any quit and come back at the relaunch while "Restore tabs from the last session" is on. With
+  "Download and install updates automatically" on, Sparkle downloads an update in the background and
+  installs it when SlyTerm quits.
+- **What an update has to pass.** The DMG's EdDSA signature against `SUPublicEDKey` in
+  `Info.plist`, checked before anything is extracted (`SUVerifyUpdateBeforeExtraction`); the
+  feed's own signature, made with the same key, which `SURequireSignedFeed` makes Sparkle require,
+  so a changed feed is refused; and Sparkle's check of the new app's code signature against the
+  running app's.
+
+With `debug` on, the log has a line starting with `updates:` when Sparkle does not start, when a
+scheduled check finds a version and leaves it in the menu, for each Sparkle window raised above
+the overlay (with "though nobody asked for it" when no check was asked for), when an alert
+nobody asked for is closed, and with the error an update ends on.
 
 ### Shortcuts
 
@@ -1372,6 +1448,8 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `activityCardSeconds` | `10` | How long a finished card or a notification stays, 0 to 300 seconds; 0 keeps it until closed |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
 | `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
+| `SUEnableAutomaticChecks` | `true` (from `Info.plist`) | Sparkle's key, not SlyTerm's: check for updates once a day, in a copy that updates itself (see [Updates](#updates)) |
+| `SUAutomaticallyUpdate` | `false` | Sparkle's key: download an update found by a check in the background and install it when SlyTerm quits |
 
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
@@ -1379,7 +1457,8 @@ the last floating page and the last floating video were), `sessionDirectories` a
 `sessionSelected` (the tabs to restore), `ghostHintsShown` (how many times the automatic switch to
 click-through has said so, up to 3), `setupResume` (the step and games of a first-run assistant
 that was quit, read once at the next launch), `lookupGamesVersion` and `lookupGames.v0` (see
-[Migration notes](#migration-notes)), and `migratedFormerDefaults`.
+[Migration notes](#migration-notes)), and `migratedFormerDefaults`. Sparkle keeps its own state
+there too, under keys that start with `SU`, such as `SULastCheckTime`.
 
 `hotkeyQuest`, `questOpenInApp` and `questOpenInBackground` keep the names they were given when the
 feature only knew Dofus quests, and `guideZoom` the one from when there was a single Guide tab, so
@@ -1602,12 +1681,17 @@ a separate `SlyTerm` defaults domain.
   purpose: it would fire every time you switched tabs or moved the window.
 - **Typing goes to the terminal instead of the game.** The terminal has focus (green dot). Click
   into the game once, or press `⌃⌥Tab`.
-- **The lookup says Screen Recording is needed, again.** The app is ad-hoc signed by default, and
-  macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and the grant
-  has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security › Screen
-  Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it across
-  builds, create a self-signed "Code Signing" certificate in Keychain Access (Certificate
-  Assistant › Create a Certificate) and build with `CODESIGN_IDENTITY="its name" ./build.sh`.
+- **The lookup says Screen Recording is needed, again.** A copy you build is ad-hoc signed by
+  default, and macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and
+  the grant has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security ›
+  Screen Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it
+  across builds, create a self-signed "Code Signing" certificate in Keychain Access (Certificate
+  Assistant › Create a Certificate) and build with `CODESIGN_IDENTITY="its name" ./build.sh`. The
+  app from GitHub Releases keeps the grant across its updates, and asks once when it replaces a
+  copy you built.
+- **No Check for Updates… in the menu.** Only the app from GitHub Releases updates itself; a copy
+  built from source has no feed, and Settings › General › Updates says so. With `debug` on, the
+  `updates:` lines in the log say what Sparkle did.
 - **The lookup opens the wrong page or nothing.** Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q`
   to pick the line yourself. To see why, run `defaults write com.charlesmelki.slyterm debug -bool
   true`, press the hotkey, and read `~/Library/Logs/SlyTerm.log`: it lists which game answered,
@@ -1645,13 +1729,15 @@ a separate `SlyTerm` defaults domain.
 
 ## Architecture
 
-SlyTerm is one Swift package: an executable target, `SlyTerm`, with
-[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) as its only dependency, and a tiny C
+SlyTerm is one Swift package: an executable target, `SlyTerm`, with two dependencies,
+[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) for the terminals and
+[Sparkle](https://sparkle-project.org) for updates, and a tiny C
 target, `CMultitouch`, that declares the layout of the touch frames Apple's private
 MultitouchSupport framework hands the trackpad tap. It
 links AppKit, Carbon, ScreenCaptureKit, Vision and WebKit. `build.sh` wraps the release binary,
-`Resources/Info.plist` and the icons into `dist/SlyTerm.app`; the app is `LSUIElement`, so it has no
-Dock icon except while Settings or the setup assistant is open (see
+`Resources/Info.plist`, the icons and `Sparkle.framework` into `dist/SlyTerm.app` (see
+[Building and releasing](#building-and-releasing)); the app is `LSUIElement`, so it has no Dock icon
+except while Settings, the setup assistant, About or one of Sparkle's windows is open (see
 [Windows and focus](#windows-and-focus)), and it registers the `slyterm` URL scheme.
 
 ### Source map
@@ -1659,7 +1745,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | File | What it holds |
 | --- | --- |
 | `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
-| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings, the assistant or About is open; `ScreenRecording`, the permission line and Reopen SlyTerm; `NSAlert.runModal(level:)` |
+| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings, the assistant, About or a Sparkle window is open; `ScreenRecording`, the permission line and Reopen SlyTerm; `NSAlert.runModal(level:)` |
 | `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic, Fullscreen), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
@@ -1669,6 +1755,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | `HotkeyRecorder.swift` | The list of global actions and the shortcut recorder field |
 | `Settings.swift` | Every preference over `UserDefaults`, the `didChange` notification, the debug log, the HoverTerm carry-over |
 | `SettingsWindow.swift` | The six Settings panes |
+| `Updater.swift` | The only file that imports Sparkle: the updater of a release build, the update waiting in the menu, Sparkle's windows and alerts raised above the overlay, an alert nobody asked for closed |
 | `RemoteControl.swift` | The `slyterm://` routes |
 | `TrackpadGestures.swift` | The N-finger tap, over `Sources/CMultitouch` |
 | `Fonts.swift` | Nerd Font detection and iTerm2's profile font |
@@ -1707,7 +1794,10 @@ Dock icon except while Settings or the setup assistant is open (see
 tuning the lookup, `make-agent-fixtures.swift` writes synthetic agent files, titles and screens for
 the `--activity` modes, `preview-startup-animation.swift` renders instants of the logo animation to
 a contact sheet, and `make-readme-animation.swift` renders the whole of it to
-`docs/startup-animation.gif`, the loop at the top of the README.
+`docs/startup-animation.gif`, the loop at the top of the README. `make-release-notes.sh` and
+`make-appcast.sh` make a release's notes and its update feed (see
+[Building and releasing](#building-and-releasing)). `Resources/` holds `Info.plist`,
+`SlyTerm.entitlements` and the icons, and `.github/workflows/` the CI, Tag and Release workflows.
 
 ```sh
 swift Tools/make-icon.swift
@@ -1759,17 +1849,21 @@ swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/make-re
 - Settings and the setup assistant are ordinary windows one level above the overlay while SlyTerm is
   active, and at the normal level when it is not, so they go behind the app you switch to. While
   either is open, `AppSwitcher` makes SlyTerm a regular app, with a Dock icon, a place in `⌘Tab` and
-  an app menu (Quit, an Edit menu, Close); when the last one closes it is an accessory again and the
-  menu is removed. The menu sees `⌘C`, `⌘V`, `⌘W` and the rest before the overlay's key handler,
-  so its Edit items and Close are enabled only while Settings, the assistant or a sheet on them is
-  key; a disabled item lets the key through to the terminal. An app that is already active when it
-  turns regular keeps the previous app's menu bar, so in that case activation goes to the Dock and
-  comes back 0.2 s later.
+  an app menu (Quit, an Edit menu, Close); when the last one closes, and no hold from the updater is
+  running, it is an accessory again and the menu is removed. The menu sees `⌘C`, `⌘V`, `⌘W` and the
+  rest before the overlay's key handler, so its Edit items and Close are enabled only while
+  Settings, the assistant or a sheet on them is key; a disabled item lets the key through to the
+  terminal. An app that is already active when it turns regular keeps the previous app's menu bar,
+  so in that case activation goes to the Dock and comes back 0.2 s later, to the newest window still
+  registered: the one that asked may have been replaced by then. About and Sparkle's windows and
+  alerts are registered with `AppSwitcher` in the same way (see [Updates](#updates)).
 - The quit confirmation and the confirmation before interrupting an agent run through
   `NSAlert.runModal(level:)`, two levels above the overlay. `runModal` puts an alert at the modal
   panel level, below the overlay and Settings, and does it again each time the app activates, so
   the level is set once the modal session runs (on the run loop in `.modalPanel` mode; the main
-  queue is not served during it) and after each activation change.
+  queue is not served during it) and after each activation change. Sparkle runs its own alerts
+  from a main queue block, so `Updater` raises them the same way from its user driver's modal
+  alert callbacks.
 
 ### Tabs
 
@@ -2005,13 +2099,203 @@ while the logo is up.
 | `~/Library/Preferences/com.charlesmelki.slyterm.plist` | Every setting and the app's own state |
 | `~/Library/Application Support/SlyTerm/lookup/` | One index per host, as JSON, rebuilt weekly |
 | `~/Library/Logs/SlyTerm.log` | The debug trace, written only while `debug` is on |
+| `~/Library/Caches/com.charlesmelki.slyterm/org.sparkle-project.Sparkle/` | Sparkle's download of an update and its installer's files, in a copy that updates itself |
 | WebKit's usual places under `~/Library` | The web tabs' cookies and cache, shared by all of them, and the compiled blocking rules |
 | `~/.claude/sessions/*.json` and Claude Code's transcripts | Read, never written |
 | `~/.codex/sessions/` rollouts and `~/.codex/session_index.jsonl`, under `$CODEX_HOME` when the Codex process has it set | Read, never written |
 | `~/.omp/agent/terminal-sessions/` and `~/.omp/agent/sessions/`, where omp's `PI_CONFIG_DIR`, `OMP_PROFILE`, `PI_CODING_AGENT_DIR` or `XDG_STATE_HOME` put them | Read, never written |
 | `~/.pi/agent/sessions/`, where pi's `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` or `--session-dir` put it | Read, never written |
 
+## Building and releasing
+
+`swift build` makes the debug binary, `.build/debug/SlyTerm`, which is enough for the command-line
+modes and finds `Sparkle.framework` next to it in `.build/debug`. `build.sh` makes the app bundle,
+in one of two ways.
+
+### A plain build
+
+`./build.sh`, or `./build.sh --install`, which then copies the app to `/Applications` with `ditto`:
+
+1. `swift build -c release`, for the Mac's own architecture only.
+2. `dist/SlyTerm.app` gets the binary, `Resources/Info.plist`, the icons, the licences of
+   SlyTerm, SwiftTerm and Sparkle in `Contents/Resources/Licenses` (Sparkle's asks binary copies to
+   carry it), the package's resource bundles, and `Sparkle.framework` in `Contents/Frameworks`,
+   copied with `ditto` to keep its symlinks and without its XPC services, which only sandboxed apps
+   use.
+3. It is signed inside out, never with `--deep`: Sparkle's `Autoupdate`, its `Updater.app`, the
+   framework, then the app with `Resources/SlyTerm.entitlements`. `codesign --verify --deep
+   --strict` checks the result.
+
+The identity is ad hoc unless `CODESIGN_IDENTITY` names one (see
+[Troubleshooting](#troubleshooting) for keeping Screen Recording across builds), the hardened
+runtime is off, and there is no `SUFeedURL`, so this app never updates itself. The hardened runtime
+stays off because an ad-hoc app under it cannot load `Sparkle.framework`: library validation
+compares the Team IDs of the app and the framework, ad-hoc code has none, and dyld stops the app at
+launch with "different Team IDs".
+
+CI builds one of these on every pull request, checks it with `codesign --verify --deep --strict`,
+and runs `--strip-snapshot` from the bundle's own binary, which only gets that far when it finds
+Sparkle in `Contents/Frameworks`.
+
+### A release build
+
+`./build.sh --release` makes what GitHub Releases carries:
+
+1. The app is built for `arm64` and `x86_64`, each with its own triple
+   (`swift build -c release --triple <arch>-apple-macosx14.0`), since a build for one points
+   `.build/release` at it, and `lipo` joins the two into one universal binary. `Sparkle.framework`,
+   which carries both architectures, and the resources come from the arm64 build.
+2. The bundle is put together as above, and `SUFeedURL` is added to its `Info.plist`.
+3. It is signed in the same order with `Developer ID Application: Charles Melki (J5958G39Q2)`, or
+   `CODESIGN_IDENTITY`, with `--options runtime --timestamp`.
+4. The app is zipped with `ditto -c -k --keepParent`, notarized (`notarytool submit --wait`) and
+   stapled.
+5. `dist/SlyTerm-<version>.dmg`, with the version from the built app's `Info.plist`, is made with
+   `hdiutil create` (UDZO, volume name SlyTerm) from a folder holding the stapled app and an
+   `Applications` symlink. The DMG is signed with `--timestamp`, notarized and stapled.
+
+A submission that is not accepted within 90 minutes (`--timeout 90m`; a team's first can take
+most of an hour, later ones a few minutes) prints its `notarytool log`, is deleted from `dist/`,
+and stops the build; an exit trap removes the zip and the DMG's folder in any case, and a release
+build first removes older DMGs from `dist/`. `stapler staple`
+and `hdiutil create` are tried up to three times, 15 s apart: a new ticket can take a moment to
+reach the servers stapler asks, and `hdiutil` on CI runners now and then fails with "Resource
+busy". Stapling changes the DMG, so its update signature is made afterwards, by
+`Tools/make-appcast.sh`.
+
+| Variable | With | What it does |
+| --- | --- | --- |
+| `CODESIGN_IDENTITY` | both | The signing identity: ad hoc (`-`) by default for a plain build, the Developer ID for `--release` |
+| `SLYTERM_FEED_URL` | `--release` | The feed the app checks, instead of `https://github.com/MushkyQT/SlyTerm/releases/latest/download/appcast.xml`, such as a local one for a test |
+| `NOTARIZE=0` | `--release` | Signs and builds the DMG without notarizing or stapling either, to check the signing without submitting anything to Apple |
+| `NOTARY_PROFILE` | `--release` | The notarytool keychain profile, `SlyTerm` by default |
+| `NOTARY_KEY_FILE`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | `--release` | An App Store Connect API key (its `.p8` file, key ID and issuer ID) instead of the profile, as the Release workflow does; with the file set, the other two are required |
+
+The keychain profile is made once, from the same kind of key, and `history` checks it:
+
+```sh
+xcrun notarytool store-credentials SlyTerm \
+    --key AuthKey_<key id>.p8 --key-id <key id> --issuer <issuer id>
+xcrun notarytool history --keychain-profile SlyTerm
+```
+
+### Entitlements
+
+`Resources/SlyTerm.entitlements` is applied to every build. It matters under the hardened runtime,
+which blocks both of these without it:
+
+- `com.apple.security.automation.apple-events`: bringing a session in and sending it back send
+  Apple Events to iTerm2, Terminal and Ghostty (see
+  [Sending a session back](#sending-a-session-back)).
+- `com.apple.security.device.audio-input`, with `NSMicrophoneUsageDescription` in `Info.plist`:
+  macOS attributes the programs run in a tab to SlyTerm, so a coding agent's voice input asks for
+  the microphone on SlyTerm's behalf.
+
+Nothing else is granted. Under the hardened runtime, a program in a tab that asks for the camera,
+contacts, calendars, photos or location is refused without a prompt, as SlyTerm has none of those
+entitlements; a plain build, without the runtime, does not have that limit.
+
+### The update feed and the release notes
+
+The update key is an EdDSA key pair made with Sparkle's `generate_keys`. Its public half is
+`SUPublicEDKey` in `Info.plist`; its private half is in the maintainer's login keychain under the
+account `SlyTerm`, and in the `SPARKLE_PRIVATE_KEY` secret for CI. Sparkle's tools come with the
+package, in `.build/artifacts/sparkle/Sparkle/bin/`, once `swift build` has run.
+
+```sh
+Tools/make-release-notes.sh <version> <notes.md> <notes.html>
+Tools/make-appcast.sh <dmg> <notes.html> <appcast.xml> [--ed-key-file <file>]
+```
+
+- `make-release-notes.sh` writes the `## [<version>]` section of CHANGELOG.md, without its heading,
+  up to the next `## ` heading or the link list, with each list item on one line, since a GitHub
+  release shows every line break it is given. It renders that to HTML with `gh api markdown`
+  (GitHub Flavored Markdown, in the repository's context) for the appcast, and fails when
+  CHANGELOG.md has no such section.
+- `make-appcast.sh` writes a feed with one item: the title, the date, `sparkle:version`
+  (`CFBundleVersion`), `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`
+  (`LSMinimumSystemVersion`), the notes as its description, and an enclosure with the download URL,
+  the DMG's length and its EdDSA signature from `sign_update`. It then signs the feed itself
+  (`sign_update` puts that signature in a comment at its end, which `SURequireSignedFeed` needs) and
+  verifies both signatures. `sign_update` verifies with the key it was given, so the script also
+  checks the DMG's signature against `SUPublicEDKey` with CryptoKit: a feed signed with any other
+  key would be refused by every copy of the app, and fails here instead. The DMG must be named
+  `SlyTerm-<version>.dmg` after `Resources/Info.plist`, and the URL is
+  `https://github.com/MushkyQT/SlyTerm/releases/download/v<version>/SlyTerm-<version>.dmg`, or
+  `SLYTERM_DOWNLOAD_URL`. With `--ed-key-file` the private key comes from that file, as in CI;
+  without it, `sign_update --account SlyTerm` reads it from the login keychain, and macOS shows a
+  dialog asking to allow that.
+
+### Releases on GitHub
+
+`.github/workflows/release.yml`, the Release workflow, runs in three ways:
+
+- **Called by the Tag workflow**, with the version it has just tagged and `publish` on.
+- **Dispatched by hand**, with `version` (such as `1.3.0`, built from the tag `v1.3.0`) and
+  `publish`, off by default, which leaves the result as a workflow artifact only.
+- **On a pull request** that changes `build.sh`, either Tools script above, `release.yml`,
+  `tag.yml`, `Package.swift`, `Package.resolved`, `Resources/Info.plist` or
+  `Resources/SlyTerm.entitlements`: a dry run of the pull request's head, signed and notarized,
+  never published. A branch of this repository gets the signing secrets, and the run fails if one
+  is missing, so a green dry run means the release will sign; a pull request from a fork gets
+  none, and the run is skipped with a notice. A new push cancels the dry run in progress.
+
+Its jobs:
+
+1. **Check the signing secrets** (Ubuntu): a version given must be `X.Y.Z`, and the six secrets
+   below must be set. A missing one fails a release and skips a pull request's dry run.
+2. **Build, sign and notarize** (macOS 26, with a read-only token): checks out the tag, or the pull
+   request's head, and checks that its `Info.plist` has that version; imports the Developer ID
+   certificate into a temporary keychain, with Apple's Developer ID G2 intermediate since the
+   `.p12` holds only the leaf; writes the notary and update keys to the runner's temporary folder;
+   runs `./build.sh --release` with the API key; checks the notarization with `stapler validate`
+   and `spctl` on the app and the DMG; runs the two Tools scripts, with `--ed-key-file`; and keeps
+   the DMG, `appcast.xml` and `notes.md` as the workflow artifact `SlyTerm-<version>` for 14 days.
+   The keychain and the key files are deleted at the end, whatever happened.
+3. **Publish the release** (Ubuntu, only with `publish` on and never for a pull request): the only
+   job that can write to the repository, and it has none of the signing secrets. It downloads the
+   artifact and creates the release `v<version>`, titled "SlyTerm <version>", with `notes.md` as its
+   text and three assets: `SlyTerm-<version>.dmg`, which the appcast points to; the same DMG as
+   `SlyTerm.dmg`, so that
+   `https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg` is always the latest;
+   and `appcast.xml`, the feed every copy reads at `releases/latest/download/appcast.xml`. When the
+   release already exists, it replaces those three assets and leaves its text as it is.
+
+Each appcast lists only its own version, so the feed is always the latest release's.
+
+| Secret | What it holds |
+| --- | --- |
+| `DEVELOPER_ID_P12` | The Developer ID Application certificate with its private key, as a `.p12`, base64 encoded |
+| `DEVELOPER_ID_P12_PASSWORD` | The `.p12`'s password |
+| `NOTARY_KEY_P8` | An App Store Connect team API key: the text of its `.p8` file |
+| `NOTARY_KEY_ID` | That key's ID |
+| `NOTARY_ISSUER_ID` | Its issuer ID |
+| `SPARKLE_PRIVATE_KEY` | The update key's private half, as `generate_keys --account SlyTerm -x <file>` exports it |
+
+`.github/workflows/tag.yml`, the Tag workflow, runs when a push to `main` changes
+`Resources/Info.plist`. When `v<version>` is not tagged yet, it tags `main` and calls Release with
+that version and `publish` on; a tag pushed with the workflow's own token starts no workflow, which
+is why Release is called from here. When the version is already tagged, it says so and nothing is
+released. A release that fails after its tag was pushed is retried by dispatching Release with the
+same version and `publish` on:
+
+```sh
+gh workflow run release.yml -f version=1.3.0 -f publish=true
+```
+
 ## Migration notes
+
+### From a copy you built to the signed app
+
+1.3.0 is the first version signed with a Developer ID and notarized, the first one on GitHub
+Releases and the first one that updates itself. 1.2.0 and earlier have no updater and were only
+built from source, so moving means downloading 1.3.0 once and putting it in place of the old copy
+in `/Applications`. Settings, tabs and games are in the same defaults domain and carry over.
+
+macOS ties Screen Recording and Automation to the app's signature, so the signed app asks again,
+once: for Screen Recording at the first lookup, and for control of iTerm2, Terminal or Ghostty the
+first time it sends one an Apple Event. Its updates are signed by the same Developer ID team, and
+keep both.
 
 ### Coming from HoverTerm
 

@@ -18,9 +18,11 @@ body:
   - type: input
     id: commit
     attributes:
-      label: Commit you built
-      description: The output of `git rev-parse --short HEAD` in your clone.
-      placeholder: 0da7f45
+      label: SlyTerm version or commit
+      description: >-
+        The version in About SlyTerm, or for a copy you built, the output of
+        `git rev-parse --short HEAD` in your clone.
+      placeholder: 1.3.0 or 0da7f45
     validations:
       required: true
   - type: input

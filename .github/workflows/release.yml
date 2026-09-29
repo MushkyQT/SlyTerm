@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version to build from its tag, such as 1.3.0
+        required: true
+        type: string
+      publish:
+        description: Publish the GitHub release, not only the workflow artifact
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to build from its tag, such as 1.3.0
+        required: true
+        type: string
+      publish:
+        description: Publish the GitHub release, not only the workflow artifact
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - build.sh
+      - Tools/make-appcast.sh
+      - Tools/make-release-notes.sh
+      - .github/workflows/release.yml
+      - .github/workflows/tag.yml
+      - Package.swift
+      - Package.resolved
+      - Resources/Info.plist
+      - Resources/SlyTerm.entitlements
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    release-${{ github.event_name == 'pull_request' &&
+    format('pr-{0}', github.event.pull_request.number) || inputs.version }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Check the signing secrets
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check
+        id: check
+        env:
+          PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          FORK: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name != github.repository }}
+          VERSION: ${{ inputs.version }}
+          PRESENT: >-
+            ${{ secrets.DEVELOPER_ID_P12 != '' && secrets.DEVELOPER_ID_P12_PASSWORD != '' &&
+            secrets.NOTARY_KEY_P8 != '' && secrets.NOTARY_KEY_ID != '' &&
+            secrets.NOTARY_ISSUER_ID != '' && secrets.SPARKLE_PRIVATE_KEY != '' }}
+        run: |
+          if [[ "$PULL_REQUEST" != true && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected version '$VERSION'"
+            exit 1
+          fi
+          if [[ "$PRESENT" == true ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$FORK" == true ]]; then
+            # Pull requests from forks get no secrets.
+            echo "::notice::No signing secrets for a fork, so the release dry run is skipped."
+          else
+            echo "::error::A signing secret is missing."
+            exit 1
+          fi
+
+  build:
+    name: Build, sign and notarize
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    runs-on: macos-26
+    # A team's first notarization took 43 minutes; later ones take a few.
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: >-
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha ||
+            format('refs/tags/v{0}', inputs.version) }}
+          persist-credentials: false
+
+      - name: Read the version
+        env:
+          EXPECTED: ${{ github.event_name != 'pull_request' && inputs.version || '' }}
+        run: |
+          plist=Resources/Info.plist
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist")
+          if [[ -n "$EXPECTED" && "$version" != "$EXPECTED" ]]; then
+            echo "::error::Resources/Info.plist at v$EXPECTED says $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Import the Developer ID certificate
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          p12="$RUNNER_TEMP/developer-id.p12"
+          (umask 077; printf '%s' "$DEVELOPER_ID_P12" | base64 --decode > "$p12")
+          security import "$p12" -k "$keychain" -f pkcs12 -P "$DEVELOPER_ID_P12_PASSWORD" \
+            -T /usr/bin/codesign
+          rm "$p12"
+          # The .p12 holds only the leaf certificate; codesign needs the chain to Apple's root.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
+            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" ||
+            echo "The intermediate certificate is already in the keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" \
+            "$keychain" >/dev/null
+          others=$(security list-keychains -d user | tr -d '"')
+          security list-keychains -d user -s "$keychain" $others
+          identities=$(security find-identity -v -p codesigning "$keychain")
+          echo "$identities"
+          grep -q "Developer ID Application" <<<"$identities"
+
+      - name: Write the notary and update keys
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8" ./build.sh --release
+
+      - name: Check the notarization
+        run: |
+          xcrun stapler validate dist/SlyTerm.app
+          xcrun stapler validate "dist/SlyTerm-$VERSION.dmg"
+          spctl -a -t exec -vv dist/SlyTerm.app
+          spctl -a -t open --context context:primary-signature -vv "dist/SlyTerm-$VERSION.dmg"
+
+      - name: Release notes and appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Tools/make-release-notes.sh "$VERSION" dist/notes.md dist/notes.html
+          Tools/make-appcast.sh "dist/SlyTerm-$VERSION.dmg" dist/notes.html dist/appcast.xml \
+            --ed-key-file "$RUNNER_TEMP/sparkle.key"
+
+      - name: Keep the DMG and the appcast
+        uses: actions/upload-artifact@v7
+        with:
+          name: SlyTerm-${{ env.VERSION }}
+          path: |
+            dist/SlyTerm-${{ env.VERSION }}.dmg
+            dist/appcast.xml
+            dist/notes.md
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+
+      - name: Remove the keychain and the keys
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/sparkle.key"
+
+  publish:
+    name: Publish the release
+    needs: build
+    if: github.event_name != 'pull_request' && inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: SlyTerm-${{ inputs.version }}
+          path: dist
+
+      - name: Create or update the release
+        run: |
+          dmg="dist/SlyTerm-$VERSION.dmg"
+          # Under a fixed name too, so releases/latest/download/SlyTerm.dmg is always the latest.
+          cp "$dmg" dist/SlyTerm.dmg
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "$dmg" dist/SlyTerm.dmg dist/appcast.xml --clobber
+          else
+            gh release create "v$VERSION" --verify-tag --title "SlyTerm $VERSION" \
+              --notes-file dist/notes.md "$dmg" dist/SlyTerm.dmg dist/appcast.xml
+          fi

@@ -12,10 +12,14 @@ jobs:
   tag:
     name: Tag the version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      created: ${{ steps.tag.outputs.created }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Tag
+        id: tag
         # Pull requests are squash-merged, so the version can only be tagged once it is on main.
         run: |
           version=$(grep CFBundleShortVersionString Resources/Info.plist |
@@ -30,3 +34,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v$version" -m "SlyTerm $version"
           git push origin "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: tag
+    # A tag pushed with GITHUB_TOKEN starts no workflow, so the release is called from here.
+    if: needs.tag.outputs.created == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}
+      publish: true
+    secrets: inherit

@@ -273,6 +273,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     private let cardSeconds = NSTextField(string: "")
     private let cardStepper = NSStepper()
     private var cardSecondsLabels: [NSTextField] = []
+    private var checkUpdates = NSButton()
+    private var downloadUpdates = NSButton()
+    private var checkNow = NSButton()
 
     override func buildContent() -> NSView {
         restoreSession = checkbox("Restore tabs from the last session", #selector(setRestoreSession(_:)))
@@ -306,6 +309,19 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         cardStepper.action = #selector(stepCardSeconds)
         cardSecondsLabels = [NSTextField(labelWithString: "Keep a finished card for"),
                              NSTextField(labelWithString: "s, 0 keeps it")]
+        checkUpdates = checkbox("Check for updates automatically", #selector(setChecksForUpdates(_:)))
+        downloadUpdates = checkbox("Download and install updates automatically",
+                                   #selector(setDownloadsUpdates(_:)))
+        checkNow = button("Check Now", #selector(checkForUpdates))
+        let updates = Updater.shared.isEnabled ? [
+            checkUpdates, downloadUpdates,
+            caption("An update found by an automatic check waits at the top of the menu bar item "
+                    + "and opens nothing over the game. One downloaded automatically is installed "
+                    + "when SlyTerm quits."),
+            checkNow,
+        ] : [caption(Updater.isAvailable
+                     ? "Updates could not start. The log in ~/Library/Logs/SlyTerm.log says why."
+                     : "This copy was built from source and does not update itself.")]
         return grid([
             section("Launch", [restoreSession, startupAnimation,
                                button("Run Setup Assistant…", #selector(runSetupAssistant))]),
@@ -325,6 +341,7 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
                         + "version 1.3 or later."),
             ]),
             section("Quitting", [confirmQuit]),
+            section("Updates", updates),
         ])
     }
 
@@ -346,6 +363,11 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         cardSeconds.isEnabled = cards
         cardStepper.isEnabled = cards
         for label in cardSecondsLabels { label.textColor = cards ? .labelColor : .disabledControlTextColor }
+        let updater = Updater.shared
+        checkUpdates.state = updater.checksAutomatically ? .on : .off
+        downloadUpdates.state = updater.downloadsAutomatically ? .on : .off
+        downloadUpdates.isEnabled = updater.checksAutomatically && updater.allowsAutomaticDownloads
+        checkNow.isEnabled = updater.canCheck
     }
 
     @objc private func setCardSeconds() {
@@ -374,6 +396,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     @objc private func setSendBackTerminal() {
         settings.sendBackTerminal = sendBackTerminal.selectedItem?.representedObject as? String ?? "iterm2"
     }
+    @objc private func setChecksForUpdates(_ sender: NSButton) { Updater.shared.checksAutomatically = sender.state == .on }
+    @objc private func setDownloadsUpdates(_ sender: NSButton) { Updater.shared.downloadsAutomatically = sender.state == .on }
+    @objc private func checkForUpdates() { Updater.shared.check() }
 }
 
 final class WebPane: SettingsPane, NSTextFieldDelegate {
