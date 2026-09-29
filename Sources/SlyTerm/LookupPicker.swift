@@ -42,7 +42,7 @@ final class LookupPicker {
                                     canvas: ScreenGrabber.appKitRect(fromCG: screen.frame),
                                     candidates: candidates, keys: keys,
                                     highlighted: candidates.indices.contains(request.suggested) ? request.suggested : 0,
-                                    topInset: screen.safeAreaInsets.top)
+                                    topInset: screen.safeAreaInsets.top, game: request.game)
         view.onChoose = { [weak self] index, how in self?.choose(index, how: how) }
         view.onCancel = { [weak self] why in self?.close(why, restoringKeyboard: true) }
         panel.contentView = view
@@ -226,13 +226,17 @@ private final class LookupPickerView: NSView {
     private let lit: [NSRect]
     private let chips: [NSRect]
     private let chipFont: NSFont
+    private let hint: String
     private let hintRect: NSRect
     private var pressed: Int?
 
-    static let hint = "Press a key to look it up  ·  ↩ the highlighted one  ·  Esc to cancel"
+    static func hint(for game: LookupGame) -> String {
+        "Press a key to look it up on \(game.primarySource?.name ?? game.name)  ·  ↩ the highlighted one  ·  "
+            + "Esc to cancel"
+    }
 
     init(frame: NSRect, image: CGImage, shot: CGRect, canvas: CGRect, candidates: [LookupCandidate],
-         keys: [Key], highlighted: Int, topInset: CGFloat) {
+         keys: [Key], highlighted: Int, topInset: CGFloat, game: LookupGame) {
         func place(_ r: CGRect) -> NSRect {
             NSRect(x: r.minX - canvas.minX, y: canvas.maxY - r.maxY, width: r.width, height: r.height)
         }
@@ -252,7 +256,8 @@ private final class LookupPickerView: NSView {
         self.lit = lit
         self.chips = chips
         chipFont = font
-        hintRect = LookupPickerView.placeHint(in: bounds, topInset: topInset, avoiding: lit + chips)
+        hint = LookupPickerView.hint(for: game)
+        hintRect = LookupPickerView.placeHint(hint, in: bounds, topInset: topInset, avoiding: lit + chips)
         super.init(frame: frame)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -314,9 +319,9 @@ private final class LookupPickerView: NSView {
         NSColor(calibratedWhite: 0.08, alpha: 0.92).setFill()
         NSBezierPath(roundedRect: hintRect, xRadius: 8, yRadius: 8).fill()
         let attrs = LookupPickerView.hintAttributes
-        let size = (LookupPickerView.hint as NSString).size(withAttributes: attrs)
-        (LookupPickerView.hint as NSString).draw(at: NSPoint(x: hintRect.midX - size.width / 2, y: hintRect.midY - size.height / 2),
-                                                 withAttributes: attrs)
+        let size = (hint as NSString).size(withAttributes: attrs)
+        (hint as NSString).draw(at: NSPoint(x: hintRect.midX - size.width / 2, y: hintRect.midY - size.height / 2),
+                                withAttributes: attrs)
     }
 
     private static let hintAttributes: [NSAttributedString.Key: Any] = [
@@ -385,7 +390,8 @@ private final class LookupPickerView: NSView {
         return placed
     }
 
-    private static func placeHint(in bounds: NSRect, topInset: CGFloat, avoiding: [NSRect]) -> NSRect {
+    private static func placeHint(_ hint: String, in bounds: NSRect, topInset: CGFloat,
+                                  avoiding: [NSRect]) -> NSRect {
         let text = (hint as NSString).size(withAttributes: hintAttributes)
         let size = NSSize(width: ceil(text.width) + 24, height: ceil(text.height) + 16)
         let x = (bounds.midX - size.width / 2).rounded()
@@ -542,7 +548,8 @@ extension LookupPicker {
 
         let view = LookupPickerView(frame: NSRect(origin: .zero, size: size), image: image, shot: shot.frame,
                                     canvas: shot.frame, candidates: shown, keys: keys,
-                                    highlighted: shown.indices.contains(suggested) ? suggested : 0, topInset: 0)
+                                    highlighted: shown.indices.contains(suggested) ? suggested : 0, topInset: 0,
+                                    game: game)
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: image.width, pixelsHigh: image.height,
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                          colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return }

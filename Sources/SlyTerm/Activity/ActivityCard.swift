@@ -236,7 +236,7 @@ final class ActivityCard: ActivityCardPresenting {
             title: title,
             body: Self.clamp(activity.lastMessage) ?? "Turn finished.",
             mono: nil,
-            footer: footer([ghost.map { "\($0) to read" }]))
+            footer: footer([ghost.map { ($0, "to read") }]))
     }
 
     private func notifiedContent(tab: TerminalTab, title: String?,
@@ -247,7 +247,7 @@ final class ActivityCard: ActivityCardPresenting {
             title: "\(tab.title) · \(title ?? "notification")",
             body: Self.clamp(body) ?? body,
             mono: nil,
-            footer: footer([ghost.map { "\($0) to read" }]))
+            footer: footer([ghost.map { ($0, "to read") }]))
     }
 
     private func asksContent(tab: TerminalTab,
@@ -262,8 +262,8 @@ final class ActivityCard: ActivityCardPresenting {
                 title: "\(tab.title) · needs an answer",
                 body: "Wants to \(summary)",
                 mono: detail.map { Self.clampCharacters(Self.clampLines($0, max: 6), to: 600) },
-                footer: footer([allow.map { "\($0) allow" }, refuse.map { "\($0) refuse" },
-                                ghost.map { "\($0) to look" }]))
+                footer: footer([allow.map { ($0, "Allow") }, refuse.map { ($0, "Refuse") },
+                                ghost.map { ($0, "Look") }]))
         case .question(let text, let options):
             let listed = options.prefix(5).map { "· \($0)" }.joined(separator: "\n")
             return ActivityCardView.Content(
@@ -271,19 +271,19 @@ final class ActivityCard: ActivityCardPresenting {
                 title: "\(tab.title) · asks a question",
                 body: listed.isEmpty ? text : "\(text)\n\(listed)",
                 mono: nil,
-                footer: footer([ghost.map { "\($0) to answer" }]))
+                footer: footer([ghost.map { ($0, "to answer") }]))
         case .unknown, .none:
             return ActivityCardView.Content(
                 accent: .systemOrange,
                 title: "\(tab.title) · is waiting for you",
                 body: "Open the terminal to see what it asks.",
                 mono: nil,
-                footer: footer([ghost.map { "\($0) to answer" }]))
+                footer: footer([ghost.map { ($0, "to answer") }]))
         }
     }
 
-    private func footer(_ parts: [String?]) -> String {
-        parts.compactMap { $0 }.joined(separator: " · ")
+    private func footer(_ parts: [(key: String, action: String)?]) -> [ActivityCardView.Hint] {
+        parts.compactMap { $0.map { ActivityCardView.Hint(key: $0.key, action: $0.action) } }
     }
 
     static func clamp(_ text: String?) -> String? {
@@ -319,7 +319,12 @@ final class ActivityCardView: NSView {
         var title: String
         var body: String
         var mono: String?
-        var footer: String
+        var footer: [Hint]
+    }
+
+    struct Hint {
+        var key: String
+        var action: String
     }
 
     var onClose: (() -> Void)?
@@ -335,7 +340,9 @@ final class ActivityCardView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let bodyLabel = NSTextField(wrappingLabelWithString: "")
     private let monoLabel = NSTextField(wrappingLabelWithString: "")
-    private let footerLabel = NSTextField(labelWithString: "")
+    private let footerLabel = NSTextField(wrappingLabelWithString: "")
+    private static let footerFont = NSFont.systemFont(ofSize: 11.5)
+    private static let footerAlpha: CGFloat = 0.8
     private var accent = NSColor.systemYellow
     private var closeRect = NSRect.zero
     private var closeHovered = false { didSet { if closeHovered != oldValue { needsDisplay = true } } }
@@ -344,10 +351,10 @@ final class ActivityCardView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        style(titleLabel, font: .systemFont(ofSize: 12, weight: .semibold), alpha: 0.9, lines: 1)
+        style(titleLabel, font: .systemFont(ofSize: 13, weight: .semibold), alpha: 0.9, lines: 1)
         style(bodyLabel, font: .systemFont(ofSize: 12), alpha: 0.8, lines: 6)
         style(monoLabel, font: .monospacedSystemFont(ofSize: 11, weight: .regular), alpha: 0.75, lines: 6)
-        style(footerLabel, font: .systemFont(ofSize: 10.5), alpha: 0.5, lines: 1)
+        style(footerLabel, font: Self.footerFont, alpha: Self.footerAlpha, lines: 2)
         for label in [titleLabel, bodyLabel, monoLabel, footerLabel] { addSubview(label) }
     }
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -373,9 +380,25 @@ final class ActivityCardView: NSView {
         monoLabel.stringValue = content.mono ?? ""
         monoLabel.maximumNumberOfLines = 6
         monoLabel.isHidden = content.mono == nil
-        footerLabel.stringValue = content.footer
+        footerLabel.attributedStringValue = Self.footerText(content.footer)
         footerLabel.isHidden = content.footer.isEmpty
         needsDisplay = true
+    }
+
+    // A no-break space keeps each combo on the line of its action when the footer wraps.
+    private static func footerText(_ hints: [Hint]) -> NSAttributedString {
+        let color = NSColor(calibratedWhite: 1, alpha: footerAlpha)
+        let plain: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: color]
+        let key: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: footerFont.pointSize, weight: .semibold), .foregroundColor: color,
+        ]
+        let text = NSMutableAttributedString()
+        for (i, hint) in hints.enumerated() {
+            if i > 0 { text.append(NSAttributedString(string: " · ", attributes: plain)) }
+            text.append(NSAttributedString(string: hint.key, attributes: key))
+            text.append(NSAttributedString(string: "\u{00A0}" + hint.action, attributes: plain))
+        }
+        return text
     }
 
     func height(forWidth width: CGFloat) -> CGFloat {
@@ -511,6 +534,9 @@ enum ActivityCardSnapshotCLI {
         func add(_ caption: String, _ content: ActivityCardView.Content, width: CGFloat = 420) {
             if let image = render(content, width: width) { rows.append((caption, image)) }
         }
+        let permission: [ActivityCardView.Hint] = [.init(key: "⌃⌥Y", action: "Allow"),
+                                                    .init(key: "⌃⌥N", action: "Refuse"),
+                                                    .init(key: "⌃⌥Tab", action: "Look")]
         add("a finished turn", ActivityCardView.Content(
             accent: .systemYellow,
             title: "claude · finished · 2m 14s",
@@ -520,19 +546,19 @@ enum ActivityCardSnapshotCLI {
                   for how long. I left the yellow dot alone: it still means a bell or a notify.
                   """,
             mono: nil,
-            footer: "⌃⌥Tab to read"))
+            footer: [.init(key: "⌃⌥Tab", action: "to read")]))
         add("a permission prompt, with the command", ActivityCardView.Content(
             accent: .systemOrange,
             title: "slyterm · needs an answer",
             body: "Wants to run `swift build 2>&1 | tail -40`",
             mono: "swift build 2>&1 | tail -40\nswift build -c release 2>&1 | tail -20",
-            footer: "⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look"))
+            footer: permission))
         add("a question, with its options", ActivityCardView.Content(
             accent: .systemOrange,
             title: "Projects · asks a question",
             body: "Which strip edge should the card prefer when both sides fit?\n· Away from the terminal\n· Always below\n· Follow the window",
             mono: nil,
-            footer: "⌃⌥Tab to answer"))
+            footer: [.init(key: "⌃⌥Tab", action: "to answer")]))
         add("a long answer, cut where the card runs out", ActivityCardView.Content(
             accent: .systemYellow,
             title: "slyterm · finished · 4m 02s",
@@ -548,25 +574,25 @@ enum ActivityCardSnapshotCLI {
                   and nothing in the poll can crash the app.
                   """) ?? "",
             mono: nil,
-            footer: "⌃⌥Tab to read"))
+            footer: [.init(key: "⌃⌥Tab", action: "to read")]))
         add("Codex asks to run a command, read off its screen", ActivityCardView.Content(
             accent: .systemOrange,
             title: "Fix the login test | api · needs an answer",
             body: "Wants to run `npm test -- --grep login`",
             mono: "npm test -- --grep login",
-            footer: "⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look"))
+            footer: permission))
         add("a notification from a program SlyTerm does not read", ActivityCardView.Content(
             accent: .systemYellow,
             title: "build · Build finished",
             body: "All 214 targets built in 3m 12s, 2 warnings.",
             mono: nil,
-            footer: "⌃⌥Tab to read"))
+            footer: [.init(key: "⌃⌥Tab", action: "to read")]))
         add("a long command and a narrow strip", ActivityCardView.Content(
             accent: .systemOrange,
             title: "a tab with a very long name indeed · needs an answer",
             body: "Wants to run `rg --hidden --glob '!.git' 'activityCards' -n Sources`",
             mono: "rg --hidden --glob '!.git' 'activityCards' -n Sources README.md build.sh",
-            footer: "⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look"), width: 260)
+            footer: permission), width: 260)
         write(rows, to: output)
         return true
     }

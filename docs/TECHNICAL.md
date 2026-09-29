@@ -257,11 +257,12 @@ marks nothing and a shell completion beep stays quiet.
 With the mark comes a card, hung off the strip and readable over the game: the tab's name, what
 happened and, for a finished turn, how long it took and the last paragraph of the agent's answer;
 for a permission prompt, the command it wants to run or the file it wants to edit; for a question,
-the question and its options; for a notification, its title and its text. The less SlyTerm can read
-of an agent, the less its card says: Gemini CLI's and Qwen Code's only say that a turn finished or
-that something waits, and so does the card of a Codex whose rollout cannot be found. A finished card
-fades
-after ten seconds, a waiting one stays until it is answered or closed with its ×. Clicking the
+the question and its options; for a notification, its title and its text. Its last line names the
+keys that act on it, each combo in bold and taken from Settings › Shortcuts: `⌃⌥Y Allow · ⌃⌥N
+Refuse · ⌃⌥Tab Look` for a permission prompt, on two lines when the card is too narrow for one.
+The less SlyTerm can read of an agent, the less its card says: Gemini CLI's and Qwen Code's only
+say that a turn finished or that something waits, and so does the card of a Codex whose rollout
+cannot be found. A finished card fades after ten seconds, a waiting one stays until it is answered or closed with its ×. Clicking the
 card brings its tab forward and, like a click on the strip, leaves you in click-through; `⌃⌥Tab`
 with a card up opens the tab the card is about, whichever tab is selected.
 
@@ -285,9 +286,11 @@ tab: for Claude Code, Return for the highlighted "Yes" and Escape for "No"; for 
 - it is a prompt known to take a plain yes or no: for Claude Code, one for a tool known to put up
   such a prompt (a command, an edit, a read, a fetch or search, an MCP tool); for Codex, a command
   to run or an edit to make, as the tab shows it right before the key,
-- and the agent is still the job in front in the tab.
+- and the agent is still the program running in the tab.
 
-Otherwise a small toast says why and nothing is typed. So a prompt that changed while you reached
+Otherwise a small toast says why and nothing is typed ("Claude is not the program running in
+slyterm"). Every orange toast here stays 3.5 seconds, "Refused: …" included; the green
+"Allowed: …" stays 1.6. So a prompt that changed while you reached
 for the key wants another look at the card first, and some prompts always want the terminal: a
 question, which is never answered blind (the card says to press `⌃⌥Tab`), a plan to approve, a
 subagent asking for something, and several calls issued at once, where the transcript cannot say
@@ -619,7 +622,12 @@ Point at something in your game (a quest in the journal, an item in your bags, t
 you have open), press `⌃⌥Q`, and the page your game's sources have for it opens in a **web tab**
 next to your terminals, never in your browser: a browser would come to the front and take the
 keyboard, which is the one thing you cannot afford mid-fight. A small message next to the pointer
-says which page is opening, or what was read when nothing matched. Typical time from key press to
+says which page is opening and on which site (`Guide: Dragon scimitar · OSRS Wiki`), or what was
+read and which game was asked when nothing matched (`No guide on Dofus for “Hogger”`). When the
+game came from the fallback, with "Detect the game from the app in front" on and another game
+naming an app, a second line says so for 4 seconds: `Dofus answered; no game claims World of
+Warcraft. Set the game app in Settings › Lookup.` With one game and no game app set, there is no
+second line. Typical time from key press to
 the tab: 200 to 400 ms, plus about half a second for the page.
 
 The overlay does not take focus when a guide arrives: if it was hidden it comes back in
@@ -736,7 +744,8 @@ tooltip's name gets one of the first keys.
 
 The screenshot is read with the fast recognition, or the accurate one when the fast one found no
 tooltip with a name in it, since the line you pick is the text looked up: that is about half a
-second more before the frame freezes. `Return` takes the highlighted line, which starts on the one
+second more before the frame freezes. The hint at the top names the game's first source ("Press a
+key to look it up on Dofus Wiki"). `Return` takes the highlighted line, which starts on the one
 `⌃⌥Q` alone would have gone for; `Tab`, `⇧Tab` and the arrows move the highlight; `Esc` cancels,
 and so does `⌃⌥⇧Q` pressed again. `⌃⌥Q` while the picker is up takes the highlighted line.
 
@@ -1015,7 +1024,9 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
 - **The window** is the page on the terminal's translucent background, with rounded corners,
   resizable from its sides and its bottom down to 240 × 160 pt, and its toolbar across the top,
   which covers the top edge as the strip does the SlyTerm window's. The toolbar is the handle: drag
-  its empty space to move the window.
+  its empty space to move the window. Since the strip may be hidden, the toolbar shows the mode
+  itself, left of its back button: the strip's green dot in interact mode, and in click-through an
+  orange dot on the strip's click-through brown. The docked toolbar has neither.
 - **Where it opens.** A page opens where the last floating page was, and a video that is playing,
   or filling the page, where the last floating video was; each is saved when you finish moving or
   resizing a window of its kind. A page with a paused video opens as a page. The first page opens at
@@ -1046,7 +1057,8 @@ video goes back to the usual rule, opaque in interact mode.
 
 A floating window's toolbar stays clickable in click-through, like the strip, dimmed with the rest:
 its buttons work and dragging it moves the window. Its address field needs interact mode, since the
-toolbar cannot take the keyboard in click-through.
+toolbar cannot take the keyboard in click-through: a click on it there shows "Click-through:
+⌃⌥Tab to type here" for 2.5 seconds, with the combo from Settings › Shortcuts.
 
 Clicking a floating page in interact mode gives it the keyboard, and clicking into the game from
 there switches everything to click-through, as leaving the terminal does; so does hiding the
@@ -1582,14 +1594,16 @@ a separate `SlyTerm` defaults domain.
   than leaving you with nothing. `--index` says which of the two it is, source by source, with the
   size and the age of every index; `--index --refresh` rebuilds them on the spot.
 - **The wrong game was picked.** The lookup asks the app under the pointer, then the app in front,
-  then the game chosen by hand. Set each game's **Game app** in Settings › Lookup so it can be
+  then the game chosen by hand, and the message names the game or the site that answered. When
+  the game chosen by hand answered for an app no game claims, the message's second line names that
+  app. Set each game's **Game app** in Settings › Lookup so it can be
   recognised, or turn "Detect the game from the app in front" off and pick the game yourself, in
   that pane or in the menu bar's "Lookup Game" submenu.
 - **The lookup opened a new web tab instead of its own.** Its own was playing something, and the
   lookup never replaces a show: the new tab is the lookup's from then on (see
   [The lookup's tab](#the-lookups-tab)).
-- **A floating web tab's address field does not take typing.** SlyTerm is in click-through, where
-  the toolbar's buttons work but typing does not. Press `⌃⌥Tab`, then click the field.
+- **A floating web tab's address field does not take typing.** The toolbar's dot is orange:
+  SlyTerm is in click-through. Press `⌃⌥Tab`, then click the field.
 - **Ads play on YouTube.** Nothing is blocked on streaming sites, since YouTube stops playing when
   its ad requests are blocked (see [Reader mode and blocking](#reader-mode-and-blocking)).
 - **Signing in through a pop-up does not finish.** A pop-up opens as a new web tab, without the

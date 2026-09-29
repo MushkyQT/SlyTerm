@@ -86,7 +86,8 @@ Point at a quest, an item or a spell and press `⌃⌥Q`. SlyTerm reads the text
 finds the matching page on your game's wiki or guide site, and opens it in a web tab next to your
 terminals. It also finds the name at the top of an item's tooltip, wherever the game draws it.
 Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q` to choose from every line near the pointer with one
-key each.
+key each. The message by the pointer names the site that answered, or the game it asked when
+nothing matched, so a lookup that went to the wrong game shows it.
 
 <img src="docs/features/lookup.gif" width="600"
      alt="Pointing at a Minor Healing Potion in the World of Warcraft bag and pressing ⌃⌥Q opens its Wowhead page in a web tab">
@@ -113,9 +114,11 @@ the page and your terminal, and the game keeps focus when a page opens.
 
 Pop a web tab out and it floats over the game in a window of its own, filled with its video if one
 is playing, while the SlyTerm window goes back to your terminal. It switches to click-through with
-the rest of SlyTerm. A playing video has an opacity of its own, 85% by default, so the game shows
-through it in either mode. Put it back and it returns to the SlyTerm window. `⌃⌥V` pauses what is
-playing without leaving the game, and plays it again; the panic button silences it too.
+the rest of SlyTerm, and a dot on its toolbar shows which mode it is in: green when it takes clicks
+and typing, orange in click-through. A playing video has an opacity of its own, 85% by default, so
+the game shows through it in either mode. Put it back and it returns to the SlyTerm window. `⌃⌥V`
+pauses what is playing without leaving the game, and plays it again; the panic button silences it
+too.
 
 <img src="docs/features/web.gif" width="600"
      alt="Over Cyberpunk 2077, a YouTube guide playing in a web tab pops out into a floating window, keeps playing with the game showing through after a click in the game, and ⌃⌥V pauses it">

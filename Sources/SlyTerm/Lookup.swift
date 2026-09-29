@@ -117,6 +117,7 @@ final class Lookup {
     private struct Press {
         var outcome: Outcome
         var game: LookupGame?
+        var unclaimed: String?
         var reading = Reading()
         var answered: Int?
         var rowText: String?
@@ -161,20 +162,26 @@ final class Lookup {
             if let s = continued, await !self.rowUnchanged(since: s, at: mouse) { continued = nil }
             let outcome: Outcome
             let kept: Session?
+            let answering: LookupGame?, unclaimed: String?
             if var s = continued {
                 outcome = await self.again(&s)
                 s.pressed = Date()
                 kept = s
+                answering = s.game
+                unclaimed = nil
             } else {
                 let press = await self.press(at: mouse, text: text, game: game)
                 outcome = press.outcome
+                answering = press.game
+                unclaimed = press.unclaimed
                 kept = text == nil ? Self.startSession(after: press, at: mouse, forced: game, dryRun: dryRun) : nil
             }
             let next = kept.flatMap { self.upcoming($0) }
             await MainActor.run {
                 self.sessionLock.withLock { self.session = kept }
                 self.running = false
-                self.finish(outcome, at: mouse, dryRun: dryRun, next: next)
+                self.finish(outcome, at: mouse, dryRun: dryRun, next: next, game: answering,
+                            unclaimed: unclaimed)
                 if kept != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + Self.againWindow + 1) { [weak self] in self?.expireSession() }
                 }
@@ -206,8 +213,11 @@ final class Lookup {
                 : nil
             if grabber != nil { Settings.log("lookup: shareable content in \(clock.ms) ms") }
 
-            guard let game = await resolveGame(forced: forced, at: point, with: grabber) else { return Press(outcome: .noGame) }
-            var press = Press(outcome: .noText, game: game)
+            guard let resolved = await resolveGame(forced: forced, at: point, with: grabber) else {
+                return Press(outcome: .noGame)
+            }
+            let game = resolved.game
+            var press = Press(outcome: .noText, game: game, unclaimed: resolved.unclaimed)
             let indexed = LookupIndices.indexed(game)
             for (_, index) in indexed { index.ensureLoaded() }
 
@@ -663,7 +673,7 @@ final class Lookup {
             let outcome = await self.lookup(at: mouse, text: candidate.text, game: request.game)
             await MainActor.run {
                 self.running = false
-                self.finish(outcome, at: mouse, dryRun: request.dryRun)
+                self.finish(outcome, at: mouse, dryRun: request.dryRun, game: request.game)
             }
         }
     }
@@ -683,7 +693,9 @@ final class Lookup {
         do {
             let point = ScreenGrabber.cgPoint(fromAppKit: mouse)
             let grabber = ScreenGrabber(content: try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true))
-            guard let game = await resolveGame(forced: forced, at: point, with: grabber) else { return .failed(.noGame) }
+            guard let game = await resolveGame(forced: forced, at: point, with: grabber)?.game else {
+                return .failed(.noGame)
+            }
             var shot = try await grabber.captureWindow(around: point, game: game)
             if shot == nil { shot = try await grabber.captureDisplay(containing: point) }
             guard let shot else { return .nothing }
@@ -712,10 +724,13 @@ final class Lookup {
         return try OCR.lines(in: shot.image, fast: false, languages: game.ocrLanguages)
     }
 
-    private func resolveGame(forced: LookupGame?, at point: CGPoint, with grabber: ScreenGrabber?) async -> LookupGame? {
+    // `unclaimed` names the app no game claims when the fallback game answered and another game
+    // names an app: the toast says so, or a wrong wiki's answer looks like the right one.
+    private func resolveGame(forced: LookupGame?, at point: CGPoint,
+                             with grabber: ScreenGrabber?) async -> (game: LookupGame, unclaimed: String?)? {
         if let forced {
             Settings.log("lookup: game \(forced.name), asked for by name")
-            return forced
+            return (forced, nil)
         }
         let pointed = grabber?.bundleID(under: point)
         let front = await MainActor.run { NSWorkspace.shared.frontmostApplication?.bundleIdentifier }
@@ -723,16 +738,28 @@ final class Lookup {
             Settings.log("lookup: no game configured")
             return nil
         }
+        let store = LookupStore.shared
         let why: String
-        if LookupStore.shared.autoDetect, game.matches(bundleID: pointed) {
+        var unclaimed: String?
+        if store.autoDetect, game.matches(bundleID: pointed) {
             why = "\(pointed ?? "") under the pointer"
-        } else if LookupStore.shared.autoDetect, game.matches(bundleID: front) {
+        } else if store.autoDetect, game.matches(bundleID: front) {
             why = "\(front ?? "") in front"
         } else {
-            why = "the game chosen by hand"
+            if store.autoDetect, store.games.contains(where: { $0.id != game.id && !$0.appBundleIDs.isEmpty }) {
+                unclaimed = await MainActor.run { Self.appName(pointed ?? front) }
+            }
+            why = "the game chosen by hand" + (unclaimed.map { ", no game claims \($0)" } ?? "")
         }
         Settings.log("lookup: game \(game.name), from \(why)")
-        return game
+        return (game, unclaimed)
+    }
+
+    @MainActor
+    private static func appName(_ bundleID: String?) -> String? {
+        guard let bundleID else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .first { $0.processIdentifier != getpid() }?.localizedName
     }
 
     private func bestMatch(for cleaned: String, in indexed: [(source: LookupSource, index: LookupIndex)]) -> (source: LookupSource, match: LookupIndex.Match)? {
@@ -776,35 +803,56 @@ final class Lookup {
     }
 
     @MainActor
-    private func finish(_ outcome: Outcome, at mouse: NSPoint, dryRun: Bool, next: String? = nil) {
+    private func finish(_ outcome: Outcome, at mouse: NSPoint, dryRun: Bool, next: String? = nil,
+                        game: LookupGame? = nil, unclaimed: String? = nil) {
         Settings.log("lookup: \(outcome)\(next.map { ", next: \($0)" } ?? "")")
+        let note = game.flatMap { game in unclaimed.map { Self.fallbackNote(game: game.name, app: $0) } }
+        func show(_ text: String, tint: NSColor, duration: TimeInterval = 1.8) {
+            Toast.shared.show(note.map { text + "\n" + $0 } ?? text, near: mouse, tint: tint,
+                              duration: note == nil ? duration : max(duration, 4))
+        }
         switch outcome {
-        case .found(let name, let url, _, let source):
+        case .found(_, let url, _, _):
             let inApp = Settings.shared.questOpenInApp && openGuide != nil
-            var message = dryRun ? "\(name)  →  \(Self.pageLabel(of: url))  [\(source)]"
-                                 : inApp ? "Guide: \(name)" : "Opening \(name)"
+            var message = Self.toastText(outcome, game: game?.name, inApp: inApp, dryRun: dryRun)
             if let next {
                 let combo = KeyCombo.pretty(Settings.shared.hotkey(.quest))
                 message += "  ·  \(combo.isEmpty ? "" : combo + " ")again: \(next)"
             }
-            Toast.shared.show(message, near: mouse, tint: .systemGreen)
+            show(message, tint: .systemGreen)
             if !dryRun {
                 if inApp { openGuide?(url) } else { open(url) }
             }
         case .noGame:
             Toast.shared.show("Add a game in Settings › Lookup", near: mouse, tint: .systemOrange, duration: 3)
         case .noText:
-            Toast.shared.show("No text under the pointer", near: mouse, tint: .systemOrange)
-        case .noMatch(let text):
-            Toast.shared.show("No guide found for “\(text)”", near: mouse, tint: .systemOrange, duration: 3)
+            show("No text under the pointer", tint: .systemOrange)
+        case .noMatch:
+            show(Self.toastText(outcome, game: game?.name), tint: .systemOrange, duration: 3)
         case .nothingElse:
-            Toast.shared.show("Nothing else near the pointer", near: mouse, tint: .systemOrange)
+            show("Nothing else near the pointer", tint: .systemOrange)
         case .noPermission:
             Toast.shared.show("Allow Screen Recording for SlyTerm in System Settings › Privacy & Security, then relaunch it",
                               near: mouse, tint: .systemRed, duration: 6)
         case .failed(let message):
             Toast.shared.show("Lookup failed: \(message)", near: mouse, tint: .systemRed, duration: 4)
         }
+    }
+
+    static func toastText(_ outcome: Outcome, game: String?, inApp: Bool = true, dryRun: Bool = false) -> String {
+        switch outcome {
+        case .found(let name, let url, _, let source):
+            if dryRun { return "\(name)  →  \(pageLabel(of: url))  [\(source)]" }
+            return (inApp ? "Guide: \(name)" : "Opening \(name)") + " · \(source)"
+        case .noMatch(let text):
+            return game.map { "No guide on \($0) for “\(text)”" } ?? "No guide found for “\(text)”"
+        default:
+            return outcome.description
+        }
+    }
+
+    static func fallbackNote(game: String, app: String) -> String {
+        "\(game) answered; no game claims \(app). Set the game app in Settings › Lookup."
     }
 
     private static func pageLabel(of url: URL) -> String {
@@ -1039,10 +1087,14 @@ enum LookupCLI {
         switch args[1] {
         case "--match":
             let text = LookupText.clean(words.joined(separator: " "), for: game)
-            for m in merged(matches: text, in: indexed, limit: 5) {
+            let matches = merged(matches: text, in: indexed, limit: 5)
+            for m in matches {
                 print(String(format: "  %.3f  %@  %@%@", m.match.score, m.match.entry.name, m.match.entry.url.absoluteString,
                              indexed.count > 1 ? "  [\(m.source.name)]" : ""))
             }
+            let top = matches.first.map { Lookup.Outcome.found(name: $0.match.entry.name, url: $0.match.entry.url,
+                                                                via: "text", source: $0.source.name) }
+            print("toast: \(Lookup.toastText(top ?? .noMatch(text), game: game.name))")
         case "--ocr":
             guard let path = words.first, let image = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
                 print("cannot read image"); return true
@@ -1087,6 +1139,7 @@ enum LookupCLI {
             wait {
                 let outcome = await Lookup.shared.lookup(at: point ?? NSEvent.mouseLocation, game: game)
                 print("result: \(outcome)")
+                print("toast: \(Lookup.toastText(outcome, game: game.name))")
             }
         }
         return true
@@ -1214,8 +1267,14 @@ enum LookupCLI {
             if let winner, case .hit(let page)? = reading.verdict(for: reading.candidates[winner]) {
                 let outcome = Lookup.Outcome.found(name: page.name, url: page.url, via: "nearby", source: page.source)
                 print("result: \(outcome), from \"\(reading.candidates[winner].text)\" (rank \(winner + 1))")
+                print("toast: \(Lookup.toastText(outcome, game: game.name))")
             } else if let top = Lookup.searched(reading.candidates) {
                 print("result: nothing confirmed near the pointer; the search page would get \"\(top.cleaned)\"")
+                if let source = game.primarySource, let url = source.searchURL(for: top.cleaned) {
+                    let outcome = Lookup.Outcome.found(name: top.cleaned, url: url, via: "search page",
+                                                       source: source.name)
+                    print("toast: \(Lookup.toastText(outcome, game: game.name))")
+                }
             } else {
                 print("result: no tooltip, and nothing within \(Int(LookupNearby.radius)) text heights of the pointer")
             }

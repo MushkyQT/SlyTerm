@@ -129,6 +129,7 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
         keyHandler = nil
         onKeyChange = nil
         // The tab may already have taken its views back.
+        (toolbarView as? GuideToolbarView)?.floatingGhost = nil
         if toolbarView.superview === barView {
             toolbarView.removeFromSuperview()
             toolbarView.autoresizingMask = toolbarMask
@@ -146,6 +147,7 @@ final class FloatingWeb: NSObject, NSWindowDelegate {
         bar.ignoresMouseEvents = false
         bar.alphaValue = ghost ? dim : 1
         bar.allowsKey = !ghost
+        (toolbarView as? GuideToolbarView)?.floatingGhost = ghost
         let background = TerminalTab.backgroundColor.withAlphaComponent(isFilled ? 1 : backgroundOpacity)
         container.layer?.backgroundColor = background.cgColor
     }
@@ -479,7 +481,8 @@ enum FloatSnapshotCLI {
         let action = #selector(SnapshotTarget.noop)
         for (i, item) in left.enumerated() {
             let button = GuideToolbarView.button(item.0, tooltip: item.1, target: target, action: action)
-            button.frame = NSRect(x: 6 + CGFloat(i) * 22, y: y, width: size, height: size)
+            button.frame = NSRect(x: 6 + GuideTab.floatingDotRoom + CGFloat(i) * 22, y: y,
+                                  width: size, height: size)
             bar.addSubview(button)
         }
         for (i, item) in right.enumerated() {
@@ -493,7 +496,8 @@ enum FloatSnapshotCLI {
         label.textColor = NSColor(calibratedWhite: 1, alpha: 0.75)
         label.lineBreakMode = .byTruncatingMiddle
         label.alignment = .center
-        let leftEdge: CGFloat = 54, rightEdge = width - 26 - CGFloat(right.count - 1) * 22 - 6
+        let leftEdge: CGFloat = 54 + GuideTab.floatingDotRoom
+        let rightEdge = width - 26 - CGFloat(right.count - 1) * 22 - 6
         label.frame = NSRect(x: leftEdge, y: 5, width: rightEdge - leftEdge, height: 16)
         label.autoresizingMask = [.width]
         bar.addSubview(label)
