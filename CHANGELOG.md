@@ -37,8 +37,9 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   names an app and the game under "Otherwise use" answered, a second line says so. Pick mode's
   hint names the site it looks things up on.
 - Tab names stay readable on a narrow strip: the expand button makes way when tabs would be under
-  40 pt, a tab too narrow for its × plus three letters of its name has no ×, and a very narrow tab
-  shows the first three letters of its name. The tooltip has the full name.
+  40 pt, a tab too narrow for its × plus three letters of its name has no ×, and a tab where an
+  ellipsis would leave one or two letters shows the first three letters of its name. The tooltip
+  has the full name.
 - The activity card's key line is larger and brighter, with the shortcuts in bold ("⌃⌥Y Allow ·
   ⌃⌥N Refuse · ⌃⌥Tab Look"), and the card's title is larger. The toasts that say why an answer key
   did nothing stay 3.5 seconds.

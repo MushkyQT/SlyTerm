@@ -127,8 +127,9 @@ would still be under 40 pt, the expand button goes (`⌘Return` and `⌃⌥M` st
 Fullscreen). A tab has a `×`, shown while it is selected or under the pointer, only when the `×`
 leaves room for three letters of the name and an ellipsis after the tab's mark; a narrower tab has
 none, and a click anywhere on it selects it. Middle-click, `⌘W` and **Close Tab** in the tab's
-right-click menu close a tab either way. A tab under 40 pt shows its mark and the first three
-letters of its name, with no ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always
+right-click menu close a tab either way. A tab under 40 pt, or one where an ellipsis would leave
+fewer than three letters, shows its mark and the first three letters of its name with no
+ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always
 stay. A tab whose name is shortened has it in its tooltip, above what its agent is doing.
 
 ### Tabs and folders

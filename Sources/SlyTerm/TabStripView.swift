@@ -358,7 +358,7 @@ final class TabStripView: NSView {
                                  : NSColor(calibratedWhite: 1, alpha: isSelected ? 0.95 : 0.6)
             let mark = delegate?.stripTabMark(i) ?? (alerting ? .attention : .none)
             if mark == .working { anyWorking = true }
-            // Below 40 pt an ellipsis would leave a letter or two: the first three, clipped.
+            // Where an ellipsis would leave a letter or two, the first three letters, clipped.
             let narrow = r.width < 40
             let inset: CGFloat = narrow ? 5 : 8
             var indent = inset
@@ -369,12 +369,15 @@ final class TabStripView: NSView {
             let showClose = (isHovered || isSelected) && !closeRects[i].isEmpty
             let textRect = NSRect(x: r.minX + indent, y: r.minY + 4,
                                   width: r.width - indent - (showClose ? 22 : narrow ? 2 : 8), height: r.height - 8)
+            let first3 = String(titles[i].prefix(3))
+            let fits = { (s: String) in (s as NSString).size(withAttributes: [.font: font]).width <= textRect.width }
+            let clipped = narrow || (!fits(titles[i]) && !fits(first3 + "…"))
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: font,
                 .foregroundColor: color,
-                .paragraphStyle: narrow ? clip : para,
+                .paragraphStyle: clipped ? clip : para,
             ]
-            let name = narrow ? String(titles[i].prefix(3)) : titles[i]
+            let name = clipped ? first3 : titles[i]
             (name as NSString).draw(in: textRect, withAttributes: attrs)
             if showClose {
                 drawSymbol("xmark", in: closeRects[i], color: NSColor(calibratedWhite: 1, alpha: hover == .close(i) ? 1 : 0.5), pointSize: 9)
