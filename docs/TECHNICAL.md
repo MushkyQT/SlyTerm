@@ -43,7 +43,7 @@ These hold for every feature, and a change that breaks one of them is a bug:
 
 Set your game to **borderless windowed** for the most reliable overlay. Native macOS fullscreen
 also works; exclusive fullscreen may not. If the overlay ends up behind the game, raise Settings ›
-Window › Level to "Pop-up menu, highest".
+Window › Level to "Above everything, for games that cover the terminal".
 
 - **Interact** (green dot). The terminal takes clicks, scrolling, text selection and typing, like
   any terminal. Typing goes to the terminal, not the game.
@@ -309,9 +309,10 @@ The allow and refuse shortcuts go with the card, `slyterm://allow` and `slyterm:
 
 Those two URLs are off anyway until you turn them on, since any program of yours can open a URL,
 and an agent that can run `open` could approve its own next request:
-`defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`. `activityCardSeconds`
-(default 10; 0 keeps a finished card or a notification until it is closed) has no control in
-Settings either.
+`defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`, with no control in
+Settings. How long a finished card or a notification stays is "Keep a finished card for … s" in
+Settings › General › Agents (`activityCardSeconds`, default 10; 0 keeps it until it is closed), off
+while the card is off.
 
 ### Claude Code
 
@@ -542,8 +543,8 @@ right-click the tab in the strip (or Control-click it) and choose "Send Back to 
 Quit". The menus name the terminal that tab would go to.
 
 A tab brought in from one of those four (moved, copied, attached or opened as a folder) remembers
-it and goes back there. Any other tab goes to the one chosen in Settings › General › Other
-terminals ("Send sessions back to"), and when that one is not installed, to iTerm2, else Terminal.
+it and goes back there. Any other tab goes to the one chosen in Settings › General › Agents
+("Send sessions back to"), and when that one is not installed, to iTerm2, else Terminal.
 The memory lasts as long as the tab: a tab restored at launch is a new shell and has none. Ghostty
 counts only from 1.3, the first version with an AppleScript dictionary (`NSAppleScriptEnabled` in
 its Info.plist); WezTerm counts when its bundle has the `wezterm` command line in `Contents/MacOS`.
@@ -750,6 +751,15 @@ The lookup needs the **Screen Recording** permission. The first press asks for i
 System Settings › Privacy & Security › Screen Recording and relaunch the app. Nothing is captured
 outside a hotkey press.
 
+macOS applies a grant only to a process started after it, so SlyTerm notes at launch whether it
+had one (`CGPreflightScreenCaptureAccess`, which captures nothing). Settings › Lookup › Permission
+and the setup assistant's Games step then show one of three lines: "Screen Recording: not granted"
+(orange), "Screen Recording: granted", or, when it was granted since launch, "Screen Recording:
+granted, reopen SlyTerm to use it" (orange) with a **Reopen SlyTerm** button. The button quits as
+⌘Q does, the quit confirmation included, and a short shell started as SlyTerm quits waits for it to
+exit and opens the same bundle again. Run as `.build/debug/SlyTerm`, outside a bundle, there is
+nothing to reopen: Settings keeps **Open System Settings…** and the assistant shows no button.
+
 Each site's index is cached as one JSON file per host under
 `~/Library/Application Support/SlyTerm/lookup/`, loaded and refreshed in the background at launch
 and rebuilt when it is more than a week old. The first lookup on a site that has never been indexed
@@ -763,10 +773,10 @@ what that means on a wiki, on Wowhead and on anything else. It goes to the web t
 last, docked or floating, or to a new one when that one is playing something: see
 [The lookup's tab](#the-lookups-tab).
 
-Pick "In your browser" in Settings › Lookup and guides go to your browser instead; "Keep the game in
-front, load the page behind it" then leaves the game where it is and loads the page behind it, for
-a second screen. Web tabs stay on the strip either way, for everything else. The same pane says
-whether Screen Recording has been granted.
+Pick "In your browser" in Settings › Web › Open guides and guides go to your browser instead;
+"Keep the game in front, load the page behind it" then leaves the game where it is and loads the
+page behind it, for a second screen. Web tabs stay on the strip either way, for everything else.
+Settings › Lookup says whether Screen Recording has been granted.
 `open -g "slyterm://lookup?dry=1"` shows what would open without opening it, which is handy for
 tuning.
 
@@ -931,7 +941,7 @@ up to the ninth, and picking one does what clicking its square would.
 
 With no web tab open, one dimmed globe holds the place, so nothing in the strip shifts when a page
 comes or goes; clicking it, like `⌘G`, opens the active game's first source. The squares stay
-when Settings › Lookup sends guides to your browser.
+when Settings › Web sends guides to your browser.
 
 ### The toolbar and the address field
 
@@ -944,8 +954,8 @@ floats), open in your browser and, on a floating window only, `×` to close it.
   typed over. `Return` opens what you typed in this tab and `⌘Return` in a new web tab, in front;
   `Esc` cancels and gives the page the keyboard back. A web address opens as typed and a bare host
   such as `wowhead.com` as `https://` (`http://` for `localhost` and an IPv4 address); anything
-  else, `https://` with no host included, is a search, sent to the address in Settings › General ›
-  Web tabs › "Search with", DuckDuckGo by default. Nothing but an `http` or `https` address ever
+  else, `https://` with no host included, is a search, sent to the address in Settings › Web ›
+  "Search with", DuckDuckGo by default. Nothing but an `http` or `https` address ever
   comes out of the field. `⌘C`, `⌘V`, `⌘X` and `⌘A` work in it.
 - **Reader mode**: the button switches between reader mode and the full page, and names the mode a
   click takes you to. On a streaming site, where the reader never applies (see
@@ -959,7 +969,8 @@ floats), open in your browser and, on a floating window only, `×` to close it.
 While a web tab is in front in the SlyTerm window:
 
 - `⌘←` / `⌘→` back and forward, `⌘R` reload, `⌘+` / `⌘-` / `⌘0` zoom (kept in `guideZoom`, one for
-  every web tab), `⌘C` copy, `⌘V` paste and `⌘X` cut, into the page's own fields too (a site's
+  every web tab, and the "Page zoom" slider in Settings › Web, 50% to 200%, which changes open
+  pages as it moves), `⌘C` copy, `⌘V` paste and `⌘X` cut, into the page's own fields too (a site's
   search box, a sign-in form), `⌘A` select all. The terminal font is not touched.
 - `⌘F` find, `⌘E` find the selection, and `⌘G` / `⌘⇧G` the next and previous match while the find
   bar is open.
@@ -1027,7 +1038,7 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
 Click-through follows the rest of SlyTerm: `⌃⌥Tab`, the eye button, the trackpad tap and the switch
 when the terminal loses focus change every SlyTerm window at once. In click-through a floating page
 lets every click through to the game and dims to the click-through level, except a video that is
-playing, which has a level of its own: Settings › Window › Opacity › "Playing video", 85% by
+playing, which has a level of its own: Settings › Web › Opacity › "Playing video", 85% by
 default, in click-through and in interact mode alike, so the game shows through the picture. The
 same holds in the SlyTerm window: with a web tab in front that is playing a video, the whole window,
 the tab's toolbar included, takes the video level; the strip keeps its usual level. A paused
@@ -1070,7 +1081,7 @@ and suspends nothing.
 
 ### Pausing on its own
 
-With Settings › General › Web tabs › "Pause videos when a guide opens or they go out of view" on,
+With Settings › Web › Videos › "Pause videos when a guide opens or they go out of view" on,
 as it is by default, videos pause at the moments you stop watching them. Sound with no video in
 view, a podcast or music, is left playing.
 
@@ -1169,26 +1180,33 @@ is why none is kept warm. Web tabs are not restored at launch.
 
 The menu bar item is for doing: show / hide, a new tab, click-through, panic mode, Fullscreen, the
 lookup and which game it asks, a new web tab, play / pause, opacity (terminal, click-through, playing video),
-resetting the window position, quitting.
-Everything that configures the app is behind **Settings…** in it, in five tabs:
+**Shortcuts…** (Settings on its Shortcuts tab), **Help** (the README's
+[shortcut list](https://github.com/MushkyQT/slyterm#shortcuts) in your browser), resetting the
+window position, **About SlyTerm** (the standard panel, with the version from `Info.plist`; the app
+is in the Dock and ⌘Tab while it is open, as for Settings), quitting.
+Everything that configures the app is behind **Settings…** in it, in six tabs:
 
-- **General**: restoring the last session's tabs at launch, the logo animation, **Run Setup
-  Assistant…** (see [The setup assistant](#the-setup-assistant)), the quit
-  confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
-  or asks, what bringing a session in from another terminal does about the tab it came from and
-  about interrupting an agent mid-turn, which terminal sessions are sent back to, and, under Web tabs, "Search with": the address that words
-  typed into a web tab's address field go to, with `{query}` where they go. An address without
-  `{query}` shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under
-  Web tabs, pausing videos when a guide opens or they go out of view (see
-  [Pausing on its own](#pausing-on-its-own)).
+- **General**: under Launch, restoring the last session's tabs, the logo animation and **Run Setup
+  Assistant…** (see [The setup assistant](#the-setup-assistant)); under Agents, the card that says
+  what an agent finished or asks, the sound a tab plays when it needs you, how long a finished card
+  stays, asking before interrupting an agent mid-turn, closing the tab a session was brought in
+  from, and which terminal sessions are sent back to; under Quitting, the quit confirmation.
 - **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
-  the current one's, the startup command, Option as Meta.
-- **Window**: background opacity, the dim level in click-through, the level of a playing video,
-  switching to click-through on focus loss, the window level, where the tab bar sits.
+  the current one's, the startup command, the scrollback (lines kept per tab, for tabs opened after
+  the change), Option as Meta.
+- **Window**: background opacity, the dim level in click-through, switching to click-through on
+  focus loss, the window level ("Above other windows", "Above the menu bar", the default, or "Above
+  everything, for games that cover the terminal"), where the tab bar sits.
 - **Shortcuts**: the nine global hotkeys and the trackpad tap.
 - **Lookup**: the games and their sources, the language each game's text is read in, how the game
-  is picked, where guides open ("In a web tab inside SlyTerm" or "In your browser"), whether Screen
-  Recording has been granted, and importing or exporting a game.
+  is picked, whether Screen Recording has been granted (see
+  [Permission and caches](#permission-and-caches)), and importing or exporting a game.
+- **Web**: "Search with", the address that words typed into a web tab's address field go to, with
+  `{query}` where they go (an address without `{query}` shows in orange and is not saved; emptying
+  the field puts DuckDuckGo back); pausing videos when a guide opens or they go out of view (see
+  [Pausing on its own](#pausing-on-its-own)); the opacity of a playing video; the page zoom of
+  every web tab; and where guides open ("In a web tab inside SlyTerm" or "In your browser", see
+  [Where guides open](#where-guides-open)).
 
 Nothing there is modal: the terminal stays where it is and every change applies as you make it.
 
@@ -1204,8 +1222,10 @@ A fresh install opens a four-step window, and the terminal first appears when it
    in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
    own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
    site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it
-   has one. Under the list, whether Screen Recording is granted and a button that asks macOS for it;
-   nothing is captured.
+   has one. Under the list, whether Screen Recording is granted, and a button that asks macOS for
+   it (nothing is captured), or, when it was granted since SlyTerm opened, **Reopen SlyTerm** (see
+   [Permission and caches](#permission-and-caches)). Reopening from here brings the assistant back
+   at the next launch, since it was not finished.
 3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
    on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
 4. **Done**: the main shortcuts as chosen (the click-through one as "takes you back to the
@@ -1236,7 +1256,8 @@ window is open.
 The pane warns when two actions share a shortcut, when macOS uses it for one of its own (the list
 in System Settings › Keyboard › Keyboard Shortcuts, which `CopySymbolicHotKeys` returns), and when
 macOS did not accept it. It cannot see another app's shortcut: macOS registers the same combo for
-both apps without an error, and only one of them then gets the key.
+both apps without an error, and only one of them then gets the key. Under the list, a caption
+names the main keys inside SlyTerm (`⌘L`, `⌘G`, `⌘⇧T`, `⌘Return`, `⌘F`, `⌘,`) and points to Help.
 
 The defaults are all ⌃⌥ with a key. Games rarely bind Control and Option together, and if a finger
 slips off one of them the game gets ⌃ or ⌥ with a key, where a ⌘ chord would become ⌘Q, or ⌃⌘Q,
@@ -1278,12 +1299,12 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `startupCommand` | empty | Typed into every new tab, such as `claude` or `codex` |
 | `shell` | `$SHELL` | Run as a login shell in each tab |
 | `optionAsMeta` | `false` | Off keeps Option for accents and brackets on international layouts |
-| `scrollback` | `10000` | Lines kept per tab |
+| `scrollback` | `10000` | Lines kept per tab; a change applies to tabs opened after it |
 | `restoreSession` | `true` | Bring the last run's tabs and folders back at launch |
 | `confirmQuit` | `true` | Ask before quitting with several tabs or a running command |
 | `attentionSound` | `true` | Play the system alert when a tab needs you |
 | `startupAnimation` | `true` | Play the logo over the first terminal at launch |
-| `windowLevel` | `statusBar` | `floating`, `statusBar` or `popUpMenu` |
+| `windowLevel` | `statusBar` | `floating`, `statusBar` or `popUpMenu` ("Above other windows", "Above the menu bar", "Above everything" in Settings) |
 | `stripPosition` | `auto` | `auto` (follows the window), `top` or `bottom` |
 | `hotkeyToggle` | `ctrl+alt+h` | Show / hide |
 | `hotkeyGhost` | `ctrl+alt+tab` | Toggle click-through |
@@ -1311,7 +1332,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to when it was not brought in from one of these: `iterm2`, `terminal`, `ghostty` or `wezterm` (iTerm2, else Terminal, when the one chosen is not installed) |
 | `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
-| `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
+| `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
 | `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
 
@@ -1511,8 +1532,8 @@ a separate `SlyTerm` defaults domain.
 
 ## Troubleshooting
 
-- **Overlay hidden behind the game.** Settings › Window › Level → "Pop-up menu, highest", and make
-  sure the game is not in exclusive fullscreen.
+- **Overlay hidden behind the game.** Settings › Window › Level → "Above everything, for games that
+  cover the terminal", and make sure the game is not in exclusive fullscreen.
 - **Hotkey does nothing, or moves a window instead.** Another app has the same combination, often
   a window manager. macOS does not report it to either app, so change the shortcut in one of them.
   When macOS itself refuses a combo, or uses it, Settings › Shortcuts says so next to the field and
@@ -1544,7 +1565,7 @@ a separate `SlyTerm` defaults domain.
 - **The lookup says Screen Recording is needed, again.** The app is ad-hoc signed by default, and
   macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and the grant
   has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security › Screen
-  Recording, then relaunch). To keep it across builds, create a self-signed "Code Signing"
+  Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it across builds, create a self-signed "Code Signing"
   certificate in Keychain Access (Certificate Assistant › Create a Certificate) and build with
   `CODESIGN_IDENTITY="its name" ./build.sh`.
 - **The lookup opens the wrong page or nothing.** Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q`
@@ -1597,7 +1618,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | File | What it holds |
 | --- | --- |
 | `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
-| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings or the assistant is open; `NSAlert.runModal(level:)` |
+| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings, the assistant or About is open; `ScreenRecording`, the permission line and Reopen SlyTerm; `NSAlert.runModal(level:)` |
 | `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic, Fullscreen), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
@@ -1606,7 +1627,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | `HotKeys.swift` | `HotKeyCenter` over Carbon `RegisterEventHotKey`, and `KeyCombo` parsing on the current layout and checking against macOS's own shortcuts |
 | `HotkeyRecorder.swift` | The list of global actions and the shortcut recorder field |
 | `Settings.swift` | Every preference over `UserDefaults`, the `didChange` notification, the debug log, the HoverTerm carry-over |
-| `SettingsWindow.swift` | The five Settings panes |
+| `SettingsWindow.swift` | The six Settings panes |
 | `RemoteControl.swift` | The `slyterm://` routes |
 | `TrackpadGestures.swift` | The N-finger tap, over `Sources/CMultitouch` |
 | `Fonts.swift` | Nerd Font detection and iTerm2's profile font |

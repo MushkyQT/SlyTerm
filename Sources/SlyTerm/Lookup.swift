@@ -17,6 +17,9 @@ final class Lookup {
     static let againSlop: CGFloat = 6
     static let againWindow: TimeInterval = 10
     static let againAsks = 6
+    // Set by AppDelegate at launch: macOS applies a Screen Recording grant only to a process
+    // started after it, so a grant made since then needs a reopen.
+    static var captureGrantedAtLaunch = true
 
     var openGuide: ((URL) -> Void)?
     private var running = false

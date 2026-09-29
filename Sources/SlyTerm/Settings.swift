@@ -109,7 +109,7 @@ final class Settings {
     func hotkey(_ action: HotkeyAction) -> String { d.string(forKey: action.settingsKey) ?? "" }
     func setHotkey(_ action: HotkeyAction, _ combo: String) { set(combo, action.settingsKey) }
     var optionAsMeta: Bool { get { d.bool(forKey: "optionAsMeta") } set { set(newValue, "optionAsMeta") } }
-    var scrollback: Int { get { d.integer(forKey: "scrollback") } }
+    var scrollback: Int { get { d.integer(forKey: "scrollback") } set { set(max(0, newValue), "scrollback") } }
     var debug: Bool { get { d.bool(forKey: "debug") } }
     var tapGesture: Bool { get { d.bool(forKey: "tapGesture") } set { set(newValue, "tapGesture") } }
     var tapGestureAction: String { get { d.string(forKey: "tapGestureAction") ?? "ghost" } set { set(newValue, "tapGestureAction") } }

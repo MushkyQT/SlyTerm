@@ -127,7 +127,8 @@ One setting turns this off.
 Guides show in reader mode on the terminal's dark, translucent background, with ads, cookie banners
 and trackers blocked; streaming sites are left as they are, so their players work. `⌘F` finds text
 in the page, so you can jump straight to the quest step you are on. If you prefer your browser, one
-setting sends the lookup's pages there instead.
+setting sends the lookup's pages there instead. Settings › Web holds these settings, with the page
+zoom and the search address.
 
 ### Bring a session in from another terminal
 
@@ -204,7 +205,8 @@ Look for the icon in the menu bar: a terminal window with a smirk.
 
 The lookup needs the Screen Recording permission. macOS asks for it the first time you press
 `⌃⌥Q`: turn SlyTerm on in System Settings › Privacy & Security › Screen Recording, then relaunch
-it.
+it. Settings › Lookup and the first setup say when that is still needed, with a button that
+reopens SlyTerm.
 
 ## Getting started
 
@@ -228,7 +230,7 @@ which can run the setup again.
 ## Shortcuts
 
 These are the defaults. You can change the global ones in Settings › Shortcuts. ⌃ is Control, ⌥ is
-Option, ⌘ is Command and ⇧ is Shift.
+Option, ⌘ is Command and ⇧ is Shift. **Help** in the menu bar item opens this list.
 
 | Action | Keys |
 | --- | --- |
@@ -261,7 +263,8 @@ or each tap also opens a dictionary panel.
   the command-line modes, troubleshooting and how the app is built.
 - [Troubleshooting](docs/TECHNICAL.md#troubleshooting): the overlay hidden behind the game, a
   hotkey that does nothing, a lookup that opens the wrong page.
-- [Changelog](CHANGELOG.md): what changed in each release.
+- [Changelog](CHANGELOG.md): what changed in each release. **About SlyTerm** in the menu bar item
+  shows the version you run.
 - [Contributing](CONTRIBUTING.md): building, testing and sending a change.
 - [AGENTS.md](AGENTS.md): the same, for AI coding agents.
 - [Security](SECURITY.md): how to report a vulnerability privately.

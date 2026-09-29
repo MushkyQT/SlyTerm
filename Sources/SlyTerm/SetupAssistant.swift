@@ -46,6 +46,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private var pending: [HotkeyAction: String] = [:]
     private var activityCards = true
     private var captureAllowed: () -> Bool = { CGPreflightScreenCaptureAccess() }
+    private var captureAllowedAtLaunch: () -> Bool = { Lookup.captureGrantedAtLaunch }
+    private var canReopen: () -> Bool = { ScreenRecording.canReopen }
 
     private let dots = StepDots()
     private let icon = NSImageView()
@@ -277,7 +279,8 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         captureSection.spacing = 4
         captureSection.addArrangedSubview(row([captureLabel, allowCapture]))
         captureSection.addArrangedSubview(
-            caption("The lookup reads the text under the pointer from the screen."))
+            caption("The lookup reads the text under the pointer from the screen. macOS asks once; "
+                    + "after you allow it, SlyTerm needs to be reopened."))
 
         let stack = column([
             label("Do you play games with SlyTerm open?", size: 17, weight: .semibold),
@@ -668,11 +671,16 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
             && sites.allSatisfy { $0.source != nil }
     }
 
+    private var captureState: ScreenRecording {
+        ScreenRecording.state(granted: captureAllowed(), atLaunch: captureAllowedAtLaunch())
+    }
+
     private func refreshCapture() {
-        let allowed = captureAllowed()
-        captureLabel.stringValue = "Screen capture: \(allowed ? "allowed" : "not allowed yet")"
-        captureLabel.textColor = allowed ? .labelColor : .systemOrange
-        allowCapture.isHidden = allowed
+        let state = captureState
+        captureLabel.stringValue = state.label
+        captureLabel.textColor = state.color
+        allowCapture.title = state == .needsReopen ? "Reopen SlyTerm" : "Allow…"
+        allowCapture.isHidden = state == .granted || (state == .needsReopen && !canReopen())
     }
 
     private func refreshAppPopup(running: [(name: String, id: String)]) {
@@ -854,6 +862,10 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     }
 
     @objc private func requestCapture() {
+        if captureState == .needsReopen {
+            (NSApp.delegate as? AppDelegate)?.reopen()
+            return
+        }
         // Only asks for the permission; nothing is captured here.
         CGRequestScreenCaptureAccess()
         refreshCapture()
@@ -1067,6 +1079,13 @@ extension SetupAssistant {
         }
         add("Welcome", .welcome)
         add("Games, no", .games)
+        add("Games, yes, Screen Recording granted since launch", .games) { assistant in
+            assistant.playsGames = true
+            assistant.chosen = [.osrs]
+            assistant.captureAllowed = { true }
+            assistant.captureAllowedAtLaunch = { false }
+            assistant.canReopen = { true }
+        }
         add("Games, yes, with another game being added", .games) { assistant in
             assistant.playsGames = true
             assistant.chosen = [.wow, .osrs]
