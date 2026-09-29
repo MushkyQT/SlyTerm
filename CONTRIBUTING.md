@@ -19,8 +19,9 @@ together is in [docs/TECHNICAL.md](docs/TECHNICAL.md); if you are an AI coding a
 
 Open an issue with the **Bug report** form. It asks for:
 
-- your macOS version, the commit you built (`git rev-parse --short HEAD`), and the game and its
-  display mode (borderless windowed, macOS fullscreen, exclusive fullscreen) if one is involved;
+- your macOS version, the SlyTerm version (**About SlyTerm** in the menu bar item) or the commit
+  you built (`git rev-parse --short HEAD`), and the game and its display mode (borderless
+  windowed, macOS fullscreen, exclusive fullscreen) if one is involved;
 - what you did, what you expected and what happened instead;
 - the relevant lines of the debug log. Turn it on with
   `defaults write com.charlesmelki.slyterm debug -bool true`, reproduce the problem, and look in
@@ -57,16 +58,23 @@ signature, so every build asks for the grant again. To keep it across builds, cr
 "Code Signing" certificate in Keychain Access (Certificate Assistant › Create a Certificate) and
 build with `CODESIGN_IDENTITY="its name" ./build.sh`.
 
-The only dependency is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm). Please open an
-issue before adding another.
+A copy you build does not update itself: only a release build has the update feed. That one is
+made by `./build.sh --release`, which signs with the maintainer's Developer ID, has Apple notarize
+the app and packages it as a DMG, so it needs the maintainer's credentials. Releases are built and
+published by the Release workflow on GitHub;
+[Building and releasing](docs/TECHNICAL.md#building-and-releasing) describes both.
+
+The dependencies are [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) and
+[Sparkle](https://sparkle-project.org), which installs updates. Please open an issue before adding
+another.
 
 ## Where things are
 
 All the app's code is in `Sources/SlyTerm`, with the agent activity feature in `Activity/` and
 "Bring In a Session" in `Teleport/`. [The source map](docs/TECHNICAL.md#source-map) says what each
 file holds. `Tools/` has scripts run by hand (the icon, lookup test images, agent session fixtures,
-the startup animation preview and the README's GIF of it), and `Resources/` has `Info.plist` and
-the icons.
+the startup animation preview and the README's GIF of it) and the two a release runs (its notes
+and its update feed), and `Resources/` has `Info.plist`, the entitlements and the icons.
 
 ## Checking a change
 
@@ -96,6 +104,9 @@ the running app when it involves windows, focus or hotkeys.
    Look at the PNGs a snapshot writes: they are the review for any drawing change. Keep test
    screenshots and PNGs out of the repository. CI builds every pull request, runs the strip,
    float, card, picker and pick mode snapshots, and attaches their PNGs to the run as `snapshots`.
+   It also builds the app bundle and checks its signature. A pull request that changes how the app
+   is built or released also runs the Release workflow as a dry run, signed and notarized but not
+   published; from a fork it is skipped, since forks get no signing secrets.
 3. **A live run** for anything that involves focus, click-through, hotkeys, the card or a picker.
    A few things make this safer:
    - The app you build shares its preferences with any copy you have installed. Back them up
@@ -175,8 +186,9 @@ Update all three in the same pull request as the behaviour they describe.
   by one) and renames `[Unreleased]` to that version with the date. The version follows
   [semantic versioning](https://semver.org), counted over everything unreleased: the patch number
   if it is only fixes, the minor number for something new, the major number for a change that
-  takes something away, such as a feature, a hotkey, a URL route or a command-line mode. Once it
-  is merged, the Tag workflow tags `main` with `vX.Y.Z`.
+  takes something away, such as a feature, a hotkey, a URL route or a command-line mode. Its
+  Release dry run has to pass before it is merged. Once it is, the Tag workflow tags `main` with
+  `vX.Y.Z` and publishes the signed DMG and the update feed on GitHub Releases.
 - AI-assisted changes are welcome. Credit the tool with a `Co-Authored-By:` trailer, and review
   the change yourself before you open the pull request: you are its author.
 

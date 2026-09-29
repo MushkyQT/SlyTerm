@@ -2,13 +2,25 @@
 
 What changes in SlyTerm from one version to the next. Changes merged since the last release are
 under Unreleased. Versions follow [semantic versioning](https://semver.org), and each one is tagged
-`vX.Y.Z` on `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+`vX.Y.Z` on `main`; from 1.3.0 on, each is also a DMG on
+[GitHub Releases](https://github.com/MushkyQT/SlyTerm/releases). The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-29
+
 ### Added
 
+- SlyTerm can be downloaded from GitHub Releases as a DMG: open it and drag SlyTerm to
+  Applications. The app is signed with a Developer ID and notarized by Apple, and runs on Apple
+  silicon and Intel Macs with macOS 14 or later.
+- The downloaded app checks for a new version once a day. One it finds waits as "Update to SlyTerm
+  X…" at the top of the menu bar item, and nothing opens over the game until you choose it; Check
+  for Updates…, next to About SlyTerm, checks at once. In Settings › General › Updates the daily
+  check can be turned off, and updates can be downloaded on their own and installed when SlyTerm
+  quits. A copy built from source does not update itself, and Settings says so.
 - When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
   say it needs a reopen and offer a Reopen SlyTerm button.
   ([#9](https://github.com/MushkyQT/slyterm/pull/9))
@@ -37,6 +49,9 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Changed
 
+- The first time the downloaded app replaces a copy you built, macOS asks again for Screen
+  Recording, and for control of iTerm2, Terminal or Ghostty the next time a session is brought in
+  from one or sent back to it, since the app is signed differently. Updates keep both.
 - The setup assistant calls the permission Screen Recording, as System Settings does, and says
   that SlyTerm needs to be reopened after it is allowed.
   ([#9](https://github.com/MushkyQT/slyterm/pull/9))
@@ -183,7 +198,8 @@ hotkeys, Claude Code's state on the tab strip with cards answered by `⌃⌥Y` a
 that opens a game's wiki page for what is under the pointer, web tabs that float over the game, and
 Bring In a Session for Claude Code and plain shell tabs.
 
-[Unreleased]: https://github.com/MushkyQT/slyterm/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/MushkyQT/slyterm/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/MushkyQT/slyterm/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/MushkyQT/slyterm/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/MushkyQT/slyterm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MushkyQT/slyterm/releases/tag/v1.0.0

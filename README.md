@@ -190,12 +190,33 @@ SlyTerm is a separate window on top of your game, like any other app's. It never
 memory or network traffic, and it never sends the game any input. The lookup takes one screenshot
 around the pointer when you press its hotkey, reads it on your Mac with Apple's text recognition,
 and does not save it. Apart from the pages you open, its only network requests go to the guide sites
-you have set up: an index refresh once a week, and a search when a name is not in the index.
+you have set up, for an index refresh once a week and a search when a name is not in the index,
+and to GitHub, where it looks for a new version of SlyTerm once a day unless you turn that off in
+Settings.
 
 ## Install
 
-SlyTerm is built from source for now. You need macOS 14 Sonoma or later and the Xcode Command Line
-Tools (`xcode-select --install`); the full Xcode app is not needed.
+[Download SlyTerm](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg),
+open the DMG and drag SlyTerm to Applications, then open it from there. It needs macOS 14 Sonoma or
+later and runs on Apple silicon and Intel Macs. Every version, with what changed in it, is on the
+[Releases](https://github.com/MushkyQT/SlyTerm/releases) page.
+
+Look for the icon in the menu bar: a terminal window with a smirk.
+
+The lookup needs the Screen Recording permission. macOS asks for it the first time you press
+`⌃⌥Q`: turn SlyTerm on in System Settings › Privacy & Security › Screen Recording, then relaunch
+it. Settings › Lookup and the first setup say when that is still needed, with a button that
+reopens SlyTerm. If you used a copy you built yourself before, macOS asks once more when the
+downloaded app replaces it.
+
+SlyTerm checks for a new version once a day. When there is one, an item such as "Update to SlyTerm
+1.4.0…" waits at the top of the menu bar item and nothing opens over your game; choose it when you
+are ready. In Settings › General › Updates you can turn the checks off, or have updates download
+on their own and install when SlyTerm quits.
+
+### Build from source
+
+You need the Xcode Command Line Tools (`xcode-select --install`); the full Xcode app is not needed.
 
 ```sh
 git clone https://github.com/MushkyQT/slyterm.git
@@ -204,12 +225,8 @@ cd slyterm
 open /Applications/SlyTerm.app
 ```
 
-Look for the icon in the menu bar: a terminal window with a smirk.
-
-The lookup needs the Screen Recording permission. macOS asks for it the first time you press
-`⌃⌥Q`: turn SlyTerm on in System Settings › Privacy & Security › Screen Recording, then relaunch
-it. Settings › Lookup and the first setup say when that is still needed, with a button that
-reopens SlyTerm.
+A copy built from source does not update itself. [CONTRIBUTING.md](CONTRIBUTING.md) has more on
+building.
 
 ## Getting started
 
@@ -276,6 +293,7 @@ or each tap also opens a dictionary panel.
 ## Credits
 
 Terminal emulation is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza.
+Updates are installed by [Sparkle](https://sparkle-project.org), under the MIT License.
 The lookup presets open pages from the [Dofus Wiki](https://dofuswiki.fandom.com), the
 [129Dofus Wiki](https://129dofus.fandom.com), [DofusDB](https://dofusdb.fr),
 [Wowhead](https://www.wowhead.com), the
