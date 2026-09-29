@@ -11,18 +11,30 @@ for arg in "$@"; do
   esac
 done
 
-swift build -c release
+if $release; then
+  # A release runs on Intel Macs too. Each architecture gets its own triple: after a build for
+  # one, .build/release points at it. Sparkle.framework and the resources are the same in both.
+  for arch in arm64 x86_64; do swift build -c release --triple $arch-apple-macosx14.0; done
+  products=.build/arm64-apple-macosx/release
+else
+  swift build -c release
+  products=.build/release
+fi
 APP=dist/SlyTerm.app
 SPARKLE=$APP/Contents/Frameworks/Sparkle.framework
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp .build/release/SlyTerm "$APP/Contents/MacOS/SlyTerm"
+if $release; then
+  lipo -create .build/{arm64,x86_64}-apple-macosx/release/SlyTerm -output "$APP/Contents/MacOS/SlyTerm"
+else
+  cp $products/SlyTerm "$APP/Contents/MacOS/SlyTerm"
+fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/StatusItemIcon.pdf Resources/AppIcon.icns "$APP/Contents/Resources/"
-for bundle in .build/release/*.bundle; do
+for bundle in $products/*.bundle; do
   [ -e "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
-ditto .build/release/Sparkle.framework "$SPARKLE"
+ditto $products/Sparkle.framework "$SPARKLE"
 # Sparkle's XPC services are only for sandboxed apps.
 rm -rf "$SPARKLE/XPCServices" "$SPARKLE/Versions/B/XPCServices"
 
