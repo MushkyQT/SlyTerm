@@ -188,7 +188,8 @@ Update all three in the same pull request as the behaviour they describe.
   if it is only fixes, the minor number for something new, the major number for a change that
   takes something away, such as a feature, a hotkey, a URL route or a command-line mode. Its
   Release dry run has to pass before it is merged. Once it is, the Tag workflow tags `main` with
-  `vX.Y.Z` and publishes the signed DMG and the update feed on GitHub Releases.
+  `vX.Y.Z`, publishes the signed DMG and the update feed on GitHub Releases, and updates the
+  Homebrew cask in [MushkyQT/homebrew-tap](https://github.com/MushkyQT/homebrew-tap).
 - AI-assisted changes are welcome. Credit the tool with a `Co-Authored-By:` trailer, and review
   the change yourself before you open the pull request: you are its author.
 

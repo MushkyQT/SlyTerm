@@ -199,7 +199,8 @@ Settings.
 [Download SlyTerm](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg), open
 the DMG and drag SlyTerm to Applications, then open it from there. It needs macOS 14 Sonoma or later
 and runs on Apple silicon and Intel Macs. Every version from 1.3.0 on, with what changed in it, is
-on the [Releases](https://github.com/MushkyQT/SlyTerm/releases) page.
+on the [Releases](https://github.com/MushkyQT/SlyTerm/releases) page. With
+[Homebrew](https://brew.sh), `brew install --cask mushkyqt/tap/slyterm` does the same.
 
 Look for the icon in the menu bar: a terminal window with a smirk.
 
