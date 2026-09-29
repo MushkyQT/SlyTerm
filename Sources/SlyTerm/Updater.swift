@@ -16,6 +16,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
     private var alert: NSWindow?
     private var alertPending = false
     private var asked = false
+    private var bringForward = false
     private(set) var pendingVersion: String?
 
     // Only a release build's bundle has SUFeedURL: source and debug builds never update themselves.
@@ -67,6 +68,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
     func check() {
         guard let updater, updater.canCheckForUpdates else { return }
         asked = true
+        bringForward = true
         updater.checkForUpdates()
         // An update already found is shown before this returns; the rest come through the
         // window notifications.
@@ -88,6 +90,12 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
         AppSwitcher.shared.windowOpened(window)
         Settings.log("updates: \"\(window.title)\" shown above the overlay"
                      + (asked ? "" : ", though nobody asked for it"))
+        // A click in the menu bar item leaves SlyTerm inactive, and the window would stay hidden.
+        // Only the first window after a click: later ones must not take the game's keyboard.
+        guard bringForward else { return }
+        bringForward = false
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     @objc private func windowClosing(_ note: Notification) {
@@ -170,6 +178,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
     func standardUserDriverWillFinishUpdateSession() {
         pendingVersion = nil
         asked = false
+        bringForward = false
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
