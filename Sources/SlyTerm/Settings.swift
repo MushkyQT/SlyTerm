@@ -109,7 +109,11 @@ final class Settings {
     func hotkey(_ action: HotkeyAction) -> String { d.string(forKey: action.settingsKey) ?? "" }
     func setHotkey(_ action: HotkeyAction, _ combo: String) { set(combo, action.settingsKey) }
     var optionAsMeta: Bool { get { d.bool(forKey: "optionAsMeta") } set { set(newValue, "optionAsMeta") } }
-    var scrollback: Int { get { d.integer(forKey: "scrollback") } set { set(max(0, newValue), "scrollback") } }
+    // SwiftTerm allocates scrollback plus rows up front: a huge value crashes every new tab.
+    var scrollback: Int {
+        get { min(100_000, max(1000, d.integer(forKey: "scrollback"))) }
+        set { set(min(100_000, max(1000, newValue)), "scrollback") }
+    }
     var debug: Bool { get { d.bool(forKey: "debug") } }
     var tapGesture: Bool { get { d.bool(forKey: "tapGesture") } set { set(newValue, "tapGesture") } }
     var tapGestureAction: String { get { d.string(forKey: "tapGestureAction") ?? "ghost" } set { set(newValue, "tapGestureAction") } }
@@ -138,9 +142,10 @@ final class Settings {
     var activityAnswerURLs: Bool { get { d.bool(forKey: "activityAnswerURLs") } set { set(newValue, "activityAnswerURLs") } }
     var setupDone: Bool { get { d.bool(forKey: "setupDone") } set { set(newValue, "setupDone") } }
     var activityCardSeconds: Double {
-        get { max(0, d.double(forKey: "activityCardSeconds")) }
-        set { set(max(0, newValue), "activityCardSeconds") }
+        get { Self.cardSeconds(d.double(forKey: "activityCardSeconds")) }
+        set { set(Self.cardSeconds(newValue), "activityCardSeconds") }
     }
+    private static func cardSeconds(_ value: Double) -> Double { value.isFinite ? min(300, max(0, value)) : 10 }
 
     // Before the overlay exists: it writes frameEdge at once. These keys come only from a launch
     // of an earlier build (or HoverTerm's), which never showed the setup assistant. The persistent

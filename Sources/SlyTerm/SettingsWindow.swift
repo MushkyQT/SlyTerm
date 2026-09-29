@@ -350,7 +350,7 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
 
     @objc private func setCardSeconds() {
         let text = cardSeconds.stringValue.trimmingCharacters(in: .whitespaces)
-        guard let value = Double(text), value >= 0 else { refresh(); return }
+        guard let value = Double(text), value.isFinite, value >= 0 else { refresh(); return }
         settings.activityCardSeconds = value
         refresh()
     }
@@ -638,7 +638,7 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
     @objc private func setOptionAsMeta(_ sender: NSButton) { settings.optionAsMeta = sender.state == .on }
     @objc private func setScrollback() {
         let text = scrollback.stringValue.trimmingCharacters(in: .whitespaces)
-        guard let value = Int(text), value >= 0 else { refresh(); return }
+        guard let value = Int(text) else { refresh(); return }
         settings.scrollback = value
         refresh()
     }

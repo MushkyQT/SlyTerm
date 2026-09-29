@@ -486,7 +486,7 @@ final class OverlayController: NSObject, TabStripDelegate {
                 floating.values.forEach { $0.releaseKey() }
             }
             // Floating windows still up switch to click-through, as when the game is clicked.
-            ghostIfKeyboardLeft()
+            ghostIfKeyboardLeft(explain: false)
         } else {
             main.orderOut(nil)
         }
@@ -699,14 +699,17 @@ final class OverlayController: NSObject, TabStripDelegate {
     }
 
     // Async: key moving between our windows resigns one before the other becomes key.
-    private func ghostIfKeyboardLeft() {
+    private func ghostIfKeyboardLeft(explain: Bool = true) {
         guard settings.autoGhost, !isReleasingKeyboard, !isPanic else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let shown = self.main.isVisible || self.floating.values.contains { $0.panel.isVisible }
             guard shown, !self.hasKeyboard, !self.isGhost, !self.isPanic else { return }
+            // The panels are non-activating, so NSApp.isActive proves nothing. No key window at all
+            // means another app has the keyboard, not Settings or a dialog of ours.
+            let toOtherApp = NSApp.keyWindow == nil
             self.setGhost(true)
-            self.explainAutoGhost()
+            if explain, toOtherApp { self.explainAutoGhost() }
         }
     }
 
@@ -1277,7 +1280,7 @@ final class OverlayController: NSObject, TabStripDelegate {
             }
             if activity.isWaiting { return ("waiting for you", .systemOrange) }
         }
-        if isGhost { return ("click-through", .systemOrange) }
+        if isGhost { return (TabStripView.ghostHint, .systemOrange) }
         return nil
     }
     private func hintKey(_ combo: String) -> String? {
@@ -1345,6 +1348,8 @@ final class OverlayController: NSObject, TabStripDelegate {
            activity.agent.copyCommand(id: activity.sessionID) != nil {
             items.append(("Copy to \(app)", #selector(copyTabBack(_:))))
         }
+        // A tab too narrow for its × is closed from here, with ⌘W or a middle click.
+        items.append(("Close Tab", #selector(closeTabFromMenu(_:))))
         for (title, action) in items {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
             item.target = self
@@ -1362,6 +1367,11 @@ final class OverlayController: NSObject, TabStripDelegate {
     @objc private func copyTabBack(_ sender: NSMenuItem) {
         guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
         TeleportEngine.shared.sendBack(tab, copy: true)
+    }
+
+    @objc private func closeTabFromMenu(_ sender: NSMenuItem) {
+        guard let tab = terminals.first(where: { $0.id == sender.representedObject as? UUID }) else { return }
+        close(tab)
     }
 
     func stripSelectTab(_ index: Int) { select(index); focusTerminalUnlessGhost() }
@@ -1497,7 +1507,7 @@ extension OverlayController: WebTabHost {
         if let web = floating.removeValue(forKey: tab.id) {
             if hadKeyboard, !keyToMain {
                 giveKeyboardAway { web.close() }
-                ghostIfKeyboardLeft()
+                ghostIfKeyboardLeft(explain: false)
             } else {
                 web.close()
             }

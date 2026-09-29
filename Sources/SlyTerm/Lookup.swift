@@ -213,7 +213,9 @@ final class Lookup {
                 : nil
             if grabber != nil { Settings.log("lookup: shareable content in \(clock.ms) ms") }
 
-            guard let resolved = await resolveGame(forced: forced, at: point, with: grabber) else {
+            // Text from a URL or --search did not come from the app in front: no note about it.
+            let resolved = await resolveGame(forced: forced, at: point, with: grabber, noting: text == nil)
+            guard let resolved else {
                 return Press(outcome: .noGame)
             }
             let game = resolved.game
@@ -726,8 +728,8 @@ final class Lookup {
 
     // `unclaimed` names the app no game claims when the fallback game answered and another game
     // names an app: the toast says so, or a wrong wiki's answer looks like the right one.
-    private func resolveGame(forced: LookupGame?, at point: CGPoint,
-                             with grabber: ScreenGrabber?) async -> (game: LookupGame, unclaimed: String?)? {
+    private func resolveGame(forced: LookupGame?, at point: CGPoint, with grabber: ScreenGrabber?,
+                             noting: Bool = false) async -> (game: LookupGame, unclaimed: String?)? {
         if let forced {
             Settings.log("lookup: game \(forced.name), asked for by name")
             return (forced, nil)
@@ -746,8 +748,9 @@ final class Lookup {
         } else if store.autoDetect, game.matches(bundleID: front) {
             why = "\(front ?? "") in front"
         } else {
-            if store.autoDetect, store.games.contains(where: { $0.id != game.id && !$0.appBundleIDs.isEmpty }) {
-                unclaimed = await MainActor.run { Self.appName(pointed ?? front) }
+            if noting, store.autoDetect,
+               store.games.contains(where: { $0.id != game.id && !$0.appBundleIDs.isEmpty }) {
+                unclaimed = await MainActor.run { [pointed, front].compactMap { Self.appName($0) }.first }
             }
             why = "the game chosen by hand" + (unclaimed.map { ", no game claims \($0)" } ?? "")
         }
@@ -1004,7 +1007,7 @@ final class Toast {
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.textColor = .white
         label.isSelectable = false
-        label.maximumNumberOfLines = 3
+        label.maximumNumberOfLines = 5
         background.addSubview(label)
         panel.contentView = background
     }

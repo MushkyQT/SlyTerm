@@ -83,6 +83,7 @@ final class TabStripView: NSView {
     private static let hintFont = NSFont.systemFont(ofSize: 10)
     private static let labelFont = NSFont.systemFont(ofSize: 11)
     private static let tabFont = NSFont.systemFont(ofSize: 11.5, weight: .medium)
+    static let ghostHint = "click-through"
     private static let webGap: CGFloat = 3
     private static let terminalMinWidth: CGFloat = 44
 
@@ -189,17 +190,30 @@ final class TabStripView: NSView {
         }
 
         hint = delegate?.stripHint
-        let hintWidth = hint.map { (($0.text as NSString).size(withAttributes: [.font: TabStripView.hintFont]).width + 18).rounded(.up) } ?? 0
+        // The idle click-through hint only takes room left over, so a mode switch does not reflow.
+        let hintWidth = hint.map { hint in
+            guard hint.text != TabStripView.ghostHint else { return 0 }
+            let size = (hint.text as NSString).size(withAttributes: [.font: TabStripView.hintFont])
+            return (size.width + 18).rounded(.up)
+        } ?? 0
         let room = webLeft - gap - left
-        // Tabs make way for the hint down to 56 pt each, and for the web squares down to what fits.
+        // Tabs make way for an agent hint down to 56 pt each, and for the web squares down to what
+        // fits.
         let tabWidth = min(170, max(24, min(56, (room - gaps) / count), (room - hintWidth - gaps) / count))
         tabRects = []
         closeRects = []
         var tx = left
-        for _ in titles.indices {
+        for i in titles.indices {
             let r = NSRect(x: tx, y: y, width: tabWidth, height: button)
             tabRects.append(r)
-            closeRects.append(NSRect(x: r.maxX - 20, y: r.minY + 3, width: 16, height: 16))
+            // No × where it would cover the name: middle-click, ⌘W and the menu still close the tab.
+            let alerting = delegate?.stripTabNeedsAttention(i) ?? false
+            let mark = delegate?.stripTabMark(i) ?? (alerting ? .attention : .none)
+            let three = (String(titles[i].prefix(3)) + "…") as NSString
+            let shortest = three.size(withAttributes: [.font: TabStripView.tabFont]).width
+            let fits = r.width >= 40 && r.width - TabStripView.markIndent(mark) - 22 >= shortest
+            let close = NSRect(x: r.maxX - 20, y: r.minY + 3, width: 16, height: 16)
+            closeRects.append(fits ? close : .zero)
             tx += tabWidth + gap
         }
     }
@@ -354,9 +368,7 @@ final class TabStripView: NSView {
                 let slot = NSRect(x: r.minX + inset, y: r.midY - 3, width: 6, height: 6)
                 indent = drawMark(mark, in: slot, color: color) - (narrow ? 4 : 0)
             }
-            // A × that would leave less than three letters of the name waits for the hover.
-            let shortest = ((String(titles[i].prefix(3)) + "…") as NSString).size(withAttributes: [.font: font])
-            let showClose = isHovered || isSelected && r.width - indent - 22 >= shortest.width
+            let showClose = (isHovered || isSelected) && !closeRects[i].isEmpty
             let textRect = NSRect(x: r.minX + indent, y: r.minY + 4,
                                   width: r.width - indent - (showClose ? 22 : narrow ? 2 : 8), height: r.height - 8)
             let attrs: [NSAttributedString.Key: Any] = [
@@ -411,15 +423,22 @@ final class TabStripView: NSView {
         updateSpinner(working: anyWorking)
     }
 
+    private static func markIndent(_ mark: TabStripMark) -> CGFloat {
+        switch mark {
+        case .none: return 8
+        case .attention, .working: return 18
+        case .waiting: return 20
+        }
+    }
+
     @discardableResult
     private func drawMark(_ mark: TabStripMark, in slot: NSRect, color: NSColor) -> CGFloat {
         switch mark {
         case .none:
-            return 8
+            break
         case .attention:
             NSColor.systemYellow.setFill()
             NSBezierPath(ovalIn: slot).fill()
-            return 18
         case .working:
             let path = NSBezierPath()
             path.appendArc(withCenter: NSPoint(x: slot.midX, y: slot.midY), radius: 3.5,
@@ -428,11 +447,10 @@ final class TabStripView: NSView {
             path.lineCapStyle = .round
             color.setStroke()
             path.stroke()
-            return 18
         case .waiting:
             drawSymbol("questionmark.circle.fill", in: slot, color: .systemOrange, pointSize: 11)
-            return 20
         }
+        return TabStripView.markIndent(mark)
     }
 
     private func updateSpinner(working: Bool) {
@@ -709,17 +727,22 @@ enum StripSnapshotCLI {
         add("360 pt wide, six terminals, twelve web tabs: no expand button, no ×, three letters",
             width: 360, selected: 5, web: many(12), titles: six)
         let seven = six + ["tests"]
-        add("click-through, nothing running: the hint says so", selected: 1, web: three, ghost: true,
-            hint: ("click-through", .systemOrange))
+        add("interact, three web tabs", selected: 1, web: three)
+        add("click-through, nothing running: the tabs keep their width, no room left for the hint",
+            selected: 1, web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
+        add("click-through, one terminal: the hint in the room left over", selected: 0, web: three,
+            ghost: true, hint: (TabStripView.ghostHint, .systemOrange), titles: ["slyterm"])
         add("360 pt wide, click-through, nothing running: no room for the hint", width: 360, selected: 1,
-            web: three, ghost: true, hint: ("click-through", .systemOrange))
+            web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
         add("360 pt wide, four terminals, three web tabs: 46 pt tabs, the web tabs behind …", width: 360,
             selected: 1, web: three, titles: Array(six.prefix(4)))
+        add("360 pt wide, four terminals, one hovered: no × where it would cover the name", width: 360,
+            selected: 1, web: three, hoverTab: 2, titles: Array(six.prefix(4)))
         add("360 pt wide, five terminals: no expand button", width: 360, selected: 1, web: three,
             titles: Array(six.prefix(5)))
-        add("360 pt wide, six terminals, the selected one hovered: its × comes back", width: 360,
+        add("360 pt wide, six terminals, the selected one hovered: no ×, three letters", width: 360,
             selected: 1, web: many(12), hoverTab: 1, titles: six)
-        add("360 pt wide, six terminals, another one hovered", width: 360, selected: 1,
+        add("360 pt wide, six terminals, another one hovered: no ×", width: 360, selected: 1,
             web: many(12), hoverTab: 3, titles: six)
         add("360 pt wide, six terminals, working, waiting and finished marks", width: 360, selected: 0,
             web: three, attention: 2, marks: [0: .working, 1: .waiting, 2: .attention], titles: six)

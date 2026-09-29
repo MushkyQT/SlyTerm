@@ -37,8 +37,8 @@ SlyTerm stays above your game, in borderless windowed mode or in macOS fullscree
 tab strip, resize it from its edges and choose how see-through it is. It has no Dock icon and lives
 in the menu bar. While Settings or the setup assistant is open it shows in the Dock and in `⌘Tab`, so
 you can switch away and come back to it. `⌃⌥H` shows or hides it from anywhere, even while the game
-has the keyboard. In a narrow window the tab names stay readable: the expand button and the tabs' `×`
-make way, and the `×` comes back when you point at a tab.
+has the keyboard. In a narrow window the tab names stay readable: the expand button goes, and a tab
+too narrow for its `×` shows none; close it with `⌘W`, a middle click or its right-click menu.
 
 ### Click through to the game
 
@@ -51,7 +51,7 @@ Two modes, one key (`⌃⌥Tab`):
 Click into your game and SlyTerm switches to click-through by itself. You show the terminal, type
 a prompt, click back into the game and keep playing while the output streams in. A three-finger tap
 on the trackpad switches modes too. The first three times it switches by itself, a note by the tab
-strip says so, and the strip reads "click-through" while nothing else needs saying.
+strip says so, and the strip reads "click-through" when it has room and nothing else to say.
 
 <img src="docs/features/overlay.gif" width="600"
      alt="The terminal appears over Dofus with ⌃⌥H, a prompt is typed, and a click on a monster dims it into click-through while Claude keeps working">

@@ -11,15 +11,17 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 - When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
   say it needs a reopen and offer a Reopen SlyTerm button.
-- The first three times the overlay switches to click-through by itself, an orange note by the
-  tab strip says that clicks and keys now go to the game and which key or button brings the
-  terminal back. In click-through with nothing else to report, the strip reads "click-through".
+- The first three times the overlay switches to click-through by itself because another app took
+  the keyboard, an orange note by the tab strip says that clicks and keys now go to the game and
+  which key or button brings the terminal back. In click-through with nothing else to report, the
+  strip reads "click-through" in the room the tabs leave, without making them narrower.
 - The menu bar item has Shortcuts…, which opens Settings on its Shortcuts tab, Help, which opens
   the README's shortcut list, and About SlyTerm, which shows the version.
 - Settings has a Web tab: the search address, pausing videos, the opacity of a playing video, a
   page zoom slider for every web tab and where guides open.
-- Settings › General sets how long a finished card stays, and Settings › Terminal how many lines
-  of scrollback a new tab keeps.
+- Settings › General sets how long a finished card stays, up to 300 seconds, and Settings ›
+  Terminal how many lines of scrollback a new tab keeps, from 1,000 to 100,000.
+- A tab's right-click menu has Close Tab.
 
 ### Changed
 
@@ -32,11 +34,11 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   in click-through says which shortcut to press to type there.
 - The lookup's message names the site that answered ("Guide: Dragon scimitar · OSRS Wiki") and,
   when nothing matched, the game it asked. When no game claims the app in front, another game
-  names an app and the first game answered, a second line says so. Pick mode's hint names the
-  site it looks things up on.
+  names an app and the game under "Otherwise use" answered, a second line says so. Pick mode's
+  hint names the site it looks things up on.
 - Tab names stay readable on a narrow strip: the expand button makes way when tabs would be under
-  40 pt, the selected tab's × waits for the pointer when it would hide the name, and a very narrow
-  tab shows the first three letters of its name. The tooltip has the full name.
+  40 pt, a tab too narrow for its × plus three letters of its name has no ×, and a very narrow tab
+  shows the first three letters of its name. The tooltip has the full name.
 - The activity card's key line is larger and brighter, with the shortcuts in bold ("⌃⌥Y Allow ·
   ⌃⌥N Refuse · ⌃⌥Tab Look"), and the card's title is larger. The toasts that say why an answer key
   did nothing stay 3.5 seconds.

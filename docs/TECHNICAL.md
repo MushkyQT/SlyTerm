@@ -89,11 +89,13 @@ loses focus") if you would rather switch modes only by hand.
 The first three automatic switches say why the terminal stopped typing: a toast by the strip's
 corner, orange, for 4 seconds, "Click-through: clicks and keys go to the game. ⌃⌥Tab or the eye
 button to type here." (the click-through shortcut as set, or "The eye button to type here." when
-it has none). The hotkey, the eye button and the tap never show it, nor does panic, and with the
-setting off nothing does; the count is kept in `ghostHintsShown`. The toast is a non-activating
-panel that ignores the mouse, so the game keeps the keyboard. While the overlay is in
-click-through and no agent hint is due, the strip's hint slot reads "click-through" in orange,
-when there is room for it.
+it has none). It shows only when the keyboard went to another app: the hotkey, the eye button and
+the tap never show it, nor do panic, hiding the SlyTerm window with a floating one up, closing a
+floating window that had the keyboard, or a window of SlyTerm's own such as Settings taking the
+keyboard; with the setting off nothing does. The count is kept in `ghostHintsShown`. The toast is
+a non-activating panel that ignores the mouse, so the game keeps the keyboard. While the overlay
+is in click-through and no agent hint is due, the strip reads "click-through" in orange in the
+room the tabs leave over; the tabs never shrink for it, so switching modes does not move them.
 
 ### Trackpad tap
 
@@ -122,11 +124,12 @@ window instead.
 On a narrow strip the tab names keep the room. Web tabs go behind a single `…` square before a
 terminal's tab gets under 44 pt (see [Web tabs on the strip](#web-tabs-on-the-strip)); if tabs
 would still be under 40 pt, the expand button goes (`⌘Return` and `⌃⌥M` still toggle
-Fullscreen). The selected tab's `×`, which a tab only shows otherwise while the pointer is on
-it, also waits for the pointer when it would leave less than three letters of the name;
-middle-click and `⌘W` close a tab either way. A tab under 40 pt shows its mark and the first three letters of its name, with no
-ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always stay. A tab whose name is
-shortened has it in its tooltip, above what its agent is doing.
+Fullscreen). A tab has a `×`, shown while it is selected or under the pointer, only when the `×`
+leaves room for three letters of the name and an ellipsis after the tab's mark; a narrower tab has
+none, and a click anywhere on it selects it. Middle-click, `⌘W` and **Close Tab** in the tab's
+right-click menu close a tab either way. A tab under 40 pt shows its mark and the first three
+letters of its name, with no ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always
+stay. A tab whose name is shortened has it in its tooltip, above what its agent is doing.
 
 ### Tabs and folders
 
@@ -182,7 +185,7 @@ logo animation", key `startupAnimation`).
 | Pause what web tabs are playing, or play it again | `⌃⌥V` (configurable), or "Play / Pause" in the menu bar item |
 | Move the window | Drag the tab strip |
 | Resize | Drag the left or right edge, or the edge the tab strip is not on |
-| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip (on a narrow strip, the selected tab's `×` shows while the pointer is on it); middle-click closes a tab or a web tab's square |
+| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip (a tab too narrow for its `×` has none); middle-click closes a tab or a web tab's square, and so does **Close Tab** in a tab's right-click menu |
 | Switch tabs | `⌘1`…`⌘9` (terminals only); `⌃Tab` / `⌃⇧Tab`, `⌘⌥←` / `⌘⌥→` or `⌘⇧[` / `⌘⇧]` go through the terminals from a terminal, and through the web tabs in the SlyTerm window from a web tab |
 | Go to a web tab | `⌥⌘1`…`⌥⌘9`, the web tabs in the order of their squares, from a terminal, a web tab or a floating window; hover a square to see its key |
 | Web tab ↔ terminal | `⌘G` (the last web tab in front in the SlyTerm window; opens the active game's first source when there is none) |
@@ -262,7 +265,8 @@ keys that act on it, each combo in bold and taken from Settings › Shortcuts: `
 Refuse · ⌃⌥Tab Look` for a permission prompt, on two lines when the card is too narrow for one.
 The less SlyTerm can read of an agent, the less its card says: Gemini CLI's and Qwen Code's only
 say that a turn finished or that something waits, and so does the card of a Codex whose rollout
-cannot be found. A finished card fades after ten seconds, a waiting one stays until it is answered or closed with its ×. Clicking the
+cannot be found. A finished card fades after the time set in Settings › General › Agents, 10
+seconds by default; a waiting one stays until it is answered or closed with its ×. Clicking the
 card brings its tab forward and, like a click on the strip, leaves you in click-through; `⌃⌥Tab`
 with a card up opens the tab the card is about, whichever tab is selected.
 
@@ -314,8 +318,8 @@ Those two URLs are off anyway until you turn them on, since any program of yours
 and an agent that can run `open` could approve its own next request:
 `defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`, with no control in
 Settings. How long a finished card or a notification stays is "Keep a finished card for … s" in
-Settings › General › Agents (`activityCardSeconds`, default 10; 0 keeps it until it is closed), off
-while the card is off.
+Settings › General › Agents (`activityCardSeconds`, default 10, up to 300; 0 keeps it until it is
+closed), off while the card is off.
 
 ### Claude Code
 
@@ -626,9 +630,10 @@ says which page is opening and on which site (`Guide: Dragon scimitar · OSRS Wi
 read and which game was asked when nothing matched (`No guide on Dofus for “Hogger”`). When the
 game came from the fallback, with "Detect the game from the app in front" on and another game
 naming an app, a second line says so for 4 seconds: `Dofus answered; no game claims World of
-Warcraft. Set the game app in Settings › Lookup.` With one game and no game app set, there is no
-second line. Typical time from key press to
-the tab: 200 to 400 ms, plus about half a second for the page.
+Warcraft. Set the game app in Settings › Lookup.` It names the app under the pointer, or the app
+in front when that one is SlyTerm. With one game, or for a lookup given its text
+(`slyterm://lookup?text=`, `--search`), there is no second line. Typical time from key press to the
+tab: 200 to 400 ms, plus about half a second for the page.
 
 The overlay does not take focus when a guide arrives: if it was hidden it comes back in
 click-through mode, so your next click and keystroke still go to the game. Press `⌃⌥Tab`, or click
@@ -1058,7 +1063,8 @@ video goes back to the usual rule, opaque in interact mode.
 A floating window's toolbar stays clickable in click-through, like the strip, dimmed with the rest:
 its buttons work and dragging it moves the window. Its address field needs interact mode, since the
 toolbar cannot take the keyboard in click-through: a click on it there shows "Click-through:
-⌃⌥Tab to type here" for 2.5 seconds, with the combo from Settings › Shortcuts.
+⌃⌥Tab to type here" for 2.5 seconds, with the combo from Settings › Shortcuts, or "Click-through
+is on" when the click-through shortcut has none.
 
 Clicking a floating page in interact mode gives it the keyboard, and clicking into the game from
 there switches everything to click-through, as leaving the terminal does; so does hiding the
@@ -1204,8 +1210,8 @@ Everything that configures the app is behind **Settings…** in it, in six tabs:
   stays, asking before interrupting an agent mid-turn, closing the tab a session was brought in
   from, and which terminal sessions are sent back to; under Quitting, the quit confirmation.
 - **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
-  the current one's, the startup command, the scrollback (lines kept per tab, for tabs opened after
-  the change), Option as Meta.
+  the current one's, the startup command, the scrollback (1,000 to 100,000 lines kept per tab, for
+  tabs opened after the change), Option as Meta.
 - **Window**: background opacity, the dim level in click-through, switching to click-through on
   focus loss, the window level ("Above other windows", "Above the menu bar", the default, or "Above
   everything, for games that cover the terminal"), where the tab bar sits.
@@ -1311,7 +1317,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `startupCommand` | empty | Typed into every new tab, such as `claude` or `codex` |
 | `shell` | `$SHELL` | Run as a login shell in each tab |
 | `optionAsMeta` | `false` | Off keeps Option for accents and brackets on international layouts |
-| `scrollback` | `10000` | Lines kept per tab; a change applies to tabs opened after it |
+| `scrollback` | `10000` | Lines kept per tab, 1000 to 100000 (a value outside is taken as the nearest end); a change applies to tabs opened after it |
 | `restoreSession` | `true` | Bring the last run's tabs and folders back at launch |
 | `confirmQuit` | `true` | Ask before quitting with several tabs or a running command |
 | `attentionSound` | `true` | Play the system alert when a tab needs you |
@@ -1344,7 +1350,7 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to when it was not brought in from one of these: `iterm2`, `terminal`, `ghostty` or `wezterm` (iTerm2, else Terminal, when the one chosen is not installed) |
 | `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
-| `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed |
+| `activityCardSeconds` | `10` | How long a finished card or a notification stays, 0 to 300 seconds; 0 keeps it until closed |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
 | `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
 
@@ -1443,14 +1449,17 @@ French ones, without reading the games you configured at all.
 
 ```sh
 B=dist/SlyTerm.app/Contents/MacOS/SlyTerm
-$B --match "La Geste de Ratagnan (2/6)"   # best index matches for a line of text
+$B --match "La Geste de Ratagnan (2/6)"   # best index matches for a line of text, then a `toast:`
+                                          # line with the message the lookup would show
 $B --ocr screenshot.png                   # read an image and match every line, `--fast` for the fast pass
-$B --ocr screenshot.png --at 1204 880     # the image read around a pointer at that pixel (see below)
+$B --ocr screenshot.png --at 1204 880     # the image read around a pointer at that pixel (see
+                                          # below), ending with the `toast:` line
 $B --pick-snapshot screenshot.png 1204 880 pick.png --scale 2
                                           # draw pick mode offscreen over that image, the pointer at
                                           # that pixel, and write a PNG; `--scale 2` for a Retina
                                           # screenshot; takes `--game`
-$B --lookup                               # the whole pipeline at the pointer, opens nothing
+$B --lookup                               # the whole pipeline at the pointer, opens nothing; its
+                                          # `toast:` line leaves out the fallback note
 $B --lookup 360 531                       # same at a screen point (origin bottom-left)
 $B --search "Abyssal whip" --game osrs    # what each source that can be asked resolves it to,
                                           # and the answer the lookup would take
@@ -1577,9 +1586,9 @@ a separate `SlyTerm` defaults domain.
 - **The lookup says Screen Recording is needed, again.** The app is ad-hoc signed by default, and
   macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and the grant
   has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security › Screen
-  Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it across builds, create a self-signed "Code Signing"
-  certificate in Keychain Access (Certificate Assistant › Create a Certificate) and build with
-  `CODESIGN_IDENTITY="its name" ./build.sh`.
+  Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it across
+  builds, create a self-signed "Code Signing" certificate in Keychain Access (Certificate
+  Assistant › Create a Certificate) and build with `CODESIGN_IDENTITY="its name" ./build.sh`.
 - **The lookup opens the wrong page or nothing.** Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q`
   to pick the line yourself. To see why, run `defaults write com.charlesmelki.slyterm debug -bool
   true`, press the hotkey, and read `~/Library/Logs/SlyTerm.log`: it lists which game answered,
@@ -1594,11 +1603,11 @@ a separate `SlyTerm` defaults domain.
   than leaving you with nothing. `--index` says which of the two it is, source by source, with the
   size and the age of every index; `--index --refresh` rebuilds them on the spot.
 - **The wrong game was picked.** The lookup asks the app under the pointer, then the app in front,
-  then the game chosen by hand, and the message names the game or the site that answered. When
-  the game chosen by hand answered for an app no game claims, the message's second line names that
-  app. Set each game's **Game app** in Settings › Lookup so it can be
-  recognised, or turn "Detect the game from the app in front" off and pick the game yourself, in
-  that pane or in the menu bar's "Lookup Game" submenu.
+  then the game chosen by hand ("Otherwise use"), and the message names the game or the site that
+  answered. When the game chosen by hand answered for an app no game claims while another game
+  names an app, the message's second line names the app. Set each game's **Game app** in Settings
+  › Lookup so it can be recognised, or turn "Detect the game from the app in front" off and pick
+  the game yourself, in that pane or in the menu bar's "Lookup Game" submenu.
 - **The lookup opened a new web tab instead of its own.** Its own was playing something, and the
   lookup never replaces a show: the new tab is the lookup's from then on (see
   [The lookup's tab](#the-lookups-tab)).
