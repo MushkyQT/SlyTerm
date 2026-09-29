@@ -6,19 +6,23 @@
 <h1 align="center">SlyTerm</h1>
 
 <p align="center">
-  A terminal that floats over your game.<br>
-  Keep Claude Code, Codex and other coding agents working while you play, and look things up
-  without alt-tabbing.
+  <b>A macOS terminal that floats over your game.</b><br>
+  Keep Claude Code or Codex running on top of the game, click straight through the terminal to
+  play, and answer your agent with a hotkey when it needs you.
 </p>
 
 <p align="center">
-  <a href="#install"><b>Install</b></a>
+  <a href="https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg"><img
+    src="https://img.shields.io/github/v/release/MushkyQT/SlyTerm?style=for-the-badge&logo=apple&logoColor=white&label=Download%20for%20macOS&labelColor=238636&color=2ea44f"
+    height="44" alt="Download SlyTerm for macOS"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/MushkyQT/SlyTerm/releases/latest"><img
-    src="https://img.shields.io/github/v/release/MushkyQT/SlyTerm?label=release"
-    alt="Latest release"></a>
+  or with Homebrew: <code>brew install --cask mushkyqt/tap/slyterm</code><br>
+  <sub>macOS 14 or later · Apple silicon and Intel · Signed and notarized · Free and open source</sub>
+</p>
+
+<p align="center">
   <a href="https://github.com/MushkyQT/SlyTerm/releases"><img
     src="https://img.shields.io/github/downloads/MushkyQT/SlyTerm/total?label=downloads"
     alt="Downloads"></a>
@@ -28,248 +32,131 @@
   <a href="https://github.com/MushkyQT/SlyTerm/actions/workflows/ci.yml"><img
     src="https://img.shields.io/github/actions/workflow/status/MushkyQT/SlyTerm/ci.yml?branch=main&label=CI"
     alt="CI status"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-lightgrey" alt="macOS 14 or later">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/MushkyQT/SlyTerm" alt="MIT License"></a>
 </p>
 
-<p align="center">
-  macOS 14 or later · Native Swift app · Free and open source
-</p>
-
----
-
-SlyTerm is a terminal window that sits on top of your game. Type a prompt to Claude Code, Codex or
-another coding agent, click back into the game, and the terminal lets every click through to it
-while the agent works. When it finishes or asks for permission, a card tells you, and a hotkey
-answers it without leaving the game. Point at a quest, an item or a spell, press a key, and its wiki
-page opens in a tab next to your terminals.
-
 https://github.com/user-attachments/assets/b203d4ae-e3b4-426d-8685-bfc97ce9af88
+
+SlyTerm is an always-on-top terminal overlay for macOS, made for playing while a coding agent works.
+Type a prompt, click back into the game, and your clicks pass through the terminal to the game while
+the output keeps coming. When the agent finishes or asks for permission, a card tells you, and
+`⌃⌥Y` or `⌃⌥N` answers it without leaving the game. It also looks up whatever is under your pointer
+on the game's wiki, and plays guides and videos in tabs you can float over the game.
 
 ## Features
 
-### Floats over your game
+### Stays on top, lets your clicks through
 
-SlyTerm stays above your game, in borderless windowed mode or in macOS fullscreen. Drag it by its
-tab strip, resize it from its edges and choose how see-through it is. It has no Dock icon and lives
-in the menu bar. While Settings or the setup assistant is open it shows in the Dock and in `⌘Tab`, so
-you can switch away and come back to it. `⌃⌥H` shows or hides it from anywhere, even while the game
-has the keyboard. In a narrow window the tab names stay readable: the expand button goes, and a tab
-too narrow for its `×` shows none; close it with `⌘W`, a middle click or its right-click menu.
-
-### Click through to the game
-
-Two modes, one key (`⌃⌥Tab`):
-
-- **Interact**: the terminal takes your typing, clicks and scrolling, like any terminal.
-- **Click-through**: the terminal dims, and every click, scroll and keystroke goes to the game
-  underneath.
-
-Click into your game and SlyTerm switches to click-through by itself. You show the terminal, type
-a prompt, click back into the game and keep playing while the output streams in. A three-finger tap
-on the trackpad switches modes too. The first three times it switches by itself, a note by the tab
-strip says so, and the strip reads "click-through" when it has room and nothing else to say.
+SlyTerm sits above the game, in borderless windowed mode or macOS fullscreen, as see-through as you
+like. Click into the game and it dims and switches to click-through by itself: every click, scroll
+and key goes to the game underneath. `⌃⌥H` shows or hides it from anywhere, and `⌃⌥Tab` switches
+modes. [More](docs/GUIDE.md#the-overlay)
 
 <img src="docs/features/overlay.gif" width="600"
      alt="The terminal appears over Dofus with ⌃⌥H, a prompt is typed, and a click on a monster dims it into click-through while Claude keeps working">
 
-### See what your agent is doing
+### Tells you when your agent needs you
 
-Each tab running a coding agent shows its state on the tab strip: a spinner while it works, an
-orange question mark while it waits for you, a yellow dot once it has finished and you have not
-looked. Hover a tab for the details, such as "Codex is working for 2m · editing GuideTab.swift" or
-"Claude is waiting for you · run `npm test`". There is nothing to set up: SlyTerm reads the session
-files and the terminal titles the agents already write.
-
-Claude Code and Codex get all of this, answers included. omp and pi get the marks and the cards,
-with nothing to answer from the game. Gemini CLI and Qwen Code show their state on the strip. Any
-other program that sends terminal notifications gets a mark and a card with its text.
-
-### Answer your agent from the game
-
-When an agent finishes a turn or asks for permission, a card appears by the tab strip with the end
-of its answer or the command it wants to run. For Claude Code and Codex, `⌃⌥Y` allows the request
-and `⌃⌥N` refuses it, and the game keeps the keyboard throughout. SlyTerm types the answer only
-after it has checked that the prompt on screen is the one the card showed; for Codex, only its usual
-prompt to run a command or edit files, with its default keys, is answered. Anything it cannot answer
-safely, such as a question with several options, waits for you in the terminal.
+Every tab shows what its agent is doing: a spinner while it works, an orange question mark when it
+waits for you, a yellow dot when it finished while you were busy. When Claude Code or Codex asks to
+run a command, a card shows the command, and `⌃⌥Y` allows it or `⌃⌥N` refuses it while the game
+keeps the keyboard. SlyTerm only types the answer after checking that the prompt on screen is the one
+on the card. [More](docs/GUIDE.md#coding-agents)
 
 <img src="docs/features/claude.gif" width="600"
      alt="Over World of Warcraft, a tab's spinner turns into a question mark and a card asks to run npm test; ⌃⌥Y allows it, and a second card says Claude finished">
 
-### Look up what is under your pointer
+| Works with | State on the tab | Card | Answer from the game |
+| --- | :---: | :---: | :---: |
+| Claude Code, Codex | ✓ | ✓ | ✓ |
+| omp, pi | ✓ | ✓ | |
+| Gemini CLI, Qwen Code | ✓ | | |
 
-Point at a quest, an item or a spell and press `⌃⌥Q`. SlyTerm reads the text around the pointer,
-finds the matching page on your game's wiki or guide site, and opens it in a web tab next to your
-terminals. It also finds the name at the top of an item's tooltip, wherever the game draws it.
-Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q` to choose from every line near the pointer with one
-key each. The message by the pointer names the site that answered, or the game it asked when
-nothing matched, so a lookup that went to the wrong game shows it.
+There is nothing to install in the agents: SlyTerm reads the session files and terminal titles they
+already write.
+
+### Looks up what's under your pointer
+
+Hover a quest, an item or a spell and press `⌃⌥Q`. SlyTerm reads the text near the pointer with the
+Mac's own text recognition and opens the matching wiki page in a tab. If it picked the wrong line,
+press `⌃⌥Q` again for the next guess. [More](docs/GUIDE.md#lookup)
 
 <img src="docs/features/lookup.gif" width="600"
      alt="Pointing at a Minor Healing Potion in the World of Warcraft bag and pressing ⌃⌥Q opens its Wowhead page in a web tab">
 
-Presets are included for:
+It comes set up for **Dofus** (Dofus 3 and Retro), **World of Warcraft** (Retail and the Classic
+versions on Wowhead) and **RuneScape** (Old School and RS3). For any other game, paste its wiki's
+search URL: Fandom, wiki.gg and other MediaWiki sites work, and so does any site with a sitemap.
 
-- **Dofus**: Dofus 3 with the Dofus Wiki and DofusDB, and Dofus Retro with the 129Dofus Wiki, in
-  English
-- **World of Warcraft**, every version Wowhead covers: Retail, Classic, Burning Crusade Classic,
-  Mists of Pandaria Classic and WoW: Forever
-- **RuneScape**: Old School with the OSRS Wiki, and RuneScape 3 with the RuneScape Wiki
+### Plays guides and video over the game
 
-Other games work too: add a site by pasting its search URL. SlyTerm indexes MediaWiki sites,
-including Fandom and wiki.gg wikis, and any site with a sitemap, so a name opens its exact page.
-
-### A browser next to your terminals
-
-Guides and video, from YouTube, Twitch and the like, open in web tabs: small squares at the end of
-the tab strip, each with its site's icon. Streaming sites such as Netflix get the same protected
-playback Safari has. Type an address or a search into a web tab's address bar, or open a new one
-with `⌘L` in a terminal or `⌘T` in a web tab, and `⌘⇧T` brings back the one you just closed. Hover a
-square to see its page and its key: `⌥⌘1`…`⌥⌘9` go to the web tabs in order. `⌘G` switches between
-the page and your terminal, and the game keeps focus when a page opens.
-
-Pop a web tab out and it floats over the game in a window of its own, filled with its video if one
-is playing, while the SlyTerm window goes back to your terminal. It switches to click-through with
-the rest of SlyTerm, and a dot on its toolbar shows which mode it is in: green when it takes clicks
-and typing, orange in click-through. A playing video has an opacity of its own, 85% by default, so
-the game shows through it in either mode. Put it back and it returns to the SlyTerm window. `⌃⌥V`
-pauses what is playing without leaving the game, and plays it again; the panic button silences it
-too.
+Web tabs sit next to your terminals, with guides in reader mode and ads and cookie banners blocked.
+Pop one out and it floats over the game in its own window, with the video slightly see-through so
+the game shows behind it. `⌃⌥V` pauses it from the game, and a lookup pauses it while you read.
+YouTube, Twitch and streaming sites like Netflix all play. [More](docs/GUIDE.md#web-tabs)
 
 <img src="docs/features/web.gif" width="600"
      alt="Over Cyberpunk 2077, a YouTube guide playing in a web tab pops out into a floating window, keeps playing with the game showing through after a click in the game, and ⌃⌥V pauses it">
 
-Looking something up pauses your videos while you read the guide. A video in the SlyTerm window also
-pauses when another tab covers it or the window hides, and plays again when you come back to it.
-One setting turns this off.
+### Brings sessions in from iTerm2 and Terminal
 
-Guides show in reader mode on the terminal's dark, translucent background, with ads, cookie banners
-and trackers blocked; streaming sites are left as they are, so their players work. `⌘F` finds text
-in the page, so you can jump straight to the quest step you are on. If you prefer your browser, one
-setting sends the lookup's pages there instead. Settings › Web holds these settings, with the page
-zoom and the search address.
-
-### Bring a session in from another terminal
-
-If you started Claude Code, Codex, omp or pi in iTerm2, Terminal or another terminal app before
-launching the game, press `⌘⇧T` in a terminal tab to bring it into SlyTerm. The conversation carries
-on from the same session. A background Claude (`claude --bg`) is attached without being
-interrupted, and Codex keeps working through the move when it runs in its background server, as
-it does by default. Otherwise moving an agent in the middle of a turn interrupts it, so SlyTerm asks
-first. Claude Code, Codex and pi can also be copied, with the original left running, and a plain
-shell tab comes across with its folder and its command.
-
-To send one back, right-click its tab and choose Send Back, or quit with Send Back and Quit: the
-conversation opens where it left off, in a new tab of the terminal it came from. That works for
-iTerm2, Terminal, Ghostty and WezTerm; a session from anywhere else, or started in SlyTerm, goes to
-the one chosen in Settings.
+If you started Claude Code, Codex, omp or pi in another terminal before the game, press `⌘⇧T` and
+pick it: the same conversation carries on in a SlyTerm tab. When you are done, send it back to a
+new tab of iTerm2, Terminal, Ghostty or WezTerm, where it left off.
+[More](docs/GUIDE.md#bringing-a-session-in)
 
 <img src="docs/features/bring-in.gif" width="600"
      alt="⌘⇧T opens Bring In a Session over Old School RuneScape, and Return resumes an iTerm2 Claude session in a new tab">
 
-### Panic button
+### Has a panic button
 
-`⌃⌥P` fills the screen with an opaque terminal, menu bar included, and puts the keyboard in it.
-Web tabs go silent and leave the tab strip, and floating web tabs hide. A guide you look up in the
-meantime loads out of sight and is in front when you leave. Press it again and the window goes back
-exactly where it was, with the floating tabs and what was playing.
+`⌃⌥P` covers the whole screen with an opaque terminal and silences every video. Press it again and
+everything goes back where it was, videos included. [More](docs/GUIDE.md#panic-button-and-fullscreen)
 
 <img src="docs/features/fullscreen.gif" width="600"
      alt="Over World of Warcraft, ⌃⌥P fills the screen with an opaque terminal while Claude keeps working, and pressing it again puts the window and a floating Wowhead page back where they were">
 
-### Fullscreen
+### And behaves like a real terminal
 
-`⌃⌥M` or `⌘Return` inside SlyTerm fills the screen with the window you are in: the SlyTerm
-window with the tab in front, or a floating web tab. The expand button on the tab strip fills it
-with the SlyTerm window. It is opaque and keeps the keyboard. Nothing pauses or hides, and tabs switch as usual. Press it again, or
-switch to click-through, and the window goes back where it was.
-
-### A real terminal
-
-- Tabs like iTerm2, each in its own folder, restored at the next launch
-- Uses your iTerm2 font, so Powerlevel10k, Starship and oh-my-posh prompts render correctly; Nerd
-  Fonts are picked up automatically
-- Option is left alone by default, so `{`, `[`, `|` and `~` keep working on French and other
-  international keyboards
-- `⇧Return` for a newline in Claude Code and Codex
-- A startup command, such as `claude` or `codex`, typed into each new tab
-
-### Scriptable
-
-Every action is also a `slyterm://` URL, so shell scripts, Shortcuts, a Stream Deck or a Claude
-Code hook can drive the app: `open -g slyterm://toggle`. Each tab exports `SLYTERM_TAB_ID`, so a
-hook can mark the tab it ran in.
+- Tabs like iTerm2, each in its own folder, reopened at the next launch
+- Your iTerm2 font, so Powerlevel10k, Starship and Nerd Font prompts look right
+- Option left alone, so `{`, `[`, `|` and `~` still work on French and other keyboards
+- `⇧Return` for a newline in Claude Code and Codex, and a startup command such as `claude` in each
+  new tab
+- Every action is a `slyterm://` URL, for scripts, Shortcuts, a Stream Deck or a Claude Code hook
+- Lives in the menu bar, with no Dock icon
 
 ## It leaves your game alone
 
-SlyTerm is a separate window on top of your game, like any other app's. It never reads the game's
-memory or network traffic, and it never sends the game any input. The lookup takes one screenshot
-around the pointer when you press its hotkey, reads it on your Mac with Apple's text recognition,
-and does not save it. Apart from the pages you open, its only network requests go to the guide sites
-you have set up, for an index refresh once a week and a search when a name is not in the index,
-and to GitHub, where it looks for a new version of SlyTerm once a day unless you turn that off in
-Settings.
+SlyTerm is an ordinary window on top of the game. It never reads the game's memory or network
+traffic, and never sends the game any input. The lookup takes one screenshot around the pointer when
+you press its key, reads it on your Mac and does not keep it.
+[What it sends over the network](docs/GUIDE.md#privacy)
 
 ## Install
 
-[Download SlyTerm](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg), open
-the DMG and drag SlyTerm to Applications, then open it from there. It needs macOS 14 Sonoma or later
-and runs on Apple silicon and Intel Macs. Every version from 1.3.0 on, with what changed in it, is
-on the [Releases](https://github.com/MushkyQT/SlyTerm/releases) page. With
-[Homebrew](https://brew.sh), `brew install --cask mushkyqt/tap/slyterm` does the same.
+[Download the DMG](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg), drag
+SlyTerm to Applications and open it, or run `brew install --cask mushkyqt/tap/slyterm`. Then look for
+the smirking terminal in the menu bar. A short setup asks which games you play and shows you the
+shortcuts.
 
-Look for the icon in the menu bar: a terminal window with a smirk.
-
-The lookup needs the Screen Recording permission. macOS asks for it the first time you press
-`⌃⌥Q`: turn SlyTerm on in System Settings › Privacy & Security › Screen Recording, then relaunch
-it. Settings › Lookup and the first setup say when that is still needed, with a button that
-reopens SlyTerm. If you used a copy you built yourself before, macOS asks once more when the
-downloaded app replaces it.
-
-SlyTerm checks for a new version once a day. When there is one, an item such as "Update to SlyTerm
-1.4.0…" waits at the top of the menu bar item and nothing opens over your game; choose it when you
-are ready. In Settings › General › Updates you can turn the checks off, or have updates download
-on their own and install when SlyTerm quits.
-
-### Build from source
-
-You need the Xcode Command Line Tools (`xcode-select --install`); the full Xcode app is not needed.
-
-```sh
-git clone https://github.com/MushkyQT/slyterm.git
-cd slyterm
-./build.sh --install
-open /Applications/SlyTerm.app
-```
-
-A copy built from source does not update itself. [CONTRIBUTING.md](CONTRIBUTING.md) has more on
-building.
+The lookup needs the Screen Recording permission, and macOS asks for it the first time you press
+`⌃⌥Q`. SlyTerm checks for updates once a day and waits in the menu bar for you to install them, so
+nothing pops up mid-game.
+[Permissions, updates and building from source](docs/GUIDE.md#install-and-update)
 
 ## Getting started
 
-The first time SlyTerm opens, a short setup asks whether you play games with it open and which
-ones, so the lookup knows where to search, and shows the main shortcuts so you can change them.
-On a Mac with a trackpad it also sets what a tap with several fingers does and lets you try it
-there, and says when macOS opens Look up on the same tap. Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
-which can run the setup again.
-
-1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide
-   the overlay.
-2. Press `⌃⌥H` to show the terminal and run `claude` or `codex`. To start your agent in every new
-   tab, set Settings › Terminal › Startup command to it.
-3. Type your prompt, then click back into the game. The terminal lets your clicks through while
-   the agent works.
-4. When a card says the agent is done or needs you, answer with `⌃⌥Y` or `⌃⌥N`, or press `⌃⌥Tab`
-   to go back to the terminal.
+1. Set your game to **borderless windowed**. Exclusive fullscreen can hide the overlay.
+2. Press `⌃⌥H` to show the terminal, and run `claude` or `codex`.
+3. Type your prompt and click back into the game.
+4. When a card appears, answer it with `⌃⌥Y` or `⌃⌥N`, or press `⌃⌥Tab` to go back to the terminal.
 5. Point at something in the game and press `⌃⌥Q` to look it up.
-6. Press `⌘L` in the terminal for a web tab, type an address, and pop it out with the button in its
-   toolbar to watch it in a window of its own over the game.
 
 ## Shortcuts
 
-These are the defaults. You can change the global ones in Settings › Shortcuts. ⌃ is Control, ⌥ is
-Option, ⌘ is Command and ⇧ is Shift. **Help** in the menu bar item opens this list.
+These are the defaults, and the global ones can be changed in Settings › Shortcuts. ⌃ is Control,
+⌥ is Option, ⌘ is Command and ⇧ is Shift. **Help** in the menu bar item opens this list.
 
 | Action | Keys |
 | --- | --- |
@@ -290,23 +177,19 @@ Option, ⌘ is Command and ⇧ is Shift. **Help** in the menu bar item opens thi
 | Reopen the web tab you just closed | `⌘⇧T` in a web tab |
 | Settings | `⌘,` |
 
-The keys that start with `⌃⌥` work from anywhere, including while the game has the keyboard, and
-stay clear of the keys games use. If one does nothing, or moves a window instead, another app, often
-a window manager, has the same shortcut: change one of the two. If you use the three-finger tap,
-set System Settings › Trackpad › Point & Click › "Look up & data detectors" to Force Click or off,
-or each tap also opens a dictionary panel.
+The `⌃⌥` keys work from anywhere, even while the game has the keyboard. If one does nothing, another
+app has it too: see [When a shortcut does nothing](docs/GUIDE.md#when-a-shortcut-does-nothing).
 
-## Learn more
+## Documentation
 
-- [Technical details](docs/TECHNICAL.md): how each feature behaves, every setting, the URL scheme,
-  the command-line modes, troubleshooting and how the app is built.
-- [Troubleshooting](docs/TECHNICAL.md#troubleshooting): the overlay hidden behind the game, a
-  hotkey that does nothing, a lookup that opens the wrong page.
-- [Changelog](CHANGELOG.md): what changed in each release. **About SlyTerm** in the menu bar item
-  shows the version you run.
-- [Contributing](CONTRIBUTING.md): building, testing and sending a change.
-- [AGENTS.md](AGENTS.md): the same, for AI coding agents.
-- [Security](SECURITY.md): how to report a vulnerability privately.
+- [Guide](docs/GUIDE.md): every feature in full, for players.
+- [Technical details](docs/TECHNICAL.md): every setting, the URL scheme, the command-line modes and
+  how the app is built.
+- [Troubleshooting](docs/TECHNICAL.md#troubleshooting): the overlay hidden behind the game, a hotkey
+  that does nothing, a lookup that opens the wrong page.
+- [Changelog](CHANGELOG.md): what changed in each release.
+- [Contributing](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) for AI coding agents, and
+  [Security](SECURITY.md) for reporting a vulnerability privately.
 
 ## Credits
 

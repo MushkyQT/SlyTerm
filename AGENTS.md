@@ -128,9 +128,11 @@ A change that breaks one of these is wrong, whatever it fixes.
   [preferences table](docs/TECHNICAL.md#preferences-from-the-shell). A URL route:
   `RemoteControl.swift` and [the URL list](docs/TECHNICAL.md#url-scheme). A command-line mode:
   `main.swift` and [the modes list](docs/TECHNICAL.md#command-line-modes).
-- **Two kinds of documentation.** README.md is the product page: what a feature does for a player,
-  in a few plain sentences, with no setting keys or internals. docs/TECHNICAL.md holds everything
-  else. Update both in the same change as the behaviour.
+- **Three kinds of documentation.** README.md is the product page: what a feature does for a
+  player, in two or three plain sentences, with no setting keys or internals. docs/GUIDE.md tells a
+  player each feature in full, still without setting keys or internals. docs/TECHNICAL.md holds
+  everything else. Update all three in the same change as the behaviour. The README keeps its
+  `## Shortcuts` heading: the app's Help item opens `#shortcuts`.
 - **Versions.** A pull request that changes the app adds its lines under `## [Unreleased]` in
   [CHANGELOG.md](CHANGELOG.md) and leaves the version alone. A release is its own change: it
   raises the semantic version in `Resources/Info.plist` (patch if only fixes are unreleased, minor
@@ -149,8 +151,8 @@ A change that breaks one of these is wrong, whatever it fixes.
 
 - `swift build` passes.
 - The modes for the area you touched have been run and their output read, PNGs included.
-- README.md and docs/TECHNICAL.md describe the new behaviour, and CHANGELOG.md has its lines
-  under `[Unreleased]`.
+- README.md, docs/GUIDE.md and docs/TECHNICAL.md describe the new behaviour, and CHANGELOG.md has
+  its lines under `[Unreleased]`.
 - Your summary or pull request lists what was verified offline, what was verified in the running
   app, and what was not verified at all. Hotkeys, focus, click-through and window placement can
   only be verified in the running app; if you could not run it, say so.

@@ -1,8 +1,9 @@
 # SlyTerm technical details
 
 This is the reference for how SlyTerm behaves, how to configure and script it, and how it is
-built. For an overview of what the app does, see the [README](../README.md). To build it and send
-a change, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+built. For an overview of what the app does, see the [README](../README.md), and for each feature
+from a player's side, the [guide](GUIDE.md). To build it and send a change, see
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 - [Principles](#principles)
 - [The overlay](#the-overlay)
