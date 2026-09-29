@@ -315,9 +315,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         checkNow = button("Check Now", #selector(checkForUpdates))
         let updates = Updater.shared.isEnabled ? [
             checkUpdates, downloadUpdates,
-            caption("Nothing opens over the game: a new version found by an automatic check waits "
-                    + "at the top of the menu bar item, or, if it downloaded automatically, is "
-                    + "installed when SlyTerm quits."),
+            caption("An update found by an automatic check waits at the top of the menu bar item "
+                    + "and opens nothing over the game. One downloaded automatically is installed "
+                    + "when SlyTerm quits."),
             checkNow,
         ] : [caption("This copy was built from source and does not update itself.")]
         return grid([

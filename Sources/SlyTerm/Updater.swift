@@ -140,8 +140,9 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
             NSApp.abortModal()
             return
         }
+        // Not hidden on deactivation, like the quit confirmation: while it runs the overlay takes
+        // no input, and a hidden alert would leave nothing on screen to say why.
         window.level = Settings.shared.alertLevel
-        window.hidesOnDeactivate = true
         guard alert == nil else { return }
         alert = window
         windows.append(window)
