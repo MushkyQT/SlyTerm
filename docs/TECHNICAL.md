@@ -2201,7 +2201,9 @@ Tools/make-appcast.sh <dmg> <notes.html> <appcast.xml> [--ed-key-file <file>]
   (`LSMinimumSystemVersion`), the notes as its description, and an enclosure with the download URL,
   the DMG's length and its EdDSA signature from `sign_update`. It then signs the feed itself
   (`sign_update` puts that signature in a comment at its end, which `SURequireSignedFeed` needs) and
-  verifies both signatures. The DMG must be named `SlyTerm-<version>.dmg` after
+  verifies both signatures. `sign_update` verifies with the key it was given, so the script also
+  checks the DMG's signature against `SUPublicEDKey` with CryptoKit: a feed signed with any other
+  key would be refused by every copy of the app, and fails here instead. The DMG must be named `SlyTerm-<version>.dmg` after
   `Resources/Info.plist`, and the URL is
   `https://github.com/MushkyQT/SlyTerm/releases/download/v<version>/SlyTerm-<version>.dmg`, or
   `SLYTERM_DOWNLOAD_URL`. With `--ed-key-file` the private key comes from that file, as in CI;

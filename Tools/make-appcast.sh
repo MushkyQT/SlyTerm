@@ -61,4 +61,18 @@ EOF
 "$sign_update" "${key[@]}" "$appcast"
 "$sign_update" "${key[@]}" --verify "$dmg" "$signature"
 "$sign_update" "${key[@]}" --verify "$appcast"
+# sign_update checks against the key it was given. Signed with any other than the one the app
+# trusts, the update would be refused by every copy out there.
+swift - "$dmg" "$signature" "$(plist SUPublicEDKey)" <<'SWIFT'
+import CryptoKit
+import Foundation
+let args = CommandLine.arguments
+guard args.count == 4, let data = FileManager.default.contents(atPath: args[1]),
+      let signature = Data(base64Encoded: args[2]), let raw = Data(base64Encoded: args[3]),
+      let key = try? Curve25519.Signing.PublicKey(rawRepresentation: raw),
+      key.isValidSignature(signature, for: data) else {
+    FileHandle.standardError.write(Data("The update key does not match SUPublicEDKey\n".utf8))
+    exit(1)
+}
+SWIFT
 echo "Wrote $appcast"
