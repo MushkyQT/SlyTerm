@@ -435,6 +435,7 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
     static let shared = AppSwitcher()
 
     private var open: [NSWindow] = []
+    private var holds = 0
     private var about: NSWindow?
     private var aboutClosing: NSObjectProtocol?
 
@@ -450,9 +451,19 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
         else { return }
         dock.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
-            guard open.contains(window) else { return }
+            // The newest: the window that asked may have closed meanwhile, replaced by another.
+            guard let front = open.last else { return }
             NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+            front.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    // Keeps SlyTerm in the Dock for a moment after a window closes, for one that replaces it.
+    func hold(for seconds: TimeInterval) {
+        holds += 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [self] in
+            holds -= 1
+            if open.isEmpty, holds == 0 { becomeAccessory() }
         }
     }
 
@@ -481,7 +492,10 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
     func windowClosed(_ window: NSWindow) {
         guard let index = open.firstIndex(of: window) else { return }
         open.remove(at: index)
-        guard open.isEmpty else { return }
+        if open.isEmpty, holds == 0 { becomeAccessory() }
+    }
+
+    private func becomeAccessory() {
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = nil
     }

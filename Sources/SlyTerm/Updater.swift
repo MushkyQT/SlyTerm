@@ -103,15 +103,12 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
     }
 
     // Sparkle closes one window just before it opens the next (checking, then the update or an
-    // alert), and letting go at once would take SlyTerm out of the Dock and back.
+    // alert): the hold keeps SlyTerm in the Dock for it. A closed window leaves AppSwitcher at once,
+    // or its Dock hand-off could bring it back with nothing behind it (seen live).
     private func release(_ window: NSWindow) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, !window.isVisible, let index = windows.firstIndex(of: window) else {
-                return
-            }
-            windows.remove(at: index)
-            AppSwitcher.shared.windowClosed(window)
-        }
+        windows.removeAll { $0 === window }
+        AppSwitcher.shared.hold(for: 0.5)
+        AppSwitcher.shared.windowClosed(window)
     }
 
     // runModal puts the alert at the modal panel level, under the overlay, and again at each
