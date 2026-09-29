@@ -16,11 +16,13 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - SlyTerm can be downloaded from GitHub Releases as a DMG: open it and drag SlyTerm to
   Applications. The app is signed with a Developer ID and notarized by Apple, and runs on Apple
   silicon and Intel Macs with macOS 14 or later.
+  ([#10](https://github.com/MushkyQT/slyterm/pull/10))
 - The downloaded app checks for a new version once a day. One it finds waits as "Update to SlyTerm
   X…" at the top of the menu bar item, and nothing opens over the game until you choose it; Check
   for Updates…, next to About SlyTerm, checks at once. In Settings › General › Updates the daily
   check can be turned off, and updates can be downloaded on their own and installed when SlyTerm
   quits. A copy built from source does not update itself, and Settings says so.
+  ([#10](https://github.com/MushkyQT/slyterm/pull/10))
 - When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
   say it needs a reopen and offer a Reopen SlyTerm button.
   ([#9](https://github.com/MushkyQT/slyterm/pull/9))
@@ -52,6 +54,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - The first time the downloaded app replaces a copy you built, macOS asks again for Screen
   Recording, and for control of iTerm2, Terminal or Ghostty the next time a session is brought in
   from one or sent back to it, since the app is signed differently. Updates keep both.
+  ([#10](https://github.com/MushkyQT/slyterm/pull/10))
 - The setup assistant calls the permission Screen Recording, as System Settings does, and says
   that SlyTerm needs to be reopened after it is allowed.
   ([#9](https://github.com/MushkyQT/slyterm/pull/9))
