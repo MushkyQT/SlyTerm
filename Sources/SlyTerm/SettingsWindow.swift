@@ -786,7 +786,10 @@ final class ShortcutsPane: SettingsPane {
             hotkeys.addRow(with: [title, recorder, clear, status])
         }
         hotkeys.column(at: 0).xPlacement = .trailing
-        hotkeys.rowAlignment = .firstBaseline
+        // The recorder has no text baseline, so first-baseline rows drop it half a row below the
+        // label and the Clear button: centre every cell instead.
+        hotkeys.rowAlignment = .none
+        for row in 0..<hotkeys.numberOfRows { hotkeys.row(at: row).yPlacement = .center }
 
         fingers.target = self
         fingers.action = #selector(setFingers)
