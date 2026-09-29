@@ -50,6 +50,9 @@ final class TrackpadTapDetector {
         return true
     }
 
+    // Lists the devices without starting them, and does not retry after a failure: start() does.
+    var hasTrackpad: Bool { !devices.isEmpty || (unavailableReason == nil && load()) }
+
     func stop() {
         guard isRunning else { return }
         for device in devices { _ = stopFn?(device) }

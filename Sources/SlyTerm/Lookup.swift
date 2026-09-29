@@ -17,6 +17,9 @@ final class Lookup {
     static let againSlop: CGFloat = 6
     static let againWindow: TimeInterval = 10
     static let againAsks = 6
+    // Set by AppDelegate at launch: macOS applies a Screen Recording grant only to a process
+    // started after it, so a grant made since then needs a reopen.
+    static var captureGrantedAtLaunch = true
 
     var openGuide: ((URL) -> Void)?
     private var running = false
@@ -158,20 +161,23 @@ final class Lookup {
             if let s = continued, await !self.rowUnchanged(since: s, at: mouse) { continued = nil }
             let outcome: Outcome
             let kept: Session?
+            let answering: LookupGame?
             if var s = continued {
                 outcome = await self.again(&s)
                 s.pressed = Date()
                 kept = s
+                answering = s.game
             } else {
                 let press = await self.press(at: mouse, text: text, game: game)
                 outcome = press.outcome
+                answering = press.game
                 kept = text == nil ? Self.startSession(after: press, at: mouse, forced: game, dryRun: dryRun) : nil
             }
             let next = kept.flatMap { self.upcoming($0) }
             await MainActor.run {
                 self.sessionLock.withLock { self.session = kept }
                 self.running = false
-                self.finish(outcome, at: mouse, dryRun: dryRun, next: next)
+                self.finish(outcome, at: mouse, dryRun: dryRun, next: next, game: answering)
                 if kept != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + Self.againWindow + 1) { [weak self] in self?.expireSession() }
                 }
@@ -660,7 +666,7 @@ final class Lookup {
             let outcome = await self.lookup(at: mouse, text: candidate.text, game: request.game)
             await MainActor.run {
                 self.running = false
-                self.finish(outcome, at: mouse, dryRun: request.dryRun)
+                self.finish(outcome, at: mouse, dryRun: request.dryRun, game: request.game)
             }
         }
     }
@@ -773,13 +779,13 @@ final class Lookup {
     }
 
     @MainActor
-    private func finish(_ outcome: Outcome, at mouse: NSPoint, dryRun: Bool, next: String? = nil) {
+    private func finish(_ outcome: Outcome, at mouse: NSPoint, dryRun: Bool, next: String? = nil,
+                        game: LookupGame? = nil) {
         Settings.log("lookup: \(outcome)\(next.map { ", next: \($0)" } ?? "")")
         switch outcome {
-        case .found(let name, let url, _, let source):
+        case .found(_, let url, _, _):
             let inApp = Settings.shared.questOpenInApp && openGuide != nil
-            var message = dryRun ? "\(name)  →  \(Self.pageLabel(of: url))  [\(source)]"
-                                 : inApp ? "Guide: \(name)" : "Opening \(name)"
+            var message = Self.toastText(outcome, game: game?.name, inApp: inApp, dryRun: dryRun)
             if let next {
                 let combo = KeyCombo.pretty(Settings.shared.hotkey(.quest))
                 message += "  ·  \(combo.isEmpty ? "" : combo + " ")again: \(next)"
@@ -792,8 +798,10 @@ final class Lookup {
             Toast.shared.show("Add a game in Settings › Lookup", near: mouse, tint: .systemOrange, duration: 3)
         case .noText:
             Toast.shared.show("No text under the pointer", near: mouse, tint: .systemOrange)
-        case .noMatch(let text):
-            Toast.shared.show("No guide found for “\(text)”", near: mouse, tint: .systemOrange, duration: 3)
+        case .noMatch:
+            // The game in its own colour, so a lookup that asked the wrong game stands out.
+            Toast.shared.show(Self.toastText(outcome, game: game?.name), near: mouse, tint: .systemOrange,
+                              duration: 3, highlight: game?.name)
         case .nothingElse:
             Toast.shared.show("Nothing else near the pointer", near: mouse, tint: .systemOrange)
         case .noPermission:
@@ -801,6 +809,18 @@ final class Lookup {
                               near: mouse, tint: .systemRed, duration: 6)
         case .failed(let message):
             Toast.shared.show("Lookup failed: \(message)", near: mouse, tint: .systemRed, duration: 4)
+        }
+    }
+
+    static func toastText(_ outcome: Outcome, game: String?, inApp: Bool = true, dryRun: Bool = false) -> String {
+        switch outcome {
+        case .found(let name, let url, _, let source):
+            if dryRun { return "\(name)  →  \(pageLabel(of: url))  [\(source)]" }
+            return (inApp ? "Guide: \(name)" : "Opening \(name)") + " · \(source)"
+        case .noMatch(let text):
+            return game.map { "No guide on \($0) for “\(text)”" } ?? "No guide found for “\(text)”"
+        default:
+            return outcome.description
         }
     }
 
@@ -958,12 +978,19 @@ final class Toast {
         panel.contentView = background
     }
 
-    func show(_ text: String, near point: NSPoint, tint: NSColor = .white, duration: TimeInterval = 1.8) {
+    func show(_ text: String, near point: NSPoint, tint: NSColor = .white, duration: TimeInterval = 1.8,
+              highlight: String? = nil) {
         hideWork?.cancel()
         generation += 1
         let current = generation
         label.stringValue = text
         label.textColor = tint
+        if let highlight, let range = text.range(of: highlight) {
+            let styled = NSMutableAttributedString(string: text, attributes: [.font: label.font as Any,
+                                                                              .foregroundColor: tint])
+            styled.addAttribute(.foregroundColor, value: NSColor.systemCyan, range: NSRange(range, in: text))
+            label.attributedStringValue = styled
+        }
         let maxWidth: CGFloat = 440
         label.preferredMaxLayoutWidth = maxWidth - 24
         var size = label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: maxWidth - 24, height: 200)) ?? NSSize(width: 200, height: 20)
@@ -1036,10 +1063,14 @@ enum LookupCLI {
         switch args[1] {
         case "--match":
             let text = LookupText.clean(words.joined(separator: " "), for: game)
-            for m in merged(matches: text, in: indexed, limit: 5) {
+            let matches = merged(matches: text, in: indexed, limit: 5)
+            for m in matches {
                 print(String(format: "  %.3f  %@  %@%@", m.match.score, m.match.entry.name, m.match.entry.url.absoluteString,
                              indexed.count > 1 ? "  [\(m.source.name)]" : ""))
             }
+            let top = matches.first.map { Lookup.Outcome.found(name: $0.match.entry.name, url: $0.match.entry.url,
+                                                                via: "text", source: $0.source.name) }
+            print("toast: \(Lookup.toastText(top ?? .noMatch(text), game: game.name))")
         case "--ocr":
             guard let path = words.first, let image = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
                 print("cannot read image"); return true
@@ -1084,6 +1115,7 @@ enum LookupCLI {
             wait {
                 let outcome = await Lookup.shared.lookup(at: point ?? NSEvent.mouseLocation, game: game)
                 print("result: \(outcome)")
+                print("toast: \(Lookup.toastText(outcome, game: game.name))")
             }
         }
         return true
@@ -1211,8 +1243,14 @@ enum LookupCLI {
             if let winner, case .hit(let page)? = reading.verdict(for: reading.candidates[winner]) {
                 let outcome = Lookup.Outcome.found(name: page.name, url: page.url, via: "nearby", source: page.source)
                 print("result: \(outcome), from \"\(reading.candidates[winner].text)\" (rank \(winner + 1))")
+                print("toast: \(Lookup.toastText(outcome, game: game.name))")
             } else if let top = Lookup.searched(reading.candidates) {
                 print("result: nothing confirmed near the pointer; the search page would get \"\(top.cleaned)\"")
+                if let source = game.primarySource, let url = source.searchURL(for: top.cleaned) {
+                    let outcome = Lookup.Outcome.found(name: top.cleaned, url: url, via: "search page",
+                                                       source: source.name)
+                    print("toast: \(Lookup.toastText(outcome, game: game.name))")
+                }
             } else {
                 print("result: no tooltip, and nothing within \(Int(LookupNearby.radius)) text heights of the pointer")
             }

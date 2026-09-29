@@ -344,7 +344,7 @@ final class ActivityCardView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        style(titleLabel, font: .systemFont(ofSize: 12, weight: .semibold), alpha: 0.9, lines: 1)
+        style(titleLabel, font: .systemFont(ofSize: 13, weight: .semibold), alpha: 0.9, lines: 1)
         style(bodyLabel, font: .systemFont(ofSize: 12), alpha: 0.8, lines: 6)
         style(monoLabel, font: .monospacedSystemFont(ofSize: 11, weight: .regular), alpha: 0.75, lines: 6)
         style(footerLabel, font: .systemFont(ofSize: 10.5), alpha: 0.5, lines: 1)

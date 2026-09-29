@@ -6,8 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotkeyOK: [String: Bool] = [:]
     private var pendingURLs: [URL] = []
     private var quitPending = false
+    private var reopenOnQuit = false
+    private var setupOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Only asks whether the grant is there; nothing is captured.
+        Lookup.captureGrantedAtLaunch = CGPreflightScreenCaptureAccess()
         Settings.shared.decideSetup()
         controller = OverlayController()
         TeleportEngine.shared.controller = controller
@@ -40,12 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if setupOpen { SetupAssistant.shared.keepForNextLaunch() }
         TrackpadTapDetector.shared.stop()
         // Refresh and save before terminateAll: a dead shell has no cwd, and the poll stops while
         // the overlay is hidden.
         controller.refreshTabs()
         controller.saveSession()
         controller.terminateAll()
+        if reopenOnQuit { ScreenRecording.launchAfterExit() }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -102,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 NSApp.reply(toApplicationShouldTerminate: true)
                 return
             }
+            self?.reopenOnQuit = false
             Settings.log("quit: \(stayed.count) tab(s) could not be sent back, not quitting")
             let lead = stayed.count == 1 ? "1 tab stayed" : "\(stayed.count) tabs stayed"
             MainActor.assumeIsolated {
@@ -134,6 +141,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func performGestureAction() {
+        // The assistant lets the player try the tap; hiding or covering the screen behind it would
+        // lose the window they are reading.
+        if setupOpen {
+            SetupAssistant.shared.tapRecognised()
+            Settings.log("tap gesture: held while the setup assistant is open")
+            return
+        }
         switch Settings.shared.tapGestureAction {
         case "toggle": controller.toggleVisible()
         case "panic": controller.togglePanic()
@@ -207,6 +221,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.show(tab: tab, level: Settings.shared.dialogLevel)
     }
 
+    func reopen() {
+        guard ScreenRecording.canReopen else { return }
+        reopenOnQuit = true
+        NSApp.terminate(nil)
+        // Still running: the quit was cancelled, or it waits on Send Back and Quit.
+        if !quitPending { reopenOnQuit = false }
+    }
+
     func runSetupAssistant(then: (() -> Void)? = nil) {
         let assistant = SetupAssistant.shared
         // Open already: keep its onClose, which may still owe the first launch its overlay.
@@ -217,10 +239,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         assistant.onEndRecording = { [weak self] in self?.registerHotkeys() }
         assistant.onClose = { [weak self] in
+            self?.setupOpen = false
             Settings.shared.setupDone = true
             self?.registerHotkeys()
             then?()
         }
+        setupOpen = true
         assistant.show(level: Settings.shared.dialogLevel)
     }
 
@@ -288,8 +312,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(opacityItem)
         menu.addItem(.separator())
 
+        menu.addItem(item("Shortcuts…", #selector(showShortcuts)))
+        menu.addItem(item("Help", #selector(openHelp)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ",", modifiers: .command))
         menu.addItem(item("Reset Window Position", #selector(resetPosition)))
+        menu.addItem(item("About SlyTerm", #selector(showAbout)))
         menu.addItem(.separator())
         menu.addItem(item("Quit SlyTerm", #selector(quit), key: "q", modifiers: .command))
     }
@@ -378,6 +405,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func setGhostOpacity(_ sender: NSMenuItem) { Settings.shared.ghostOpacity = Double(sender.tag) / 100 }
     @objc private func setVideoOpacity(_ sender: NSMenuItem) { Settings.shared.videoOpacity = Double(sender.tag) / 100 }
     @objc private func showSettings() { openSettings() }
+    @objc private func showShortcuts() { openSettings(tab: .shortcuts) }
+    @objc private func openHelp() {
+        guard let url = URL(string: "https://github.com/MushkyQT/slyterm#shortcuts") else { return }
+        NSWorkspace.shared.open(url)
+    }
+    @objc private func showAbout() { AppSwitcher.shared.showAbout() }
     @objc private func resetPosition() { controller.resetPosition() }
     @objc private func quit() { NSApp.terminate(nil) }
 }
@@ -388,6 +421,8 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
     static let shared = AppSwitcher()
 
     private var open: [NSWindow] = []
+    private var about: NSWindow?
+    private var aboutClosing: NSObjectProtocol?
 
     func windowOpened(_ window: NSWindow) {
         if !open.contains(window) { open.append(window) }
@@ -405,6 +440,28 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    // AppKit gives no handle on the standard panel, so it is the window that was not there before.
+    func showAbout() {
+        let known = Set(NSApp.windows.map(ObjectIdentifier.init))
+        NSApp.orderFrontStandardAboutPanel(options: [:])
+        if let fresh = NSApp.windows.first(where: { !known.contains(ObjectIdentifier($0)) && $0.isVisible }) {
+            if let aboutClosing { NotificationCenter.default.removeObserver(aboutClosing) }
+            about = fresh
+            aboutClosing = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: fresh, queue: .main
+            ) { [weak self, weak fresh] _ in if let fresh { self?.windowClosed(fresh) } }
+        }
+        guard let about else { return }
+        // Above the overlay like Settings; hidden while another app is active, so it does not
+        // float over that app's windows.
+        about.level = Settings.shared.dialogLevel
+        about.hidesOnDeactivate = true
+        about.center()
+        windowOpened(about)
+        NSApp.activate(ignoringOtherApps: true)
+        about.makeKeyAndOrderFront(nil)
     }
 
     func windowClosed(_ window: NSWindow) {
@@ -451,6 +508,43 @@ final class AppSwitcher: NSObject, NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         guard let key = NSApp.keyWindow else { return false }
         return open.contains { $0 === key || $0 === key.sheetParent }
+    }
+}
+
+enum ScreenRecording {
+    case notGranted, granted, needsReopen
+
+    static func state(granted: Bool, atLaunch: Bool) -> ScreenRecording {
+        granted ? (atLaunch ? .granted : .needsReopen) : .notGranted
+    }
+
+    static var current: ScreenRecording {
+        state(granted: CGPreflightScreenCaptureAccess(), atLaunch: Lookup.captureGrantedAtLaunch)
+    }
+
+    // The debug binary is not in a bundle, so there is nothing to open again.
+    static var canReopen: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+
+    var label: String {
+        switch self {
+        case .notGranted: return "Screen Recording: not granted"
+        case .granted: return "Screen Recording: granted"
+        case .needsReopen: return "Screen Recording: granted, reopen SlyTerm to use it"
+        }
+    }
+
+    var color: NSColor { self == .granted ? .labelColor : .systemOrange }
+
+    // `open` on a bundle that is still running only brings it forward, so the shell waits for
+    // this process to exit first, for 20 s at most.
+    static func launchAfterExit() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "i=0; while kill -0 \"$1\" 2>/dev/null && [ $i -lt 100 ]; do "
+                             + "sleep 0.2; i=$((i+1)); done; exec /usr/bin/open \"$2\"",
+                             "sh", "\(ProcessInfo.processInfo.processIdentifier)",
+                             Bundle.main.bundlePath]
+        do { try process.run() } catch { Settings.log("reopen: \(error.localizedDescription)") }
     }
 }
 

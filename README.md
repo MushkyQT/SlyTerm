@@ -37,7 +37,8 @@ SlyTerm stays above your game, in borderless windowed mode or in macOS fullscree
 tab strip, resize it from its edges and choose how see-through it is. It has no Dock icon and lives
 in the menu bar. While Settings or the setup assistant is open it shows in the Dock and in `⌘Tab`, so
 you can switch away and come back to it. `⌃⌥H` shows or hides it from anywhere, even while the game
-has the keyboard.
+has the keyboard. In a narrow window the tab names stay readable: the expand button goes, and a tab
+too narrow for its `×` shows none; close it with `⌘W`, a middle click or its right-click menu.
 
 ### Click through to the game
 
@@ -49,7 +50,8 @@ Two modes, one key (`⌃⌥Tab`):
 
 Click into your game and SlyTerm switches to click-through by itself. You show the terminal, type
 a prompt, click back into the game and keep playing while the output streams in. A three-finger tap
-on the trackpad switches modes too.
+on the trackpad switches modes too. The first three times it switches by itself, a note by the tab
+strip says so, and the strip reads "click-through" when it has room and nothing else to say.
 
 <img src="docs/features/overlay.gif" width="600"
      alt="The terminal appears over Dofus with ⌃⌥H, a prompt is typed, and a click on a monster dims it into click-through while Claude keeps working">
@@ -84,7 +86,8 @@ Point at a quest, an item or a spell and press `⌃⌥Q`. SlyTerm reads the text
 finds the matching page on your game's wiki or guide site, and opens it in a web tab next to your
 terminals. It also finds the name at the top of an item's tooltip, wherever the game draws it.
 Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q` to choose from every line near the pointer with one
-key each.
+key each. The message by the pointer names the site that answered, or the game it asked when
+nothing matched, so a lookup that went to the wrong game shows it.
 
 <img src="docs/features/lookup.gif" width="600"
      alt="Pointing at a Minor Healing Potion in the World of Warcraft bag and pressing ⌃⌥Q opens its Wowhead page in a web tab">
@@ -111,9 +114,11 @@ the page and your terminal, and the game keeps focus when a page opens.
 
 Pop a web tab out and it floats over the game in a window of its own, filled with its video if one
 is playing, while the SlyTerm window goes back to your terminal. It switches to click-through with
-the rest of SlyTerm. A playing video has an opacity of its own, 85% by default, so the game shows
-through it in either mode. Put it back and it returns to the SlyTerm window. `⌃⌥V` pauses what is
-playing without leaving the game, and plays it again; the panic button silences it too.
+the rest of SlyTerm, and a dot on its toolbar shows which mode it is in: green when it takes clicks
+and typing, orange in click-through. A playing video has an opacity of its own, 85% by default, so
+the game shows through it in either mode. Put it back and it returns to the SlyTerm window. `⌃⌥V`
+pauses what is playing without leaving the game, and plays it again; the panic button silences it
+too.
 
 <img src="docs/features/web.gif" width="600"
      alt="Over Cyberpunk 2077, a YouTube guide playing in a web tab pops out into a floating window, keeps playing with the game showing through after a click in the game, and ⌃⌥V pauses it">
@@ -125,7 +130,8 @@ One setting turns this off.
 Guides show in reader mode on the terminal's dark, translucent background, with ads, cookie banners
 and trackers blocked; streaming sites are left as they are, so their players work. `⌘F` finds text
 in the page, so you can jump straight to the quest step you are on. If you prefer your browser, one
-setting sends the lookup's pages there instead.
+setting sends the lookup's pages there instead. Settings › Web holds these settings, with the page
+zoom and the search address.
 
 ### Bring a session in from another terminal
 
@@ -202,13 +208,15 @@ Look for the icon in the menu bar: a terminal window with a smirk.
 
 The lookup needs the Screen Recording permission. macOS asks for it the first time you press
 `⌃⌥Q`: turn SlyTerm on in System Settings › Privacy & Security › Screen Recording, then relaunch
-it.
+it. Settings › Lookup and the first setup say when that is still needed, with a button that
+reopens SlyTerm.
 
 ## Getting started
 
 The first time SlyTerm opens, a short setup asks whether you play games with it open and which
 ones, so the lookup knows where to search, and shows the main shortcuts so you can change them.
-Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
+On a Mac with a trackpad it also sets what a tap with several fingers does and lets you try it
+there, and says when macOS opens Look up on the same tap. Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
 which can run the setup again.
 
 1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide
@@ -226,7 +234,7 @@ which can run the setup again.
 ## Shortcuts
 
 These are the defaults. You can change the global ones in Settings › Shortcuts. ⌃ is Control, ⌥ is
-Option, ⌘ is Command and ⇧ is Shift.
+Option, ⌘ is Command and ⇧ is Shift. **Help** in the menu bar item opens this list.
 
 | Action | Keys |
 | --- | --- |
@@ -259,7 +267,8 @@ or each tap also opens a dictionary panel.
   the command-line modes, troubleshooting and how the app is built.
 - [Troubleshooting](docs/TECHNICAL.md#troubleshooting): the overlay hidden behind the game, a
   hotkey that does nothing, a lookup that opens the wrong page.
-- [Changelog](CHANGELOG.md): what changed in each release.
+- [Changelog](CHANGELOG.md): what changed in each release. **About SlyTerm** in the menu bar item
+  shows the version you run.
 - [Contributing](CONTRIBUTING.md): building, testing and sending a change.
 - [AGENTS.md](AGENTS.md): the same, for AI coding agents.
 - [Security](SECURITY.md): how to report a vulnerability privately.

@@ -102,7 +102,7 @@ enum ActivityAnswer {
             guard let group = activity.processGroup, tab.foregroundProcessGroup == group else {
                 Settings.log("answer: \(answer.verb) ignored, \(name) is not in front "
                              + "in \(tab.title)")
-                toast("\(name) is not in front in \(tab.title)", tint: .systemOrange)
+                toast("\(name) is not the program running in \(tab.title)", tint: .systemOrange)
                 return
             }
             // Codex writes its prompts nowhere: the one on its screen now, read in the same turn as
@@ -139,7 +139,7 @@ enum ActivityAnswer {
     }
 
     @MainActor
-    private static func toast(_ text: String, tint: NSColor, duration: TimeInterval = 2) {
+    private static func toast(_ text: String, tint: NSColor, duration: TimeInterval = 3.5) {
         let strip = Activity.host?.stripScreenFrame ?? .zero
         let point = strip.isEmpty ? NSEvent.mouseLocation : NSPoint(x: strip.maxX, y: strip.maxY)
         Toast.shared.show(text, near: point, tint: tint, duration: duration)

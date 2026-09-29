@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import Vision
 
 enum SettingsTab: String, CaseIterable {
-    case general, terminal, window, shortcuts, guide
+    case general, terminal, window, shortcuts, guide, web
 
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum SettingsTab: String, CaseIterable {
         case .window: return "Window"
         case .shortcuts: return "Shortcuts"
         case .guide: return "Lookup"
+        case .web: return "Web"
         }
     }
 
@@ -22,6 +23,7 @@ enum SettingsTab: String, CaseIterable {
         case .window: return "macwindow"
         case .shortcuts: return "keyboard"
         case .guide: return "book"
+        case .web: return "globe"
         }
     }
 }
@@ -88,6 +90,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         case .window: return WindowPane()
         case .shortcuts: return ShortcutsPane(controller: self)
         case .guide: return LookupPane()
+        case .web: return WebPane()
         }
     }
 
@@ -121,6 +124,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
         }
         window.setFrame(frame, display: true, animate: animate)
+    }
+
+    // Coming back from System Settings: a grant made there shows at once.
+    func windowDidBecomeKey(_ notification: Notification) {
+        (panes[.guide] as? LookupPane)?.refreshPermission()
     }
 
     // Ends any recording, which re-registers the hotkeys; otherwise they stay off after closing.
@@ -262,8 +270,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     private var teleportClosesSource = NSButton()
     private var teleportConfirmBusy = NSButton()
     private let sendBackTerminal = NSPopUpButton()
-    private var autoPauseVideo = NSButton()
-    private let searchURL = NSTextField(string: "")
+    private let cardSeconds = NSTextField(string: "")
+    private let cardStepper = NSStepper()
+    private var cardSecondsLabels: [NSTextField] = []
 
     override func buildContent() -> NSView {
         restoreSession = checkbox("Restore tabs from the last session", #selector(setRestoreSession(_:)))
@@ -284,35 +293,141 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
             item.representedObject = terminal.rawValue
             sendBackTerminal.menu?.addItem(item)
         }
-        autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
-                                  #selector(setAutoPauseVideo(_:)))
+        cardSeconds.alignment = .right
+        cardSeconds.target = self
+        cardSeconds.action = #selector(setCardSeconds)
+        cardSeconds.delegate = self
+        width(cardSeconds, 48)
+        cardStepper.minValue = 0
+        cardStepper.maxValue = 300
+        cardStepper.increment = 5
+        cardStepper.valueWraps = false
+        cardStepper.target = self
+        cardStepper.action = #selector(stepCardSeconds)
+        cardSecondsLabels = [NSTextField(labelWithString: "Keep a finished card for"),
+                             NSTextField(labelWithString: "s, 0 keeps it")]
         return grid([
             section("Launch", [restoreSession, startupAnimation,
                                button("Run Setup Assistant…", #selector(runSetupAssistant))]),
-            section("Quitting", [confirmQuit]),
-            section("Alerts", [
-                attentionSound,
+            section("Agents", [
                 activityCards,
                 caption("Off, an agent finishing or asking only marks its tab: no card, no sound, "
                         + "and a hidden terminal stays hidden. The Allow and Refuse shortcuts go "
                         + "with it."),
-            ]),
-            section("Other terminals", [
-                teleportClosesSource,
+                attentionSound,
+                row([cardSecondsLabels[0], cardSeconds, cardStepper, cardSecondsLabels[1]]),
                 teleportConfirmBusy,
+                teleportClosesSource,
                 row([NSTextField(labelWithString: "Send sessions back to"), sendBackTerminal]),
                 caption("Right-click a tab to send it back, or quit with Send Back and Quit. "
                         + "A session brought in from one of these goes back there. iTerm2, then "
                         + "Terminal, is used when the one chosen is not installed; Ghostty needs "
                         + "version 1.3 or later."),
             ]),
-            section("Web tabs", [
+            section("Quitting", [confirmQuit]),
+        ])
+    }
+
+    override func refresh() {
+        restoreSession.state = settings.restoreSession ? .on : .off
+        startupAnimation.state = settings.startupAnimation ? .on : .off
+        confirmQuit.state = settings.confirmQuit ? .on : .off
+        attentionSound.state = settings.attentionSound ? .on : .off
+        activityCards.state = settings.activityCards ? .on : .off
+        teleportClosesSource.state = settings.teleportClosesSource ? .on : .off
+        teleportConfirmBusy.state = settings.teleportConfirmBusy ? .on : .off
+        sendBackTerminal.select(sendBackTerminal.itemArray.first {
+            ($0.representedObject as? String) == settings.sendBackTerminal
+        } ?? sendBackTerminal.itemArray.first)
+        let seconds = settings.activityCardSeconds
+        if !isEditing(cardSeconds) { cardSeconds.stringValue = String(format: "%g", seconds) }
+        cardStepper.doubleValue = seconds
+        let cards = settings.activityCards
+        cardSeconds.isEnabled = cards
+        cardStepper.isEnabled = cards
+        for label in cardSecondsLabels { label.textColor = cards ? .labelColor : .disabledControlTextColor }
+    }
+
+    @objc private func setCardSeconds() {
+        let text = cardSeconds.stringValue.trimmingCharacters(in: .whitespaces)
+        guard let value = Double(text), value.isFinite, value >= 0 else { refresh(); return }
+        settings.activityCardSeconds = value
+        refresh()
+    }
+    @objc private func stepCardSeconds() { settings.activityCardSeconds = cardStepper.doubleValue }
+
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if notification.object as? NSTextField === cardSeconds { setCardSeconds() }
+    }
+
+    @objc private func runSetupAssistant() {
+        view.window?.close()
+        (NSApp.delegate as? AppDelegate)?.runSetupAssistant()
+    }
+    @objc private func setRestoreSession(_ sender: NSButton) { settings.restoreSession = sender.state == .on }
+    @objc private func setStartupAnimation(_ sender: NSButton) { settings.startupAnimation = sender.state == .on }
+    @objc private func setConfirmQuit(_ sender: NSButton) { settings.confirmQuit = sender.state == .on }
+    @objc private func setAttentionSound(_ sender: NSButton) { settings.attentionSound = sender.state == .on }
+    @objc private func setActivityCards(_ sender: NSButton) { settings.activityCards = sender.state == .on }
+    @objc private func setTeleportClosesSource(_ sender: NSButton) { settings.teleportClosesSource = sender.state == .on }
+    @objc private func setTeleportConfirmBusy(_ sender: NSButton) { settings.teleportConfirmBusy = sender.state == .on }
+    @objc private func setSendBackTerminal() {
+        settings.sendBackTerminal = sendBackTerminal.selectedItem?.representedObject as? String ?? "iterm2"
+    }
+}
+
+final class WebPane: SettingsPane, NSTextFieldDelegate {
+    private var autoPauseVideo = NSButton()
+    private let searchURL = NSTextField(string: "")
+    private let videoOpacity = NSSlider()
+    private let videoOpacityValue = NSTextField(labelWithString: "")
+    private let zoom = NSSlider()
+    private let zoomValue = NSTextField(labelWithString: "")
+    private var destinations: [NSButton] = []
+    private var inBackground = NSButton()
+
+    override func buildContent() -> NSView {
+        autoPauseVideo = checkbox("Pause videos when a guide opens or they go out of view",
+                                  #selector(setAutoPauseVideo(_:)))
+        videoOpacity.minValue = 20
+        videoOpacity.maxValue = 100
+        videoOpacity.numberOfTickMarks = 9
+        zoom.minValue = 50
+        zoom.maxValue = 200
+        zoom.numberOfTickMarks = 7
+        for (slider, action) in [(videoOpacity, #selector(setVideoOpacity)), (zoom, #selector(setZoom))] {
+            slider.tickMarkPosition = .below
+            slider.isContinuous = true
+            slider.target = self
+            slider.action = action
+            width(slider, 200)
+        }
+        destinations = [radio("In a web tab inside SlyTerm", "app", #selector(setDestination(_:))),
+                        radio("In your browser", "browser", #selector(setDestination(_:)))]
+        inBackground = checkbox("Keep the game in front, load the page behind it", #selector(setInBackground(_:)))
+        let indented = NSStackView(views: [inBackground])
+        indented.orientation = .horizontal
+        indented.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)
+
+        return grid([
+            section("Search", [
                 row([NSTextField(labelWithString: "Search with"), searchURLField()]),
                 caption("Words typed into a web tab's address field go to this address, {query} where they go."),
+            ]),
+            section("Videos", [
                 autoPauseVideo,
                 caption("A lookup's guide pauses every video. A video in the SlyTerm window also pauses behind "
                         + "another tab or with the window hidden, and plays again when you come back to it."),
             ]),
+            section("Opacity", [
+                row([NSTextField(labelWithString: "Playing video"), videoOpacity, videoOpacityValue]),
+                caption("A web tab playing a video, in the SlyTerm window or floating, in either mode."),
+            ]),
+            section("Zoom", [
+                row([NSTextField(labelWithString: "Page zoom"), zoom, zoomValue]),
+                caption("Every web tab, open ones too. ⌘+ and ⌘- in a web tab change it as well."),
+            ]),
+            section("Open guides", [destinations[0], destinations[1], indented]),
         ])
     }
 
@@ -327,17 +442,14 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
     }
 
     override func refresh() {
-        restoreSession.state = settings.restoreSession ? .on : .off
-        startupAnimation.state = settings.startupAnimation ? .on : .off
-        confirmQuit.state = settings.confirmQuit ? .on : .off
-        attentionSound.state = settings.attentionSound ? .on : .off
-        activityCards.state = settings.activityCards ? .on : .off
-        teleportClosesSource.state = settings.teleportClosesSource ? .on : .off
-        teleportConfirmBusy.state = settings.teleportConfirmBusy ? .on : .off
         autoPauseVideo.state = settings.autoPauseVideo ? .on : .off
-        sendBackTerminal.select(sendBackTerminal.itemArray.first {
-            ($0.representedObject as? String) == settings.sendBackTerminal
-        } ?? sendBackTerminal.itemArray.first)
+        videoOpacity.doubleValue = settings.videoOpacity * 100
+        videoOpacityValue.stringValue = percent(settings.videoOpacity)
+        zoom.doubleValue = settings.guideZoom * 100
+        zoomValue.stringValue = percent(settings.guideZoom)
+        select(settings.questOpenInApp ? "app" : "browser", in: destinations)
+        inBackground.state = settings.questOpenInBackground ? .on : .off
+        inBackground.isEnabled = !settings.questOpenInApp
         if !isEditing(searchURL), isUsable(searchURL.stringValue) {
             searchURL.stringValue = settings.webSearchURL
         }
@@ -372,21 +484,13 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
         if notification.object as? NSTextField === searchURL { setSearchURL() }
     }
 
-    @objc private func runSetupAssistant() {
-        view.window?.close()
-        (NSApp.delegate as? AppDelegate)?.runSetupAssistant()
-    }
-    @objc private func setRestoreSession(_ sender: NSButton) { settings.restoreSession = sender.state == .on }
-    @objc private func setStartupAnimation(_ sender: NSButton) { settings.startupAnimation = sender.state == .on }
-    @objc private func setConfirmQuit(_ sender: NSButton) { settings.confirmQuit = sender.state == .on }
-    @objc private func setAttentionSound(_ sender: NSButton) { settings.attentionSound = sender.state == .on }
-    @objc private func setActivityCards(_ sender: NSButton) { settings.activityCards = sender.state == .on }
-    @objc private func setTeleportClosesSource(_ sender: NSButton) { settings.teleportClosesSource = sender.state == .on }
-    @objc private func setTeleportConfirmBusy(_ sender: NSButton) { settings.teleportConfirmBusy = sender.state == .on }
+    private func percent(_ value: Double) -> String { "\(Int((value * 100).rounded()))%" }
+
     @objc private func setAutoPauseVideo(_ sender: NSButton) { settings.autoPauseVideo = sender.state == .on }
-    @objc private func setSendBackTerminal() {
-        settings.sendBackTerminal = sendBackTerminal.selectedItem?.representedObject as? String ?? "iterm2"
-    }
+    @objc private func setVideoOpacity() { settings.videoOpacity = videoOpacity.doubleValue / 100 }
+    @objc private func setZoom() { settings.guideZoom = zoom.doubleValue.rounded() / 100 }
+    @objc private func setDestination(_ sender: NSButton) { settings.questOpenInApp = choice(of: sender) == "app" }
+    @objc private func setInBackground(_ sender: NSButton) { settings.questOpenInBackground = sender.state == .on }
 }
 
 final class TerminalPane: SettingsPane, NSTextFieldDelegate {
@@ -398,6 +502,8 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
     private var inherit = NSButton()
     private var optionAsMeta = NSButton()
     private var customFamily: NSMenuItem?
+    private let scrollback = NSTextField(string: "")
+    private let scrollbackStepper = NSStepper()
 
     private static let fixedPitchFamilies: [String] = {
         let manager = NSFontManager.shared
@@ -437,6 +543,17 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
         startupCommand.delegate = self
         width(startupCommand, 240)
         optionAsMeta = checkbox("Option key sends Meta (Esc+)", #selector(setOptionAsMeta(_:)))
+        scrollback.alignment = .right
+        scrollback.target = self
+        scrollback.action = #selector(setScrollback)
+        scrollback.delegate = self
+        width(scrollback, 64)
+        scrollbackStepper.minValue = 1000
+        scrollbackStepper.maxValue = 100_000
+        scrollbackStepper.increment = 1000
+        scrollbackStepper.valueWraps = false
+        scrollbackStepper.target = self
+        scrollbackStepper.action = #selector(stepScrollback)
 
         return grid([
             section("Font", [
@@ -449,6 +566,8 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
                 inherit,
                 row([label("Startup command"), startupCommand]),
                 caption("Typed into every new tab once the shell starts."),
+                row([label("Scrollback"), scrollback, scrollbackStepper, label("lines")]),
+                caption("Applies to tabs opened after the change."),
             ]),
             section("Keyboard", [
                 optionAsMeta,
@@ -502,6 +621,8 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
         inherit.state = settings.newTabInheritsDirectory ? .on : .off
         if !isEditing(startupCommand) { startupCommand.stringValue = settings.startupCommand }
         optionAsMeta.state = settings.optionAsMeta ? .on : .off
+        if !isEditing(scrollback) { scrollback.stringValue = "\(settings.scrollback)" }
+        scrollbackStepper.integerValue = settings.scrollback
     }
 
     @objc private func setFamily() { settings.fontName = family.selectedItem?.representedObject as? String ?? "" }
@@ -515,10 +636,23 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
     @objc private func setInherit(_ sender: NSButton) { settings.newTabInheritsDirectory = sender.state == .on }
     @objc private func setStartupCommand() { settings.startupCommand = startupCommand.stringValue }
     @objc private func setOptionAsMeta(_ sender: NSButton) { settings.optionAsMeta = sender.state == .on }
+    @objc private func setScrollback() {
+        let text = scrollback.stringValue.trimmingCharacters(in: .whitespaces)
+        guard let value = Int(text) else { refresh(); return }
+        settings.scrollback = value
+        refresh()
+    }
+    @objc private func stepScrollback() { settings.scrollback = scrollbackStepper.integerValue }
 
     func controlTextDidEndEditing(_ notification: Notification) {
         guard let field = notification.object as? NSTextField else { return }
-        if field === size { setSize() } else if field === startupCommand { setStartupCommand() }
+        if field === size {
+            setSize()
+        } else if field === startupCommand {
+            setStartupCommand()
+        } else if field === scrollback {
+            setScrollback()
+        }
     }
 
     @objc private func chooseFolder() {
@@ -541,10 +675,8 @@ final class TerminalPane: SettingsPane, NSTextFieldDelegate {
 final class WindowPane: SettingsPane {
     private let opacity = NSSlider()
     private let ghostOpacity = NSSlider()
-    private let videoOpacity = NSSlider()
     private let opacityValue = NSTextField(labelWithString: "")
     private let ghostOpacityValue = NSTextField(labelWithString: "")
-    private let videoOpacityValue = NSTextField(labelWithString: "")
     private var autoGhost = NSButton()
     private var levels: [NSButton] = []
     private var positions: [NSButton] = []
@@ -552,11 +684,11 @@ final class WindowPane: SettingsPane {
     override func buildContent() -> NSView {
         configure(opacity, #selector(setOpacity))
         configure(ghostOpacity, #selector(setGhostOpacity))
-        configure(videoOpacity, #selector(setVideoOpacity))
         autoGhost = checkbox("Switch to click-through when the terminal loses focus", #selector(setAutoGhost(_:)))
-        levels = [radio("Floating", "floating", #selector(setLevel(_:))),
-                  radio("Status bar", "statusBar", #selector(setLevel(_:))),
-                  radio("Pop-up menu, highest", "popUpMenu", #selector(setLevel(_:)))]
+        levels = [radio("Above other windows", "floating", #selector(setLevel(_:))),
+                  radio("Above the menu bar", "statusBar", #selector(setLevel(_:))),
+                  radio("Above everything, for games that cover the terminal", "popUpMenu",
+                        #selector(setLevel(_:)))]
         positions = [radio("Automatic", "auto", #selector(setPosition(_:))),
                      radio("Always top", "top", #selector(setPosition(_:))),
                      radio("Always bottom", "bottom", #selector(setPosition(_:)))]
@@ -565,8 +697,6 @@ final class WindowPane: SettingsPane {
             section("Opacity", [
                 row([width(NSTextField(labelWithString: "Terminal background"), 150), opacity, opacityValue]),
                 row([width(NSTextField(labelWithString: "In click-through"), 150), ghostOpacity, ghostOpacityValue]),
-                row([width(NSTextField(labelWithString: "Playing video"), 150), videoOpacity, videoOpacityValue]),
-                caption("A web tab playing a video, in the SlyTerm window or floating, in either mode."),
             ]),
             section("Click-through", [autoGhost]),
             section("Level", [
@@ -596,8 +726,6 @@ final class WindowPane: SettingsPane {
         ghostOpacity.doubleValue = settings.ghostOpacity * 100
         opacityValue.stringValue = percent(settings.opacity)
         ghostOpacityValue.stringValue = percent(settings.ghostOpacity)
-        videoOpacity.doubleValue = settings.videoOpacity * 100
-        videoOpacityValue.stringValue = percent(settings.videoOpacity)
         autoGhost.state = settings.autoGhost ? .on : .off
         select(settings.windowLevel, in: levels)
         select(settings.stripPosition, in: positions)
@@ -607,7 +735,6 @@ final class WindowPane: SettingsPane {
 
     @objc private func setOpacity() { settings.opacity = opacity.doubleValue / 100 }
     @objc private func setGhostOpacity() { settings.ghostOpacity = ghostOpacity.doubleValue / 100 }
-    @objc private func setVideoOpacity() { settings.videoOpacity = videoOpacity.doubleValue / 100 }
     @objc private func setAutoGhost(_ sender: NSButton) { settings.autoGhost = sender.state == .on }
     @objc private func setLevel(_ sender: NSButton) { settings.windowLevel = choice(of: sender) }
     @objc private func setPosition(_ sender: NSButton) { settings.stripPosition = choice(of: sender) }
@@ -659,7 +786,10 @@ final class ShortcutsPane: SettingsPane {
             hotkeys.addRow(with: [title, recorder, clear, status])
         }
         hotkeys.column(at: 0).xPlacement = .trailing
-        hotkeys.rowAlignment = .firstBaseline
+        // The recorder has no text baseline, so first-baseline rows drop it half a row below the
+        // label and the Clear button: centre every cell instead.
+        hotkeys.rowAlignment = .none
+        for row in 0..<hotkeys.numberOfRows { hotkeys.row(at: row).yPlacement = .center }
 
         fingers.target = self
         fingers.action = #selector(setFingers)
@@ -684,6 +814,9 @@ final class ShortcutsPane: SettingsPane {
                 hotkeys,
                 button("Restore Defaults", #selector(restoreDefaults)),
                 caption("Click a field and press the new shortcut. Esc cancels, ⌫ removes the shortcut. ⌃⌥ with a key stays clear of the keys games use. macOS does not tell SlyTerm when another app has the same shortcut: if one does nothing, or does something else, choose another."),
+                caption("Inside SlyTerm: ⌘L opens a web tab, ⌘G goes between the page and the terminal, "
+                        + "⌘⇧T brings in a session, ⌘Return fills the screen, ⌘F finds in a page, "
+                        + "⌘, opens Settings. The full list is in Help."),
             ]),
             section("Trackpad", [
                 row([NSTextField(labelWithString: "Tap with"), fingers,
@@ -799,9 +932,8 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
     private let hiddenSelectors = NSTextView()
     private var autoDetect = NSButton()
     private let fallbackGame = NSPopUpButton()
-    private var destinations: [NSButton] = []
-    private var inBackground = NSButton()
     private let permission = NSTextField(labelWithString: "")
+    private var permissionButton = NSButton()
     private var exportButton = NSButton()
 
     private static let listWidth: CGFloat = 150
@@ -828,12 +960,7 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
         width(fallbackGame, 200)
         fallbackGame.target = self
         fallbackGame.action = #selector(setFallbackGame)
-        destinations = [radio("In a web tab inside SlyTerm", "app", #selector(setDestination(_:))),
-                        radio("In your browser", "browser", #selector(setDestination(_:)))]
-        inBackground = checkbox("Keep the game in front, load the page behind it", #selector(setInBackground(_:)))
-        let indented = NSStackView(views: [inBackground])
-        indented.orientation = .horizontal
-        indented.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)
+        permissionButton = button("Open System Settings…", #selector(permissionAction), small: true)
         exportButton = button("Export…", #selector(exportGame), small: true)
 
         let sections = grid([
@@ -841,10 +968,8 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
                 autoDetect,
                 row([NSTextField(labelWithString: "Otherwise use"), fallbackGame]),
             ]),
-            section("Open guides", [destinations[0], destinations[1], indented]),
-            section("Permission", [
-                row([permission, button("Open System Settings…", #selector(openPrivacySettings), small: true)]),
-            ]),
+            // One above the other: the reopen line beside the button is wider than the pane.
+            section("Permission", [permission, permissionButton]),
             section("Game files", [
                 row([button("Import…", #selector(importGame), small: true), exportButton]),
             ]),
@@ -1138,12 +1263,16 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
            let item = fallbackGame.itemArray.first(where: { ($0.representedObject as? UUID) == active }) {
             fallbackGame.select(item)
         }
-        select(settings.questOpenInApp ? "app" : "browser", in: destinations)
-        inBackground.state = settings.questOpenInBackground ? .on : .off
-        inBackground.isEnabled = !settings.questOpenInApp
-        let granted = CGPreflightScreenCaptureAccess()
-        permission.stringValue = "Screen Recording: \(granted ? "granted" : "not granted")"
-        permission.textColor = granted ? .labelColor : .systemOrange
+        refreshPermission()
+    }
+
+    func refreshPermission() {
+        guard isViewLoaded else { return }
+        let state = ScreenRecording.current
+        permission.stringValue = state.label
+        permission.textColor = state.color
+        let reopen = state == .needsReopen && ScreenRecording.canReopen
+        permissionButton.title = reopen ? "Reopen SlyTerm" : "Open System Settings…"
     }
 
     // Rebuild only when the key changes: refresh runs on every didChange, and a rebuild closes an
@@ -1391,10 +1520,11 @@ final class LookupPane: SettingsPane, NSTableViewDataSource, NSTableViewDelegate
         store.activeGameID = id
     }
 
-    @objc private func setDestination(_ sender: NSButton) { settings.questOpenInApp = choice(of: sender) == "app" }
-    @objc private func setInBackground(_ sender: NSButton) { settings.questOpenInBackground = sender.state == .on }
-
-    @objc private func openPrivacySettings() {
+    @objc private func permissionAction() {
+        if ScreenRecording.current == .needsReopen, ScreenRecording.canReopen {
+            (NSApp.delegate as? AppDelegate)?.reopen()
+            return
+        }
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") else { return }
         NSWorkspace.shared.open(url)
     }

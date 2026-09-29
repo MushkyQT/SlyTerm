@@ -82,6 +82,8 @@ final class TabStripView: NSView {
     private let cornerRadius: CGFloat = 10
     private static let hintFont = NSFont.systemFont(ofSize: 10)
     private static let labelFont = NSFont.systemFont(ofSize: 11)
+    private static let tabFont = NSFont.systemFont(ofSize: 11.5, weight: .medium)
+    static let ghostHint = "click-through"
     private static let webGap: CGFloat = 3
     private static let terminalMinWidth: CGFloat = 44
 
@@ -123,6 +125,12 @@ final class TabStripView: NSView {
         needsDisplay = true
     }
 
+    func hoverTab(_ index: Int) {
+        hover = .tab(index)
+        hoverPinned = true
+        needsDisplay = true
+    }
+
     // Squares move when a web tab comes or goes, under a pointer that has not.
     private func refreshHover() {
         guard !hoverPinned, let window else { return }
@@ -136,13 +144,25 @@ final class TabStripView: NSView {
     }
 
     private func layoutRegions() {
+        // Web tabs already went behind a single "…" before terminals fell under 44 pt; below 40 the
+        // expand button goes.
+        layoutRegions(hidingExpand: false)
+        if let first = tabRects.first, first.width < 40 { layoutRegions(hidingExpand: true) }
+        updateToolTips()
+    }
+
+    private func layoutRegions(hidingExpand: Bool) {
         let b = bounds
         let button: CGFloat = 22, gap: CGFloat = 4, pad: CGFloat = 8
         let y = (b.height - button) / 2
         var x = b.maxX - pad - button
         hideRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
         ghostRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
-        fullscreenRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
+        if hidingExpand {
+            fullscreenRect = .zero
+        } else {
+            fullscreenRect = NSRect(x: x, y: y, width: button, height: button); x -= button + gap
+        }
         newTabRect = NSRect(x: x, y: y, width: button, height: button)
 
         // Panic leaves nothing of the web tabs: no squares, no "…", no globe.
@@ -170,20 +190,30 @@ final class TabStripView: NSView {
         }
 
         hint = delegate?.stripHint
-        let hintWidth = hint.map { (($0.text as NSString).size(withAttributes: [.font: TabStripView.hintFont]).width + 18).rounded(.up) } ?? 0
+        let hintWidth = hint.map { hint in
+            let size = (hint.text as NSString).size(withAttributes: [.font: TabStripView.hintFont])
+            return (size.width + 18).rounded(.up)
+        } ?? 0
         let room = webLeft - gap - left
-        // Tabs make way for the hint down to 56 pt each, and for the web squares down to what fits.
+        // Tabs make way for an agent hint down to 56 pt each, and for the web squares down to what
+        // fits.
         let tabWidth = min(170, max(24, min(56, (room - gaps) / count), (room - hintWidth - gaps) / count))
         tabRects = []
         closeRects = []
         var tx = left
-        for _ in titles.indices {
+        for i in titles.indices {
             let r = NSRect(x: tx, y: y, width: tabWidth, height: button)
             tabRects.append(r)
-            closeRects.append(NSRect(x: r.maxX - 20, y: r.minY + 3, width: 16, height: 16))
+            // No × where it would cover the name: middle-click, ⌘W and the menu still close the tab.
+            let alerting = delegate?.stripTabNeedsAttention(i) ?? false
+            let mark = delegate?.stripTabMark(i) ?? (alerting ? .attention : .none)
+            let three = (String(titles[i].prefix(3)) + "…") as NSString
+            let shortest = three.size(withAttributes: [.font: TabStripView.tabFont]).width
+            let fits = r.width >= 40 && r.width - TabStripView.markIndent(mark) - 22 >= shortest
+            let close = NSRect(x: r.maxX - 20, y: r.minY + 3, width: 16, height: 16)
+            closeRects.append(fits ? close : .zero)
             tx += tabWidth + gap
         }
-        updateToolTips()
     }
 
     private var webLeft: CGFloat { webRects.first?.minX ?? moreRect?.minX ?? newTabRect.minX }
@@ -231,7 +261,7 @@ final class TabStripView: NSView {
 
     private func updateToolTips() {
         var wanted: [(rect: NSRect, target: ToolTipTarget)] = [(newTabRect, .newTab)]
-        for i in tabRects.indices where delegate?.stripTabToolTip(i)?.isEmpty == false {
+        for i in tabRects.indices where tabToolTip(i) != nil {
             wanted.append((tabRects[i], .tab(i)))
         }
         if webItems.isEmpty, let r = webRects.first { wanted.append((r, .emptyWeb)) }
@@ -242,6 +272,18 @@ final class TabStripView: NSView {
         removeAllToolTips()
         toolTipTargets = [:]
         for tip in wanted { toolTipTargets[addToolTip(tip.rect, owner: self, userData: nil)] = tip.target }
+    }
+
+    // The name leads when the tab may show it shortened; the room left for it is at worst the
+    // mark's indent and the × of a selected or hovered tab.
+    private func tabToolTip(_ index: Int) -> String? {
+        let titles = delegate?.stripTabTitles ?? []
+        let activity = delegate?.stripTabToolTip(index).flatMap { $0.isEmpty ? nil : $0 }
+        guard titles.indices.contains(index), tabRects.indices.contains(index) else { return activity }
+        let name = titles[index]
+        let width = (name as NSString).size(withAttributes: [.font: TabStripView.tabFont]).width
+        guard !name.isEmpty, width > tabRects[index].width - 40 else { return activity }
+        return activity.map { "\(name)\n\($0)" } ?? name
     }
 
     private func region(at p: NSPoint) -> Region {
@@ -296,9 +338,11 @@ final class TabStripView: NSView {
 
         let titles = delegate?.stripTabTitles ?? []
         let selected = delegate?.stripSelectedIndex
-        let font = NSFont.systemFont(ofSize: 11.5, weight: .medium)
+        let font = TabStripView.tabFont
         let para = NSMutableParagraphStyle()
         para.lineBreakMode = .byTruncatingTail
+        let clip = NSMutableParagraphStyle()
+        clip.lineBreakMode = .byClipping
         var anyWorking = false
         for (i, r) in tabRects.enumerated() {
             let isSelected = i == selected
@@ -309,23 +353,32 @@ final class TabStripView: NSView {
             } else if isHovered {
                 NSColor(calibratedWhite: 1, alpha: 0.07).setFill(); tabPath.fill()
             }
-            let showClose = isSelected || isHovered
             let alerting = delegate?.stripTabNeedsAttention(i) ?? false
             let color = alerting ? NSColor.systemYellow.withAlphaComponent(0.95)
                                  : NSColor(calibratedWhite: 1, alpha: isSelected ? 0.95 : 0.6)
             let mark = delegate?.stripTabMark(i) ?? (alerting ? .attention : .none)
             if mark == .working { anyWorking = true }
-            var indent: CGFloat = 8
+            // Where an ellipsis would leave a letter or two, the first three letters, clipped.
+            let narrow = r.width < 40
+            let inset: CGFloat = narrow ? 5 : 8
+            var indent = inset
             if mark != .none {
-                indent = drawMark(mark, in: NSRect(x: r.minX + 8, y: r.midY - 3, width: 6, height: 6), color: color)
+                let slot = NSRect(x: r.minX + inset, y: r.midY - 3, width: 6, height: 6)
+                indent = drawMark(mark, in: slot, color: color) - (narrow ? 4 : 0)
             }
-            let textRect = NSRect(x: r.minX + indent, y: r.minY + 4, width: r.width - indent - (showClose ? 22 : 8), height: r.height - 8)
+            let showClose = (isHovered || isSelected) && !closeRects[i].isEmpty
+            let textRect = NSRect(x: r.minX + indent, y: r.minY + 4,
+                                  width: r.width - indent - (showClose ? 22 : narrow ? 2 : 8), height: r.height - 8)
+            let first3 = String(titles[i].prefix(3))
+            let fits = { (s: String) in (s as NSString).size(withAttributes: [.font: font]).width <= textRect.width }
+            let clipped = narrow || (!fits(titles[i]) && !fits(first3 + "…"))
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: font,
                 .foregroundColor: color,
-                .paragraphStyle: para,
+                .paragraphStyle: clipped ? clip : para,
             ]
-            (titles[i] as NSString).draw(in: textRect, withAttributes: attrs)
+            let name = clipped ? first3 : titles[i]
+            (name as NSString).draw(in: textRect, withAttributes: attrs)
             if showClose {
                 drawSymbol("xmark", in: closeRects[i], color: NSColor(calibratedWhite: 1, alpha: hover == .close(i) ? 1 : 0.5), pointSize: 9)
             }
@@ -350,8 +403,10 @@ final class TabStripView: NSView {
         let fullscreen = delegate?.stripIsFullscreen ?? false
         let expand = fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
         // It does nothing during panic.
-        drawButton(fullscreenRect, symbol: expand, hovered: hover == .fullscreen && !panic,
-                   tint: panic ? NSColor(calibratedWhite: 1, alpha: 0.25) : nil)
+        if !fullscreenRect.isEmpty {
+            drawButton(fullscreenRect, symbol: expand, hovered: hover == .fullscreen && !panic,
+                       tint: panic ? NSColor(calibratedWhite: 1, alpha: 0.25) : nil)
+        }
         drawButton(ghostRect, symbol: ghost ? "eye.slash" : "eye", hovered: hover == .ghost, tint: ghost ? .systemOrange : nil)
         drawButton(hideRect, symbol: "minus", hovered: hover == .hide)
 
@@ -369,15 +424,22 @@ final class TabStripView: NSView {
         updateSpinner(working: anyWorking)
     }
 
+    private static func markIndent(_ mark: TabStripMark) -> CGFloat {
+        switch mark {
+        case .none: return 8
+        case .attention, .working: return 18
+        case .waiting: return 20
+        }
+    }
+
     @discardableResult
     private func drawMark(_ mark: TabStripMark, in slot: NSRect, color: NSColor) -> CGFloat {
         switch mark {
         case .none:
-            return 8
+            break
         case .attention:
             NSColor.systemYellow.setFill()
             NSBezierPath(ovalIn: slot).fill()
-            return 18
         case .working:
             let path = NSBezierPath()
             path.appendArc(withCenter: NSPoint(x: slot.midX, y: slot.midY), radius: 3.5,
@@ -386,11 +448,10 @@ final class TabStripView: NSView {
             path.lineCapStyle = .round
             color.setStroke()
             path.stroke()
-            return 18
         case .waiting:
             drawSymbol("questionmark.circle.fill", in: slot, color: .systemOrange, pointSize: 11)
-            return 20
         }
+        return TabStripView.markIndent(mark)
     }
 
     private func updateSpinner(working: Bool) {
@@ -578,7 +639,7 @@ extension TabStripView: NSViewToolTipOwner {
               userData data: UnsafeMutableRawPointer?) -> String {
         switch toolTipTargets[tag] {
         case .newTab: return TabStripView.newTabToolTip
-        case .tab(let index): return delegate?.stripTabToolTip(index) ?? ""
+        case .tab(let index): return tabToolTip(index) ?? ""
         case .emptyWeb: return TabStripView.emptyWebToolTip
         case .moreWeb:
             let count = hiddenWebIndices.count
@@ -596,8 +657,8 @@ enum StripSnapshotCLI {
 
         var rows: [(String, NSImage)] = []
         func add(_ caption: String, width: CGFloat = 600, selected: Int?, web: [TabStripWebItem] = [book],
-                 hoverWeb: Int? = nil, hoverEmpty: Bool = false, ghost: Bool = false, panic: Bool = false,
-                 fullscreen: Bool = false, attention: Int? = nil,
+                 hoverWeb: Int? = nil, hoverEmpty: Bool = false, hoverTab: Int? = nil, ghost: Bool = false,
+                 panic: Bool = false, fullscreen: Bool = false, attention: Int? = nil,
                  marks: [Int: TabStripMark] = [:], hint: (text: String, color: NSColor)? = nil,
                  edge: StripEdge = .bottom, titles: [String] = ["slyterm", "claude", "Projects"]) {
             let delegate = StripSnapshotDelegate(titles: titles, selected: selected, web: web)
@@ -608,7 +669,8 @@ enum StripSnapshotCLI {
             delegate.marks = marks
             if attention != nil { delegate.stripHint = ("needs you: click the tab", .systemYellow) }
             if let hint { delegate.stripHint = hint }
-            if let image = render(delegate, width: width, hoverWeb: hoverWeb, hoverEmpty: hoverEmpty, edge: edge,
+            if let image = render(delegate, width: width, hoverWeb: hoverWeb, hoverEmpty: hoverEmpty,
+                                  hoverTab: hoverTab, edge: edge,
                                   caption: caption) {
                 rows.append((caption, image))
             }
@@ -662,8 +724,30 @@ enum StripSnapshotCLI {
             web: many(16, selected: 14))
         add("360 pt wide, twelve web tabs, the first one hovered", width: 360, selected: 0,
             web: many(12), hoverWeb: 0)
-        add("360 pt wide, six terminals, twelve web tabs", width: 360, selected: 5, web: many(12),
-            titles: ["slyterm", "claude", "Projects", "logs", "build", "notes"])
+        let six = ["slyterm", "claude", "Projects", "logs", "build", "notes"]
+        add("360 pt wide, six terminals, twelve web tabs: no expand button, no ×, three letters",
+            width: 360, selected: 5, web: many(12), titles: six)
+        let seven = six + ["tests"]
+        add("interact, three web tabs", selected: 1, web: three)
+        add("click-through, nothing running: the hint says so",
+            selected: 1, web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
+        add("360 pt wide, click-through, nothing running: no room for the hint", width: 360, selected: 1,
+            web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
+        add("360 pt wide, four terminals, three web tabs: 46 pt tabs, the web tabs behind …", width: 360,
+            selected: 1, web: three, titles: Array(six.prefix(4)))
+        add("360 pt wide, four terminals, one hovered: no × where it would cover the name", width: 360,
+            selected: 1, web: three, hoverTab: 2, titles: Array(six.prefix(4)))
+        add("360 pt wide, five terminals: no expand button", width: 360, selected: 1, web: three,
+            titles: Array(six.prefix(5)))
+        add("360 pt wide, six terminals, the selected one hovered: no ×, three letters", width: 360,
+            selected: 1, web: many(12), hoverTab: 1, titles: six)
+        add("360 pt wide, six terminals, another one hovered: no ×", width: 360, selected: 1,
+            web: many(12), hoverTab: 3, titles: six)
+        add("360 pt wide, six terminals, working, waiting and finished marks", width: 360, selected: 0,
+            web: three, attention: 2, marks: [0: .working, 1: .waiting, 2: .attention], titles: six)
+        add("360 pt wide, seven terminals, no web tab", width: 360, selected: 5, web: [], titles: seven)
+        add("360 pt wide, six terminals in panic", width: 360, selected: 1, web: three, panic: true,
+            titles: six)
         write(rows, to: output)
         return true
     }
@@ -712,7 +796,7 @@ enum StripSnapshotCLI {
     }
 
     private static func render(_ delegate: StripSnapshotDelegate, width: CGFloat, hoverWeb: Int?,
-                               hoverEmpty: Bool, edge: StripEdge, caption: String) -> NSImage? {
+                               hoverEmpty: Bool, hoverTab: Int?, edge: StripEdge, caption: String) -> NSImage? {
         // Never shown: `cacheDisplay` needs a window's backing store; an unparented view has none.
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: TabStripView.height),
                               styleMask: [.borderless], backing: .buffered, defer: false)
@@ -723,6 +807,7 @@ enum StripSnapshotCLI {
         window.contentView?.addSubview(view)
         view.freezeSpinner(atDegrees: 120)
         if hoverEmpty { view.hoverWeb(nil) } else if let hoverWeb { view.hoverWeb(hoverWeb) }
+        if let hoverTab { view.hoverTab(hoverTab) }
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
         if let menu = view.webOverflowMenu() {

@@ -43,7 +43,7 @@ These hold for every feature, and a change that breaks one of them is a bug:
 
 Set your game to **borderless windowed** for the most reliable overlay. Native macOS fullscreen
 also works; exclusive fullscreen may not. If the overlay ends up behind the game, raise Settings ›
-Window › Level to "Pop-up menu, highest".
+Window › Level to "Above everything, for games that cover the terminal".
 
 - **Interact** (green dot). The terminal takes clicks, scrolling, text selection and typing, like
   any terminal. Typing goes to the terminal, not the game.
@@ -86,6 +86,17 @@ keyboard moving between SlyTerm's own windows, from the terminal to a floating w
 does not count. Turn this off in Settings › Window ("Switch to click-through when the terminal
 loses focus") if you would rather switch modes only by hand.
 
+The first three automatic switches say why the terminal stopped typing: a toast by the strip's
+corner, orange, for 4 seconds, "Click-through mode enabled. ⌃⌥Tab to toggle focus on SlyTerm."
+(the click-through shortcut as set, or "The eye button toggles focus on SlyTerm." when it has
+none). It shows only when the keyboard went to another app: the hotkey, the eye button and
+the tap never show it, nor do panic, hiding the SlyTerm window with a floating one up, closing a
+floating window that had the keyboard, or a window of SlyTerm's own such as Settings taking the
+keyboard; with the setting off nothing does. The count is kept in `ghostHintsShown`. The toast is
+a non-activating panel that ignores the mouse, so the game keeps the keyboard. While the overlay
+is in click-through and no agent hint is due, the strip reads "click-through" in orange in the
+hint slot; the tabs make room for it as they do for an agent hint.
+
 ### Trackpad tap
 
 A quick tap with three fingers roughly side by side, anywhere on the trackpad, toggles
@@ -98,7 +109,10 @@ future macOS update could stop it; that pane then says "Unavailable" and the hot
 macOS cannot be told to ignore the tap, so in System Settings › Trackpad › Point & Click set "Look
 up & data detectors" to Force Click or off, otherwise every tap also opens a dictionary panel. One
 tuning key has no control: `tapAlignment` (max vertical spread, default 0.50 of the trackpad
-height, 1 disables the check). Enable `debug` and tap a few times to see in
+height, 1 disables the check). While the [setup assistant](#the-setup-assistant) is open, on any
+step, a tap only tells it, for its try-it line, and the log says "held while the setup assistant is
+open": hiding the terminal or covering the screen behind that window would be confusing. The
+assistant's Shortcuts step also warns when macOS Look up is on the three-finger tap. Enable `debug` and tap a few times to see in
 `~/Library/Logs/SlyTerm.log` why a tap was or was not recognised.
 
 ### Tab bar
@@ -109,6 +123,17 @@ the terminal goes back above it. The bar itself never leaves your pointer (the t
 moves), so the bar is always the window's outer edge and the terminal is what reaches toward the
 middle, where the game is. Settings › Window › Tab bar pins it to the top or the bottom of the
 window instead.
+
+On a narrow strip the tab names keep the room. Web tabs go behind a single `…` square before a
+terminal's tab gets under 44 pt (see [Web tabs on the strip](#web-tabs-on-the-strip)); if tabs
+would still be under 40 pt, the expand button goes (`⌘Return` and `⌃⌥M` still toggle
+Fullscreen). A tab has a `×`, shown while it is selected or under the pointer, only when the `×`
+leaves room for three letters of the name and an ellipsis after the tab's mark; a narrower tab has
+none, and a click anywhere on it selects it. Middle-click, `⌘W` and **Close Tab** in the tab's
+right-click menu close a tab either way. A tab under 40 pt, or one where an ellipsis would leave
+fewer than three letters, shows its mark and the first three letters of its name with no
+ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always
+stay. A tab whose name is shortened has it in its tooltip, above what its agent is doing.
 
 ### Tabs and folders
 
@@ -164,7 +189,7 @@ logo animation", key `startupAnimation`).
 | Pause what web tabs are playing, or play it again | `⌃⌥V` (configurable), or "Play / Pause" in the menu bar item |
 | Move the window | Drag the tab strip |
 | Resize | Drag the left or right edge, or the edge the tab strip is not on |
-| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip; middle-click closes a tab or a web tab's square |
+| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip (a tab too narrow for its `×` has none); middle-click closes a tab or a web tab's square, and so does **Close Tab** in a tab's right-click menu |
 | Switch tabs | `⌘1`…`⌘9` (terminals only); `⌃Tab` / `⌃⇧Tab`, `⌘⌥←` / `⌘⌥→` or `⌘⇧[` / `⌘⇧]` go through the terminals from a terminal, and through the web tabs in the SlyTerm window from a web tab |
 | Go to a web tab | `⌥⌘1`…`⌥⌘9`, the web tabs in the order of their squares, from a terminal, a web tab or a floating window; hover a square to see its key |
 | Web tab ↔ terminal | `⌘G` (the last web tab in front in the SlyTerm window; opens the active game's first source when there is none) |
@@ -239,11 +264,13 @@ marks nothing and a shell completion beep stays quiet.
 With the mark comes a card, hung off the strip and readable over the game: the tab's name, what
 happened and, for a finished turn, how long it took and the last paragraph of the agent's answer;
 for a permission prompt, the command it wants to run or the file it wants to edit; for a question,
-the question and its options; for a notification, its title and its text. The less SlyTerm can read
-of an agent, the less its card says: Gemini CLI's and Qwen Code's only say that a turn finished or
-that something waits, and so does the card of a Codex whose rollout cannot be found. A finished card
-fades
-after ten seconds, a waiting one stays until it is answered or closed with its ×. Clicking the
+the question and its options; for a notification, its title and its text. Its last line names the
+keys that act on it, taken from Settings › Shortcuts: `⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look`
+for a permission prompt.
+The less SlyTerm can read of an agent, the less its card says: Gemini CLI's and Qwen Code's only
+say that a turn finished or that something waits, and so does the card of a Codex whose rollout
+cannot be found. A finished card fades after the time set in Settings › General › Agents, 10
+seconds by default; a waiting one stays until it is answered or closed with its ×. Clicking the
 card brings its tab forward and, like a click on the strip, leaves you in click-through; `⌃⌥Tab`
 with a card up opens the tab the card is about, whichever tab is selected.
 
@@ -267,9 +294,11 @@ tab: for Claude Code, Return for the highlighted "Yes" and Escape for "No"; for 
 - it is a prompt known to take a plain yes or no: for Claude Code, one for a tool known to put up
   such a prompt (a command, an edit, a read, a fetch or search, an MCP tool); for Codex, a command
   to run or an edit to make, as the tab shows it right before the key,
-- and the agent is still the job in front in the tab.
+- and the agent is still the program running in the tab.
 
-Otherwise a small toast says why and nothing is typed. So a prompt that changed while you reached
+Otherwise a small toast says why and nothing is typed ("Claude is not the program running in
+slyterm"). A toast that says why stays 3.5 seconds; "Allowed: …" and "Refused: …" stay 1.6. So
+a prompt that changed while you reached
 for the key wants another look at the card first, and some prompts always want the terminal: a
 question, which is never answered blind (the card says to press `⌃⌥Tab`), a plan to approve, a
 subagent asking for something, and several calls issued at once, where the transcript cannot say
@@ -291,9 +320,10 @@ The allow and refuse shortcuts go with the card, `slyterm://allow` and `slyterm:
 
 Those two URLs are off anyway until you turn them on, since any program of yours can open a URL,
 and an agent that can run `open` could approve its own next request:
-`defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`. `activityCardSeconds`
-(default 10; 0 keeps a finished card or a notification until it is closed) has no control in
-Settings either.
+`defaults write com.charlesmelki.slyterm activityAnswerURLs -bool true`, with no control in
+Settings. How long a finished card or a notification stays is "Keep a finished card for … s" in
+Settings › General › Agents (`activityCardSeconds`, default 10, up to 300; 0 keeps it until it is
+closed), off while the card is off.
 
 ### Claude Code
 
@@ -524,8 +554,8 @@ right-click the tab in the strip (or Control-click it) and choose "Send Back to 
 Quit". The menus name the terminal that tab would go to.
 
 A tab brought in from one of those four (moved, copied, attached or opened as a folder) remembers
-it and goes back there. Any other tab goes to the one chosen in Settings › General › Other
-terminals ("Send sessions back to"), and when that one is not installed, to iTerm2, else Terminal.
+it and goes back there. Any other tab goes to the one chosen in Settings › General › Agents
+("Send sessions back to"), and when that one is not installed, to iTerm2, else Terminal.
 The memory lasts as long as the tab: a tab restored at launch is a new shell and has none. Ghostty
 counts only from 1.3, the first version with an AppleScript dictionary (`NSAppleScriptEnabled` in
 its Info.plist); WezTerm counts when its bundle has the `wezterm` command line in `Contents/MacOS`.
@@ -600,8 +630,10 @@ Point at something in your game (a quest in the journal, an item in your bags, t
 you have open), press `⌃⌥Q`, and the page your game's sources have for it opens in a **web tab**
 next to your terminals, never in your browser: a browser would come to the front and take the
 keyboard, which is the one thing you cannot afford mid-fight. A small message next to the pointer
-says which page is opening, or what was read when nothing matched. Typical time from key press to
-the tab: 200 to 400 ms, plus about half a second for the page.
+says which page is opening and on which site (`Guide: Dragon scimitar · OSRS Wiki`), or what was
+read and which game was asked when nothing matched (`No guide on Dofus for “Hogger”`), the game's
+name in cyan so a lookup that asked the wrong game stands out. Typical time from key press to the
+tab: 200 to 400 ms, plus about half a second for the page.
 
 The overlay does not take focus when a guide arrives: if it was hidden it comes back in
 click-through mode, so your next click and keystroke still go to the game. Press `⌃⌥Tab`, or click
@@ -717,7 +749,8 @@ tooltip's name gets one of the first keys.
 
 The screenshot is read with the fast recognition, or the accurate one when the fast one found no
 tooltip with a name in it, since the line you pick is the text looked up: that is about half a
-second more before the frame freezes. `Return` takes the highlighted line, which starts on the one
+second more before the frame freezes. The hint at the top names the game's first source ("Press a
+key to look it up on Dofus Wiki"). `Return` takes the highlighted line, which starts on the one
 `⌃⌥Q` alone would have gone for; `Tab`, `⇧Tab` and the arrows move the highlight; `Esc` cancels,
 and so does `⌃⌥⇧Q` pressed again. `⌃⌥Q` while the picker is up takes the highlighted line.
 
@@ -732,6 +765,15 @@ The lookup needs the **Screen Recording** permission. The first press asks for i
 System Settings › Privacy & Security › Screen Recording and relaunch the app. Nothing is captured
 outside a hotkey press.
 
+macOS applies a grant only to a process started after it, so SlyTerm notes at launch whether it
+had one (`CGPreflightScreenCaptureAccess`, which captures nothing). Settings › Lookup › Permission
+and the setup assistant's Games step then show one of three lines: "Screen Recording: not granted"
+(orange), "Screen Recording: granted", or, when it was granted since launch, "Screen Recording:
+granted, reopen SlyTerm to use it" (orange) with a **Reopen SlyTerm** button. The button quits as
+⌘Q does, the quit confirmation included, and a short shell started as SlyTerm quits waits for it to
+exit and opens the same bundle again. Run as `.build/debug/SlyTerm`, outside a bundle, there is
+nothing to reopen: Settings keeps **Open System Settings…** and the assistant shows no button.
+
 Each site's index is cached as one JSON file per host under
 `~/Library/Application Support/SlyTerm/lookup/`, loaded and refreshed in the background at launch
 and rebuilt when it is more than a week old. The first lookup on a site that has never been indexed
@@ -745,10 +787,10 @@ what that means on a wiki, on Wowhead and on anything else. It goes to the web t
 last, docked or floating, or to a new one when that one is playing something: see
 [The lookup's tab](#the-lookups-tab).
 
-Pick "In your browser" in Settings › Lookup and guides go to your browser instead; "Keep the game in
-front, load the page behind it" then leaves the game where it is and loads the page behind it, for
-a second screen. Web tabs stay on the strip either way, for everything else. The same pane says
-whether Screen Recording has been granted.
+Pick "In your browser" in Settings › Web › Open guides and guides go to your browser instead;
+"Keep the game in front, load the page behind it" then leaves the game where it is and loads the
+page behind it, for a second screen. Web tabs stay on the strip either way, for everything else.
+Settings › Lookup says whether Screen Recording has been granted.
 `open -g "slyterm://lookup?dry=1"` shows what would open without opening it, which is handy for
 tuning.
 
@@ -913,7 +955,7 @@ up to the ninth, and picking one does what clicking its square would.
 
 With no web tab open, one dimmed globe holds the place, so nothing in the strip shifts when a page
 comes or goes; clicking it, like `⌘G`, opens the active game's first source. The squares stay
-when Settings › Lookup sends guides to your browser.
+when Settings › Web sends guides to your browser.
 
 ### The toolbar and the address field
 
@@ -926,8 +968,8 @@ floats), open in your browser and, on a floating window only, `×` to close it.
   typed over. `Return` opens what you typed in this tab and `⌘Return` in a new web tab, in front;
   `Esc` cancels and gives the page the keyboard back. A web address opens as typed and a bare host
   such as `wowhead.com` as `https://` (`http://` for `localhost` and an IPv4 address); anything
-  else, `https://` with no host included, is a search, sent to the address in Settings › General ›
-  Web tabs › "Search with", DuckDuckGo by default. Nothing but an `http` or `https` address ever
+  else, `https://` with no host included, is a search, sent to the address in Settings › Web ›
+  "Search with", DuckDuckGo by default. Nothing but an `http` or `https` address ever
   comes out of the field. `⌘C`, `⌘V`, `⌘X` and `⌘A` work in it.
 - **Reader mode**: the button switches between reader mode and the full page, and names the mode a
   click takes you to. On a streaming site, where the reader never applies (see
@@ -941,7 +983,8 @@ floats), open in your browser and, on a floating window only, `×` to close it.
 While a web tab is in front in the SlyTerm window:
 
 - `⌘←` / `⌘→` back and forward, `⌘R` reload, `⌘+` / `⌘-` / `⌘0` zoom (kept in `guideZoom`, one for
-  every web tab), `⌘C` copy, `⌘V` paste and `⌘X` cut, into the page's own fields too (a site's
+  every web tab, and the "Page zoom" slider in Settings › Web, 50% to 200%, which changes open
+  pages as it moves), `⌘C` copy, `⌘V` paste and `⌘X` cut, into the page's own fields too (a site's
   search box, a sign-in form), `⌘A` select all. The terminal font is not touched.
 - `⌘F` find, `⌘E` find the selection, and `⌘G` / `⌘⇧G` the next and previous match while the find
   bar is open.
@@ -986,7 +1029,9 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
 - **The window** is the page on the terminal's translucent background, with rounded corners,
   resizable from its sides and its bottom down to 240 × 160 pt, and its toolbar across the top,
   which covers the top edge as the strip does the SlyTerm window's. The toolbar is the handle: drag
-  its empty space to move the window.
+  its empty space to move the window. Since the strip may be hidden, the toolbar shows the mode
+  itself, left of its back button: the strip's green dot in interact mode, and in click-through an
+  orange dot on the strip's click-through brown. The docked toolbar has neither.
 - **Where it opens.** A page opens where the last floating page was, and a video that is playing,
   or filling the page, where the last floating video was; each is saved when you finish moving or
   resizing a window of its kind. A page with a paused video opens as a page. The first page opens at
@@ -1009,7 +1054,7 @@ toolbar, or `⌘W`, closes it. Several web tabs can float at once.
 Click-through follows the rest of SlyTerm: `⌃⌥Tab`, the eye button, the trackpad tap and the switch
 when the terminal loses focus change every SlyTerm window at once. In click-through a floating page
 lets every click through to the game and dims to the click-through level, except a video that is
-playing, which has a level of its own: Settings › Window › Opacity › "Playing video", 85% by
+playing, which has a level of its own: Settings › Web › Opacity › "Playing video", 85% by
 default, in click-through and in interact mode alike, so the game shows through the picture. The
 same holds in the SlyTerm window: with a web tab in front that is playing a video, the whole window,
 the tab's toolbar included, takes the video level; the strip keeps its usual level. A paused
@@ -1017,7 +1062,9 @@ video goes back to the usual rule, opaque in interact mode.
 
 A floating window's toolbar stays clickable in click-through, like the strip, dimmed with the rest:
 its buttons work and dragging it moves the window. Its address field needs interact mode, since the
-toolbar cannot take the keyboard in click-through.
+toolbar cannot take the keyboard in click-through: a click on it there shows "Click-through:
+⌃⌥Tab to type here" for 2.5 seconds, with the combo from Settings › Shortcuts, or "Click-through
+is on" when the click-through shortcut has none.
 
 Clicking a floating page in interact mode gives it the keyboard, and clicking into the game from
 there switches everything to click-through, as leaving the terminal does; so does hiding the
@@ -1052,7 +1099,7 @@ and suspends nothing.
 
 ### Pausing on its own
 
-With Settings › General › Web tabs › "Pause videos when a guide opens or they go out of view" on,
+With Settings › Web › Videos › "Pause videos when a guide opens or they go out of view" on,
 as it is by default, videos pause at the moments you stop watching them. Sound with no video in
 view, a podcast or music, is left playing.
 
@@ -1151,26 +1198,33 @@ is why none is kept warm. Web tabs are not restored at launch.
 
 The menu bar item is for doing: show / hide, a new tab, click-through, panic mode, Fullscreen, the
 lookup and which game it asks, a new web tab, play / pause, opacity (terminal, click-through, playing video),
-resetting the window position, quitting.
-Everything that configures the app is behind **Settings…** in it, in five tabs:
+**Shortcuts…** (Settings on its Shortcuts tab), **Help** (the README's
+[shortcut list](https://github.com/MushkyQT/slyterm#shortcuts) in your browser), resetting the
+window position, **About SlyTerm** (the standard panel, with the version from `Info.plist`; the app
+is in the Dock and ⌘Tab while it is open, as for Settings), quitting.
+Everything that configures the app is behind **Settings…** in it, in six tabs:
 
-- **General**: restoring the last session's tabs at launch, the logo animation, **Run Setup
-  Assistant…** (see [The setup assistant](#the-setup-assistant)), the quit
-  confirmation, the sound a tab plays when it needs you, the card that says what an agent finished
-  or asks, what bringing a session in from another terminal does about the tab it came from and
-  about interrupting an agent mid-turn, which terminal sessions are sent back to, and, under Web tabs, "Search with": the address that words
-  typed into a web tab's address field go to, with `{query}` where they go. An address without
-  `{query}` shows in orange and is not saved; emptying the field puts DuckDuckGo back. Also under
-  Web tabs, pausing videos when a guide opens or they go out of view (see
-  [Pausing on its own](#pausing-on-its-own)).
+- **General**: under Launch, restoring the last session's tabs, the logo animation and **Run Setup
+  Assistant…** (see [The setup assistant](#the-setup-assistant)); under Agents, the card that says
+  what an agent finished or asks, the sound a tab plays when it needs you, how long a finished card
+  stays, asking before interrupting an agent mid-turn, closing the tab a session was brought in
+  from, and which terminal sessions are sent back to; under Quitting, the quit confirmation.
 - **Terminal**: font family and size, the default folder for new tabs and whether new tabs inherit
-  the current one's, the startup command, Option as Meta.
-- **Window**: background opacity, the dim level in click-through, the level of a playing video,
-  switching to click-through on focus loss, the window level, where the tab bar sits.
+  the current one's, the startup command, the scrollback (1,000 to 100,000 lines kept per tab, for
+  tabs opened after the change), Option as Meta.
+- **Window**: background opacity, the dim level in click-through, switching to click-through on
+  focus loss, the window level ("Above other windows", "Above the menu bar", the default, or "Above
+  everything, for games that cover the terminal"), where the tab bar sits.
 - **Shortcuts**: the nine global hotkeys and the trackpad tap.
 - **Lookup**: the games and their sources, the language each game's text is read in, how the game
-  is picked, where guides open ("In a web tab inside SlyTerm" or "In your browser"), whether Screen
-  Recording has been granted, and importing or exporting a game.
+  is picked, whether Screen Recording has been granted (see
+  [Permission and caches](#permission-and-caches)), and importing or exporting a game.
+- **Web**: "Search with", the address that words typed into a web tab's address field go to, with
+  `{query}` where they go (an address without `{query}` shows in orange and is not saved; emptying
+  the field puts DuckDuckGo back); pausing videos when a guide opens or they go out of view (see
+  [Pausing on its own](#pausing-on-its-own)); the opacity of a playing video; the page zoom of
+  every web tab; and where guides open ("In a web tab inside SlyTerm" or "In your browser", see
+  [Where guides open](#where-guides-open)).
 
 Nothing there is modal: the terminal stays where it is and every change applies as you make it.
 
@@ -1186,19 +1240,42 @@ A fresh install opens a four-step window, and the terminal first appears when it
    in, from the ones running. Each address is probed as in Settings › Lookup. A MediaWiki gets its
    own `Special:Search` address, Wowhead, DofusDB and a Weebly site their usual one, and any other
    site `https://duckduckgo.com/?q=site%3A<host>+{query}`, with its sitemap as its index when it
-   has one. Under the list, whether Screen Recording is granted and a button that asks macOS for it;
-   nothing is captured.
-3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
-   on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
-4. **Done**: the main shortcuts as chosen, **Open Settings** and **Start**.
+   has one. Under the list, whether Screen Recording is granted, and a button that asks macOS for
+   it (nothing is captured), or, when it was granted since SlyTerm opened, **Reopen SlyTerm** (see
+   [Permission and caches](#permission-and-caches)). Reopening from here brings the assistant back
+   at the next launch, since it was not finished. macOS shows its prompt below the assistant's
+   raised level while SlyTerm stays the active app, so the assistant drops to the normal level
+   when it asks, and goes back up when SlyTerm is activated again or the step changes.
+3. **Shortcuts**: first the [trackpad tap](#trackpad-tap), "Tap with [2–5] fingers to [action]"
+   with the Trackpad pane's choices, and under it "Tap the trackpad with three fingers to try it."
+   (the count as a word). A tap while the assistant is open turns that into a green "Tap
+   recognised. It will …" naming the chosen action, and does nothing else. With three fingers and
+   macOS Look up on the three-finger tap, the line is instead the orange "macOS also opens Look up
+   on a three-finger tap." with **Open Trackpad Settings…**; SlyTerm reads
+   `TrackpadThreeFingerTapGesture` from `com.apple.AppleMultitouchTrackpad` and
+   `com.apple.driver.AppleBluetoothMultitouch.trackpad` (nonzero in either is on, anything
+   unreadable off) when the step opens, the finger count changes or SlyTerm is activated again.
+   With the tap off there is no line; with no trackpad, or the framework unavailable, no row.
+   Then show / hide, click-through and panic, plus the lookup and pick keys when games are on and
+   Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
+4. **Done**: the main shortcuts as chosen (the click-through one as "takes you back to the
+   terminal"), and while the tap is on and there is a trackpad, a row such as "Three-finger tap
+   takes you back to the terminal" right after the hotkey with the same action (last for
+   Fullscreen); a caption saying that clicking into the game switches to click-through by itself
+   (only while that setting is on), **Open Settings** and **Start**.
 
 Nothing is saved until **Start** or **Open Settings** on the last step; closing the window keeps
-everything as it was. A new game list starts with the Dofus preset: on the first run it stays only
+everything as it was, except the trackpad tap, which is saved as soon as it changes so that the
+try-it counts the new fingers. A new game list starts with the Dofus preset: on the first run it stays only
 if Dofus is checked, so "No" leaves no game at all. The games already there show as checked and
 stay, and a preset or a name that is already in the list is not added twice. Run again from
 Settings › General, it only adds. Closing it sets `setupDone`, and it does not open by itself
-again; quitting SlyTerm while it is open brings it back at the next launch. The first launch of a
-version that has it stores `setupDone` as false on a fresh install and as true on one that already
+again. Quitting SlyTerm while it is open on the first run, whether with `⌘Q`, from its Reopen
+SlyTerm button or from macOS's Quit & Reopen after Screen Recording is allowed, brings it back at
+the next launch on the same step, with the same answer to "Do you play games" and the same presets
+checked (`setupResume`); a game being added by hand is not kept. AppKit closes every window as
+the app quits, so the assistant ignores that close rather than take it for finishing. The first
+launch of a version that has it stores `setupDone` as false on a fresh install and as true on one that already
 ran an earlier version (it has `frameEdge`, `sessionDirectories` or `lookupGamesVersion` stored), so
 existing installs never see it.
 
@@ -1216,7 +1293,8 @@ window is open.
 The pane warns when two actions share a shortcut, when macOS uses it for one of its own (the list
 in System Settings › Keyboard › Keyboard Shortcuts, which `CopySymbolicHotKeys` returns), and when
 macOS did not accept it. It cannot see another app's shortcut: macOS registers the same combo for
-both apps without an error, and only one of them then gets the key.
+both apps without an error, and only one of them then gets the key. Under the list, a caption
+names the main keys inside SlyTerm (`⌘L`, `⌘G`, `⌘⇧T`, `⌘Return`, `⌘F`, `⌘,`) and points to Help.
 
 The defaults are all ⌃⌥ with a key. Games rarely bind Control and Option together, and if a finger
 slips off one of them the game gets ⌃ or ⌥ with a key, where a ⌘ chord would become ⌘Q, or ⌃⌘Q,
@@ -1258,12 +1336,12 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `startupCommand` | empty | Typed into every new tab, such as `claude` or `codex` |
 | `shell` | `$SHELL` | Run as a login shell in each tab |
 | `optionAsMeta` | `false` | Off keeps Option for accents and brackets on international layouts |
-| `scrollback` | `10000` | Lines kept per tab |
+| `scrollback` | `10000` | Lines kept per tab, 1000 to 100000 (a value outside is taken as the nearest end); a change applies to tabs opened after it |
 | `restoreSession` | `true` | Bring the last run's tabs and folders back at launch |
 | `confirmQuit` | `true` | Ask before quitting with several tabs or a running command |
 | `attentionSound` | `true` | Play the system alert when a tab needs you |
 | `startupAnimation` | `true` | Play the logo over the first terminal at launch |
-| `windowLevel` | `statusBar` | `floating`, `statusBar` or `popUpMenu` |
+| `windowLevel` | `statusBar` | `floating`, `statusBar` or `popUpMenu` ("Above other windows", "Above the menu bar", "Above everything" in Settings) |
 | `stripPosition` | `auto` | `auto` (follows the window), `top` or `bottom` |
 | `hotkeyToggle` | `ctrl+alt+h` | Show / hide |
 | `hotkeyGhost` | `ctrl+alt+tab` | Toggle click-through |
@@ -1291,14 +1369,16 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 | `sendBackTerminal` | `iterm2` | Where a tab's session is sent back to when it was not brought in from one of these: `iterm2`, `terminal`, `ghostty` or `wezterm` (iTerm2, else Terminal, when the one chosen is not installed) |
 | `activityCards` | `true` | The card when an agent finishes or asks, or a program sends a notification, and with it the allow and refuse shortcuts, the sound and bringing a hidden overlay back for an agent |
 | `activityAnswerURLs` | `false` | Let `slyterm://allow` and `slyterm://refuse` answer (no control in Settings) |
-| `activityCardSeconds` | `10` | How long a finished card or a notification stays; 0 keeps it until closed (no control in Settings) |
+| `activityCardSeconds` | `10` | How long a finished card or a notification stays, 0 to 300 seconds; 0 keeps it until closed |
 | `debug` | `false` | Trace to `~/Library/Logs/SlyTerm.log` and the unified log |
 | `setupDone` | set at first launch | The setup assistant has run; `false` opens it at the next launch as on a fresh install (Settings › General › Run Setup Assistant… opens it any time) |
 
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
 the last floating page and the last floating video were), `sessionDirectories` and
-`sessionSelected` (the tabs to restore), `lookupGamesVersion` and `lookupGames.v0` (see
+`sessionSelected` (the tabs to restore), `ghostHintsShown` (how many times the automatic switch to
+click-through has said so, up to 3), `setupResume` (the step and games of a first-run assistant
+that was quit, read once at the next launch), `lookupGamesVersion` and `lookupGames.v0` (see
 [Migration notes](#migration-notes)), and `migratedFormerDefaults`.
 
 `hotkeyQuest`, `questOpenInApp` and `questOpenInBackground` keep the names they were given when the
@@ -1389,9 +1469,11 @@ French ones, without reading the games you configured at all.
 
 ```sh
 B=dist/SlyTerm.app/Contents/MacOS/SlyTerm
-$B --match "La Geste de Ratagnan (2/6)"   # best index matches for a line of text
+$B --match "La Geste de Ratagnan (2/6)"   # best index matches for a line of text, then a `toast:`
+                                          # line with the message the lookup would show
 $B --ocr screenshot.png                   # read an image and match every line, `--fast` for the fast pass
-$B --ocr screenshot.png --at 1204 880     # the image read around a pointer at that pixel (see below)
+$B --ocr screenshot.png --at 1204 880     # the image read around a pointer at that pixel (see
+                                          # below), ending with the `toast:` line
 $B --pick-snapshot screenshot.png 1204 880 pick.png --scale 2
                                           # draw pick mode offscreen over that image, the pointer at
                                           # that pixel, and write a PNG; `--scale 2` for a Retina
@@ -1490,8 +1572,8 @@ a separate `SlyTerm` defaults domain.
 
 ## Troubleshooting
 
-- **Overlay hidden behind the game.** Settings › Window › Level → "Pop-up menu, highest", and make
-  sure the game is not in exclusive fullscreen.
+- **Overlay hidden behind the game.** Settings › Window › Level → "Above everything, for games that
+  cover the terminal", and make sure the game is not in exclusive fullscreen.
 - **Hotkey does nothing, or moves a window instead.** Another app has the same combination, often
   a window manager. macOS does not report it to either app, so change the shortcut in one of them.
   When macOS itself refuses a combo, or uses it, Settings › Shortcuts says so next to the field and
@@ -1523,9 +1605,9 @@ a separate `SlyTerm` defaults domain.
 - **The lookup says Screen Recording is needed, again.** The app is ad-hoc signed by default, and
   macOS ties the grant to that exact build: every `./build.sh` produces a "new" app and the grant
   has to be redone (toggle SlyTerm off and on in System Settings › Privacy & Security › Screen
-  Recording, then relaunch). To keep it across builds, create a self-signed "Code Signing"
-  certificate in Keychain Access (Certificate Assistant › Create a Certificate) and build with
-  `CODESIGN_IDENTITY="its name" ./build.sh`.
+  Recording, then relaunch, or use **Reopen SlyTerm** in Settings › Lookup). To keep it across
+  builds, create a self-signed "Code Signing" certificate in Keychain Access (Certificate
+  Assistant › Create a Certificate) and build with `CODESIGN_IDENTITY="its name" ./build.sh`.
 - **The lookup opens the wrong page or nothing.** Press `⌃⌥Q` again for the next guess, or `⌃⌥⇧Q`
   to pick the line yourself. To see why, run `defaults write com.charlesmelki.slyterm debug -bool
   true`, press the hotkey, and read `~/Library/Logs/SlyTerm.log`: it lists which game answered,
@@ -1540,14 +1622,15 @@ a separate `SlyTerm` defaults domain.
   than leaving you with nothing. `--index` says which of the two it is, source by source, with the
   size and the age of every index; `--index --refresh` rebuilds them on the spot.
 - **The wrong game was picked.** The lookup asks the app under the pointer, then the app in front,
-  then the game chosen by hand. Set each game's **Game app** in Settings › Lookup so it can be
-  recognised, or turn "Detect the game from the app in front" off and pick the game yourself, in
-  that pane or in the menu bar's "Lookup Game" submenu.
+  then the game chosen by hand ("Otherwise use"), and the message names the game or the site that
+  answered, the game in cyan when nothing matched. Set each game's **Game app** in Settings
+  › Lookup so it can be recognised, or turn "Detect the game from the app in front" off and pick
+  the game yourself, in that pane or in the menu bar's "Lookup Game" submenu.
 - **The lookup opened a new web tab instead of its own.** Its own was playing something, and the
   lookup never replaces a show: the new tab is the lookup's from then on (see
   [The lookup's tab](#the-lookups-tab)).
-- **A floating web tab's address field does not take typing.** SlyTerm is in click-through, where
-  the toolbar's buttons work but typing does not. Press `⌃⌥Tab`, then click the field.
+- **A floating web tab's address field does not take typing.** The toolbar's dot is orange:
+  SlyTerm is in click-through. Press `⌃⌥Tab`, then click the field.
 - **Ads play on YouTube.** Nothing is blocked on streaming sites, since YouTube stops playing when
   its ad requests are blocked (see [Reader mode and blocking](#reader-mode-and-blocking)).
 - **Signing in through a pop-up does not finish.** A pop-up opens as a new web tab, without the
@@ -1576,7 +1659,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | File | What it holds |
 | --- | --- |
 | `main.swift` | Entry point: runs a command-line mode and exits if one matches, otherwise starts the app as a menu bar accessory |
-| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings or the assistant is open; `NSAlert.runModal(level:)` |
+| `AppDelegate.swift` | Launch order, the menu bar item and its menu, hotkey and trackpad registration, URL events; `AppSwitcher`, the Dock icon and app menu while Settings, the assistant or About is open; `ScreenRecording`, the permission line and Reopen SlyTerm; `NSAlert.runModal(level:)` |
 | `OverlayController.swift` | Owns the two panels, the tabs, the floating web windows and the modes (interact, click-through, panic, Fullscreen), the strip edge, focus, the attention mark, the lookup's web tab and what play / pause and panic paused |
 | `Panels.swift` | `OverlayPanel`, the non-activating terminal window, and `StripPanel`, the child window that stays clickable |
 | `Tab.swift` | The `Tab` protocol a terminal and a web tab both satisfy |
@@ -1585,7 +1668,7 @@ Dock icon except while Settings or the setup assistant is open (see
 | `HotKeys.swift` | `HotKeyCenter` over Carbon `RegisterEventHotKey`, and `KeyCombo` parsing on the current layout and checking against macOS's own shortcuts |
 | `HotkeyRecorder.swift` | The list of global actions and the shortcut recorder field |
 | `Settings.swift` | Every preference over `UserDefaults`, the `didChange` notification, the debug log, the HoverTerm carry-over |
-| `SettingsWindow.swift` | The five Settings panes |
+| `SettingsWindow.swift` | The six Settings panes |
 | `RemoteControl.swift` | The `slyterm://` routes |
 | `TrackpadGestures.swift` | The N-finger tap, over `Sources/CMultitouch` |
 | `Fonts.swift` | Nerd Font detection and iTerm2's profile font |

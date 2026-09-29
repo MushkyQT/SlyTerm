@@ -880,6 +880,7 @@ enum GuideContent {
 
 final class GuideTab: NSObject, Tab, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, NSTextFieldDelegate {
     static let toolbarHeight: CGFloat = 26
+    static let floatingDotRoom: CGFloat = 12
     static let toolbarColor = NSColor(calibratedRed: 0.12, green: 0.12, blue: 0.14, alpha: 1)
 
     let id = UUID()
@@ -1337,6 +1338,11 @@ final class GuideTab: NSObject, Tab, WKNavigationDelegate, WKUIDelegate, WKScrip
         addressField.layer?.cornerRadius = 4
         addressField.delegate = self
         addressField.mayEdit = { [weak self] in self?.host?.isGhost != true }
+        addressField.onRefused = {
+            let combo = KeyCombo.pretty(Settings.shared.hotkeyGhost)
+            Toast.shared.show(combo.isEmpty ? "Click-through is on" : "Click-through: \(combo) to type here",
+                              near: NSEvent.mouseLocation, tint: .systemOrange, duration: 2.5)
+        }
         addressField.onBegin = { [weak self] in self?.beginAddressEditing() }
         addressField.onEnd = { [weak self] in self?.endAddressEditing() }
 
@@ -1354,15 +1360,16 @@ final class GuideTab: NSObject, Tab, WKNavigationDelegate, WKUIDelegate, WKScrip
     // Floating, the idle address shrinks to its text, so the toolbar around it is free to drag.
     private func layoutToolbar() {
         let width = toolbar.bounds.width, size: CGFloat = 20, y = (GuideTab.toolbarHeight - size) / 2
-        backButton.frame = NSRect(x: 6, y: y, width: size, height: size)
-        forwardButton.frame = NSRect(x: 28, y: y, width: size, height: size)
+        let dot: CGFloat = place == .floating ? GuideTab.floatingDotRoom : 0
+        backButton.frame = NSRect(x: 6 + dot, y: y, width: size, height: size)
+        forwardButton.frame = NSRect(x: 28 + dot, y: y, width: size, height: size)
         var right = width - 4
         for button in [closeButton, browserButton, placeButton, readerButton, findButton].compactMap({ $0 })
             where !button.isHidden {
             right -= 22
             button.frame = NSRect(x: right, y: y, width: size, height: size)
         }
-        let left: CGFloat = 54, available = max(0, right - 6 - left)
+        let left: CGFloat = 54 + dot, available = max(0, right - 6 - left)
         var fieldWidth = available
         if place == .floating, !isEditingAddress {
             let shown = addressField.stringValue
@@ -1669,11 +1676,17 @@ private final class GuideAddressField: NSTextField {
     static let editingColor = NSColor(calibratedWhite: 1, alpha: 0.95)
 
     var mayEdit: () -> Bool = { true }
+    var onRefused: (() -> Void)?
     var onBegin: (() -> Void)?
     var onEnd: (() -> Void)?
     var isEditing: Bool { currentEditor() != nil }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        guard mayEdit() else { onRefused?(); return }
+        super.mouseDown(with: event)
+    }
 
     // AppKit hands a window's first key view the first responder when the window is first ordered
     // in, key or not: the floating toolbar's panel would open with this field stuck mid-edit.
@@ -1692,8 +1705,18 @@ private final class GuideAddressField: NSTextField {
 class GuideToolbarView: NSView {
     static let idleTint = NSColor(calibratedWhite: 1, alpha: 0.7)
     static let hoverTint = NSColor(calibratedWhite: 1, alpha: 0.95)
+    static let ghostColor = NSColor(calibratedRed: 0.17, green: 0.13, blue: 0.09, alpha: 1)
     var onResize: (() -> Void)?
     private var trackingArea: NSTrackingArea?
+    // Floating only, where the strip that shows the mode may be hidden: nil draws no dot.
+    var floatingGhost: Bool? {
+        didSet {
+            guard floatingGhost != oldValue else { return }
+            let ghost = floatingGhost == true
+            layer?.backgroundColor = (ghost ? GuideToolbarView.ghostColor : GuideTab.toolbarColor).cgColor
+            needsDisplay = true
+        }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -1722,6 +1745,12 @@ class GuideToolbarView: NSView {
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         if let onResize { onResize() } else { super.resizeSubviews(withOldSize: oldSize) }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ghost = floatingGhost else { return }
+        (ghost ? NSColor.systemOrange : NSColor.systemGreen).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 8, y: bounds.midY - 3, width: 6, height: 6)).fill()
     }
 
     override var mouseDownCanMoveWindow: Bool { false }
