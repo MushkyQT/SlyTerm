@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if setupOpen { SetupAssistant.shared.keepForNextLaunch() }
         TrackpadTapDetector.shared.stop()
         // Refresh and save before terminateAll: a dead shell has no cwd, and the poll stops while
         // the overlay is hidden.

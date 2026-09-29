@@ -1270,8 +1270,12 @@ try-it counts the new fingers. A new game list starts with the Dofus preset: on 
 if Dofus is checked, so "No" leaves no game at all. The games already there show as checked and
 stay, and a preset or a name that is already in the list is not added twice. Run again from
 Settings › General, it only adds. Closing it sets `setupDone`, and it does not open by itself
-again; quitting SlyTerm while it is open brings it back at the next launch. The first launch of a
-version that has it stores `setupDone` as false on a fresh install and as true on one that already
+again. Quitting SlyTerm while it is open on the first run, whether with `⌘Q`, from its Reopen
+SlyTerm button or from macOS's Quit & Reopen after Screen Recording is allowed, brings it back at
+the next launch on the same step, with the same answer to "Do you play games" and the same presets
+checked (`setupResume`); a game being added by hand is not kept. AppKit closes every window as
+the app quits, so the assistant ignores that close rather than take it for finishing. The first
+launch of a version that has it stores `setupDone` as false on a fresh install and as true on one that already
 ran an earlier version (it has `frameEdge`, `sessionDirectories` or `lookupGamesVersion` stored), so
 existing installs never see it.
 
@@ -1373,7 +1377,8 @@ The app also keeps state of its own in the same domain, which is not worth editi
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
 the last floating page and the last floating video were), `sessionDirectories` and
 `sessionSelected` (the tabs to restore), `ghostHintsShown` (how many times the automatic switch to
-click-through has said so, up to 3), `lookupGamesVersion` and `lookupGames.v0` (see
+click-through has said so, up to 3), `setupResume` (the step and games of a first-run assistant
+that was quit, read once at the next launch), `lookupGamesVersion` and `lookupGames.v0` (see
 [Migration notes](#migration-notes)), and `migratedFormerDefaults`.
 
 `hotkeyQuest`, `questOpenInApp` and `questOpenInBackground` keep the names they were given when the

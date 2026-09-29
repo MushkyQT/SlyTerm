@@ -144,6 +144,10 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
                   activityCards: s.activityCards, tapFingers: s.tapFingers,
                   tapAction: s.tapGesture ? (known ? s.tapGestureAction : "ghost") : "")
             window.center()
+            if let saved = UserDefaults.standard.dictionary(forKey: Self.resumeKey) {
+                UserDefaults.standard.removeObject(forKey: Self.resumeKey)
+                resume(saved)
+            }
         }
         AppSwitcher.shared.windowOpened(window)
         NSApp.activate(ignoringOtherApps: true)
@@ -629,6 +633,27 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         return presets.map(LookupPresets.make) + custom.map {
             LookupGame(name: $0.name, appBundleIDs: $0.app.map { [$0] } ?? [], sources: $0.sources)
         }
+    }
+
+    private static let resumeKey = "setupResume"
+
+    // AppKit closes every window when the app quits, after applicationWillTerminate, which would
+    // count as finishing the first run. macOS quits the app to apply Screen Recording, so the step
+    // and the games chosen are kept for the next launch instead.
+    func keepForNextLaunch() {
+        guard window.isVisible, !Settings.shared.setupDone else { return }
+        closeReported = true
+        UserDefaults.standard.set(["step": step.rawValue, "playsGames": playsGames,
+                                   "presets": chosen.map(\.rawValue)], forKey: Self.resumeKey)
+    }
+
+    private func resume(_ saved: [String: Any]) {
+        guard let raw = saved["step"] as? Int, let savedStep = Step(rawValue: raw) else { return }
+        if let plays = saved["playsGames"] as? Bool { playsGames = plays }
+        let presets = saved["presets"] as? [String] ?? []
+        chosen = Set(presets.compactMap(LookupPresets.Preset.init(rawValue:)))
+        refreshGames()
+        go(to: savedStep)
     }
 
     // Ends a recording first, which re-registers the hotkeys; otherwise they stay off.

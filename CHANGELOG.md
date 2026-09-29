@@ -53,6 +53,9 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ### Fixed
 
+- Quitting during the first-run setup assistant, as macOS offers to after Screen Recording is
+  allowed, no longer skips it: SlyTerm reopens it at the next launch on the same step, with the
+  games already chosen.
 - In Settings › Shortcuts, each shortcut's name and Clear button sit level with its field.
 - macOS's Screen Recording prompt, asked for from the setup assistant, is no longer hidden behind
   the assistant.
