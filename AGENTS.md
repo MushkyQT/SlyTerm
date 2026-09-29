@@ -67,7 +67,8 @@ Read these before running anything.
   ID and submits to Apple's notary service: run it only when asked, and use `NOTARIZE=0` to check
   signing without submitting. `Tools/make-appcast.sh` without `--ed-key-file` reads the update key
   from the login keychain and puts a keychain dialog on the user's screen. Never dispatch the
-  Release workflow, publish a release or push a tag unless asked. A release-built copy launched
+  Release workflow, publish a release, push a tag or push to `MushkyQT/homebrew-tap` (its
+  publish job updates the cask there) unless asked. A release-built copy launched
   live checks the real feed: point `SLYTERM_FEED_URL` at a local feed for tests.
 - **`open slyterm://…` reaches the registered copy,** usually the installed one. Target the build
   under test with `open -g -a dist/SlyTerm.app "slyterm://…"`.

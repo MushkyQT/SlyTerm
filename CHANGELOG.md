@@ -9,6 +9,12 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## [Unreleased]
 
+### Added
+
+- SlyTerm can be installed with Homebrew: `brew install --cask mushkyqt/tap/slyterm`. The cask
+  follows each release.
+  ([#11](https://github.com/MushkyQT/slyterm/pull/11))
+
 ## [1.3.0] - 2026-09-29
 
 ### Added

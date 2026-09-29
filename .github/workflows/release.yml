@@ -210,3 +210,34 @@ jobs:
             gh release create "v$VERSION" --verify-tag --title "SlyTerm $VERSION" \
               --notes-file dist/notes.md "$dmg" dist/SlyTerm.dmg dist/appcast.xml
           fi
+
+      - name: Update the Homebrew cask
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          if [[ -z "$DEPLOY_KEY" ]]; then
+            echo "::warning::No HOMEBREW_TAP_DEPLOY_KEY, so MushkyQT/homebrew-tap keeps its cask."
+            exit 0
+          fi
+          sha=$(sha256sum "dist/SlyTerm-$VERSION.dmg" | cut -d' ' -f1)
+          ssh="$RUNNER_TEMP/ssh"
+          mkdir -m 700 "$ssh"
+          trap 'rm -rf "$ssh"' EXIT
+          (umask 077; printf '%s\n' "$DEPLOY_KEY" > "$ssh/key")
+          # GitHub's host keys from its API, over HTTPS, rather than trusting the first connection.
+          gh api meta --jq '.ssh_keys[]' | sed 's/^/github.com /' > "$ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh/key -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile=$ssh/known_hosts -o StrictHostKeyChecking=yes"
+          git clone -q --depth 1 git@github.com:MushkyQT/homebrew-tap.git "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          sed -i -E -e "s/^  version \".*\"$/  version \"$VERSION\"/" \
+            -e "s/^  sha256 \".*\"$/  sha256 \"$sha\"/" Casks/slyterm.rb
+          if git diff --quiet; then
+            echo "The cask already has SlyTerm $VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Update SlyTerm to $VERSION"
+          git push -q origin HEAD
+          echo "The cask now installs SlyTerm $VERSION"

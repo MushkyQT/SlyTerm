@@ -2242,8 +2242,8 @@ Tools/make-appcast.sh <dmg> <notes.html> <appcast.xml> [--ed-key-file <file>]
 
 Its jobs:
 
-1. **Check the signing secrets** (Ubuntu): a version given must be `X.Y.Z`, and the six secrets
-   below must be set. A missing one fails a release and skips a pull request's dry run.
+1. **Check the signing secrets** (Ubuntu): a version given must be `X.Y.Z`, and the six signing
+   secrets below, all but `HOMEBREW_TAP_DEPLOY_KEY`, must be set. A missing one fails a release and skips a pull request's dry run.
 2. **Build, sign and notarize** (macOS 26, with a read-only token): checks out the tag, or the pull
    request's head, and checks that its `Info.plist` has that version; imports the Developer ID
    certificate into a temporary keychain, with Apple's Developer ID G2 intermediate since the
@@ -2259,7 +2259,8 @@ Its jobs:
    `SlyTerm.dmg`, so that
    `https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg` is always the latest;
    and `appcast.xml`, the feed every copy reads at `releases/latest/download/appcast.xml`. When the
-   release already exists, it replaces those three assets and leaves its text as it is.
+   release already exists, it replaces those three assets and leaves its text as it is. It then
+   updates the Homebrew cask (see [Homebrew](#homebrew)).
 
 Each appcast lists only its own version, so the feed is always the latest release's.
 
@@ -2271,6 +2272,7 @@ Each appcast lists only its own version, so the feed is always the latest releas
 | `NOTARY_KEY_ID` | That key's ID |
 | `NOTARY_ISSUER_ID` | Its issuer ID |
 | `SPARKLE_PRIVATE_KEY` | The update key's private half, as `generate_keys --account SlyTerm -x <file>` exports it |
+| `HOMEBREW_TAP_DEPLOY_KEY` | The private half of an SSH deploy key with write access to `MushkyQT/homebrew-tap` only; without it the cask is left as it is, with a warning |
 
 `.github/workflows/tag.yml`, the Tag workflow, runs when a push to `main` changes
 `Resources/Info.plist`. When `v<version>` is not tagged yet, it tags `main` and calls Release with
@@ -2282,6 +2284,26 @@ same version and `publish` on:
 ```sh
 gh workflow run release.yml -f version=1.3.0 -f publish=true
 ```
+
+### Homebrew
+
+SlyTerm is not in Homebrew's own casks yet: a cask submitted by an app's author needs 225 stars, 90
+forks or 90 watchers, and a repository at least 30 days old. It is in a tap,
+[MushkyQT/homebrew-tap](https://github.com/MushkyQT/homebrew-tap), as `Casks/slyterm.rb`:
+
+```sh
+brew install --cask mushkyqt/tap/slyterm
+```
+
+The cask installs `SlyTerm-<version>.dmg` from the release, checked against its SHA-256, on macOS 14
+or later. It declares `auto_updates`, so `brew upgrade` leaves the app to Sparkle, and its
+`livecheck` reads the version from the appcast. `brew uninstall` quits SlyTerm first; `--zap` also
+removes the files in [Files on disk](#files-on-disk) that belong to it.
+
+After publishing, the Release workflow's last step sets the cask's `version` and `sha256` to the
+new DMG and pushes the change to the tap, signed in with the `HOMEBREW_TAP_DEPLOY_KEY` deploy key.
+It checks GitHub's SSH host keys against the list from GitHub's API, and pushes nothing when the
+cask already has that version, as on a retried release.
 
 ## Migration notes
 
