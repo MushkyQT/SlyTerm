@@ -48,6 +48,11 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   "Above the menu bar" and "Above everything, for games that cover the terminal"; the stored
   values are unchanged.
 
+### Fixed
+
+- macOS's Screen Recording prompt, asked for from the setup assistant, is no longer hidden behind
+  the assistant.
+
 ## [1.2.0] - 2026-09-28
 
 ### Added

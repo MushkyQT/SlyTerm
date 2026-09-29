@@ -1244,7 +1244,9 @@ A fresh install opens a four-step window, and the terminal first appears when it
    has one. Under the list, whether Screen Recording is granted, and a button that asks macOS for
    it (nothing is captured), or, when it was granted since SlyTerm opened, **Reopen SlyTerm** (see
    [Permission and caches](#permission-and-caches)). Reopening from here brings the assistant back
-   at the next launch, since it was not finished.
+   at the next launch, since it was not finished. macOS shows its prompt below the assistant's
+   raised level while SlyTerm stays the active app, so the assistant drops to the normal level
+   when it asks, and goes back up when SlyTerm is activated again or the step changes.
 3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
    on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
 4. **Done**: the main shortcuts as chosen (the click-through one as "takes you back to the

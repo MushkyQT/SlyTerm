@@ -489,6 +489,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
 
     private func go(to next: Step) {
         window.makeFirstResponder(nil)
+        if NSApp.isActive { window.level = level }
         step = next
         for (key, page) in pages { page.isHidden = key != next }
         dots.current = next.rawValue
@@ -866,6 +867,9 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
             (NSApp.delegate as? AppDelegate)?.reopen()
             return
         }
+        // macOS shows its prompt below the raised assistant and SlyTerm stays active under it, so
+        // the window steps down until the app is activated again or the step changes.
+        window.level = .normal
         // Only asks for the permission; nothing is captured here.
         CGRequestScreenCaptureAccess()
         refreshCapture()
