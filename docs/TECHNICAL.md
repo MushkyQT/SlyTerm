@@ -87,9 +87,9 @@ does not count. Turn this off in Settings › Window ("Switch to click-through w
 loses focus") if you would rather switch modes only by hand.
 
 The first three automatic switches say why the terminal stopped typing: a toast by the strip's
-corner, orange, for 4 seconds, "Click-through: clicks and keys go to the game. ⌃⌥Tab or the eye
-button to type here." (the click-through shortcut as set, or "The eye button to type here." when
-it has none). It shows only when the keyboard went to another app: the hotkey, the eye button and
+corner, orange, for 4 seconds, "Click-through mode enabled. ⌃⌥Tab to toggle focus on SlyTerm."
+(the click-through shortcut as set, or "The eye button toggles focus on SlyTerm." when it has
+none). It shows only when the keyboard went to another app: the hotkey, the eye button and
 the tap never show it, nor do panic, hiding the SlyTerm window with a floating one up, closing a
 floating window that had the keyboard, or a window of SlyTerm's own such as Settings taking the
 keyboard; with the setting off nothing does. The count is kept in `ghostHintsShown`. The toast is

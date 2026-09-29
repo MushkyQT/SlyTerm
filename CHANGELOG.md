@@ -12,8 +12,8 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
   say it needs a reopen and offer a Reopen SlyTerm button.
 - The first three times the overlay switches to click-through by itself because another app took
-  the keyboard, an orange note by the tab strip says that clicks and keys now go to the game and
-  which key or button brings the terminal back. In click-through with nothing else to report, the
+  the keyboard, an orange note by the tab strip says that click-through is on and which shortcut
+  brings the focus back to SlyTerm. In click-through with nothing else to report, the
   strip reads "click-through".
 - The menu bar item has Shortcuts…, which opens Settings on its Shortcuts tab, Help, which opens
   the README's shortcut list, and About SlyTerm, which shows the version.
