@@ -17,7 +17,12 @@
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key><string>SlyTerm closes the iTerm2 or Terminal tab a session came from, once the session is here.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Programs run in SlyTerm's terminals, such as a coding agent's voice input, use the microphone through SlyTerm.</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+    <key>SUPublicEDKey</key><string>ZPOJFryXu0cHRtqEQW/XJvXsJvh9R1FOaPc3rVRpyFs=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SURequireSignedFeed</key><true/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
