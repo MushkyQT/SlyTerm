@@ -53,6 +53,9 @@ jobs:
         id: check
         env:
           PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          FORK: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name != github.repository }}
           VERSION: ${{ inputs.version }}
           PRESENT: >-
             ${{ secrets.DEVELOPER_ID_P12 != '' && secrets.DEVELOPER_ID_P12_PASSWORD != '' &&
@@ -65,9 +68,9 @@ jobs:
           fi
           if [[ "$PRESENT" == true ]]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$PULL_REQUEST" == true ]]; then
+          elif [[ "$FORK" == true ]]; then
             # Pull requests from forks get no secrets.
-            echo "::notice::No signing secrets here, so the release dry run is skipped."
+            echo "::notice::No signing secrets for a fork, so the release dry run is skipped."
           else
             echo "::error::A signing secret is missing."
             exit 1
@@ -78,7 +81,8 @@ jobs:
     needs: check
     if: needs.check.outputs.ready == 'true'
     runs-on: macos-26
-    timeout-minutes: 60
+    # A team's first notarization took 43 minutes; later ones take a few.
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash
@@ -169,6 +173,7 @@ jobs:
             dist/appcast.xml
             dist/notes.md
           if-no-files-found: error
+          overwrite: true
           retention-days: 14
 
       - name: Remove the keychain and the keys

@@ -319,7 +319,9 @@ final class GeneralPane: SettingsPane, NSTextFieldDelegate {
                     + "and opens nothing over the game. One downloaded automatically is installed "
                     + "when SlyTerm quits."),
             checkNow,
-        ] : [caption("This copy was built from source and does not update itself.")]
+        ] : [caption(Updater.isAvailable
+                     ? "Updates could not start. The log in ~/Library/Logs/SlyTerm.log says why."
+                     : "This copy was built from source and does not update itself.")]
         return grid([
             section("Launch", [restoreSession, startupAnimation,
                                button("Run Setup Assistant…", #selector(runSetupAssistant))]),

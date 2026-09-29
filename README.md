@@ -196,10 +196,10 @@ Settings.
 
 ## Install
 
-[Download SlyTerm](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg),
-open the DMG and drag SlyTerm to Applications, then open it from there. It needs macOS 14 Sonoma or
-later and runs on Apple silicon and Intel Macs. Every version, with what changed in it, is on the
-[Releases](https://github.com/MushkyQT/SlyTerm/releases) page.
+[Download SlyTerm](https://github.com/MushkyQT/SlyTerm/releases/latest/download/SlyTerm.dmg), open
+the DMG and drag SlyTerm to Applications, then open it from there. It needs macOS 14 Sonoma or later
+and runs on Apple silicon and Intel Macs. Every version from 1.3.0 on, with what changed in it, is
+on the [Releases](https://github.com/MushkyQT/SlyTerm/releases) page.
 
 Look for the icon in the menu bar: a terminal window with a smirk.
 
@@ -293,7 +293,8 @@ or each tap also opens a dictionary panel.
 ## Credits
 
 Terminal emulation is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza.
-Updates are installed by [Sparkle](https://sparkle-project.org), under the MIT License.
+Updates are installed by [Sparkle](https://sparkle-project.org). The licences of SlyTerm, SwiftTerm
+and Sparkle are inside the app, in `Contents/Resources/Licenses`.
 The lookup presets open pages from the [Dofus Wiki](https://dofuswiki.fandom.com), the
 [129Dofus Wiki](https://129dofus.fandom.com), [DofusDB](https://dofusdb.fr),
 [Wowhead](https://www.wowhead.com), the

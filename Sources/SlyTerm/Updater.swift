@@ -90,8 +90,8 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
         AppSwitcher.shared.windowOpened(window)
         Settings.log("updates: \"\(window.title)\" shown above the overlay"
                      + (asked ? "" : ", though nobody asked for it"))
-        // A click in the menu bar item leaves SlyTerm inactive, and the window would stay hidden.
-        // Only the first window after a click: later ones must not take the game's keyboard.
+        // A menu bar click leaves SlyTerm inactive and the window hidden. Only the first after a
+        // click: Sparkle itself still activates the app when a check it ran finds an update.
         guard bringForward else { return }
         bringForward = false
         NSApp.activate(ignoringOtherApps: true)
@@ -102,18 +102,16 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate
         if let window = note.object as? NSWindow, windows.contains(window) { release(window) }
     }
 
-    // Sparkle closes one window just before it opens the next (checking, then the update or an
-    // alert): the hold keeps SlyTerm in the Dock for it. A closed window leaves AppSwitcher at once,
-    // or its Dock hand-off could bring it back with nothing behind it (seen live).
+    // Sparkle closes a window just before it opens the next: the hold keeps the Dock icon for it. A
+    // window kept in AppSwitcher after closing came back from its Dock hand-off, dead (seen live).
     private func release(_ window: NSWindow) {
         windows.removeAll { $0 === window }
         AppSwitcher.shared.hold(for: 0.5)
         AppSwitcher.shared.windowClosed(window)
     }
 
-    // runModal puts the alert at the modal panel level, under the overlay, and again at each
-    // activation. Sparkle runs it from a main queue block, so a block queued on the main queue
-    // waits until the alert is gone; one on the run loop in its modal mode runs while it is up.
+    // runModal resets the alert to the modal panel level, under the overlay, at each activation.
+    // Sparkle runs it inside a main queue block, so only the run loop's modal mode reaches it.
     func standardUserDriverWillShowModalAlert() {
         alertPending = true
         RunLoop.main.perform(inModes: [.modalPanel]) { [weak self] in self?.raiseAlert() }

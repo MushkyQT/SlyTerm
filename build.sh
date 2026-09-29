@@ -31,6 +31,11 @@ else
 fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/StatusItemIcon.pdf Resources/AppIcon.icns "$APP/Contents/Resources/"
+# Sparkle's licence asks binary copies to carry it, bsdiff's terms included.
+mkdir "$APP/Contents/Resources/Licenses"
+cp LICENSE "$APP/Contents/Resources/Licenses/SlyTerm.txt"
+cp .build/checkouts/SwiftTerm/LICENSE "$APP/Contents/Resources/Licenses/SwiftTerm.txt"
+cp .build/artifacts/sparkle/Sparkle/LICENSE "$APP/Contents/Resources/Licenses/Sparkle.txt"
 for bundle in $products/*.bundle; do
   [ -e "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
@@ -66,11 +71,13 @@ if $release; then
   fi
   notarize() {
     local result id state
-    result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --output-format json) || true
+    result=$(xcrun notarytool submit "$1" "${notary[@]}" --wait --timeout 90m \
+      --output-format json) || true
     id=$(plutil -extract id raw -o - - <<<"$result" 2>/dev/null) || id=
     state=$(plutil -extract status raw -o - - <<<"$result" 2>/dev/null) || state=
     if [[ "$state" != Accepted ]]; then
       echo "Notarization of $1 failed: ${state:-no status}" >&2
+      rm -f "$1"
       if [[ -n "$id" ]]; then
         xcrun notarytool log "$id" "${notary[@]}" >&2
       else
@@ -90,18 +97,19 @@ if $release; then
     exit 1
   }
 
+  zip=dist/SlyTerm.zip stage=dist/dmg
+  trap 'rm -rf "$zip" "$stage"' EXIT
   if [[ "${NOTARIZE:-1}" != 0 ]]; then
-    zip=dist/SlyTerm.zip
     ditto -c -k --keepParent "$APP" "$zip"
     notarize "$zip"
     rm "$zip"
     retry xcrun stapler staple -q "$APP"
   fi
 
-  version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+  version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+    "$APP/Contents/Info.plist")
   DMG=dist/SlyTerm-$version.dmg
-  stage=dist/dmg
-  rm -rf "$stage" "$DMG"
+  rm -rf "$stage" dist/SlyTerm-*.dmg(N)
   mkdir "$stage"
   ditto "$APP" "$stage/SlyTerm.app"
   ln -s /Applications "$stage/Applications"

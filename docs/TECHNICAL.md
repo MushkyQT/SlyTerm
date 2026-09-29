@@ -1318,11 +1318,16 @@ latest release (see [Releases on GitHub](#releases-on-github)).
 - **Sparkle's windows.** The update window and the progress window come up like About: one level
   above the overlay, hidden while another app is active, with SlyTerm in the Dock and ⌘Tab while
   one is open. A click in the menu bar item leaves SlyTerm inactive, so the first window after one
-  of the clicks above brings SlyTerm to the front; later ones in the same session do not, and a
-  download that finishes after the player went back to the game does not take its keyboard (its
-  window waits behind the Dock icon). `Updater` finds them by their Sparkle window controllers when they become key or
-  visible, and lets go of one half a second after it closes, since Sparkle closes one window just
-  before it opens the next and letting go at once would take SlyTerm out of the Dock and back.
+  of the clicks above brings SlyTerm to the front. `Updater` does not bring later ones forward, but
+  Sparkle does in one case: when a check the player started finds an update, Sparkle activates
+  SlyTerm to show it, even if the player went back to the game during the second or two the check
+  took, and no delegate call can stop that. A download that finishes after the player went back
+  to the game does not take the keyboard: its window waits behind the Dock icon, which bounces
+  once. `Updater` finds Sparkle's windows by their window controllers when they become key or
+  visible. When one closes it leaves `AppSwitcher` at once, and `AppSwitcher.hold(for:)` keeps
+  SlyTerm in the Dock for half a second, since Sparkle closes one window just before it opens the
+  next; a closed window kept registered was brought back by the Dock hand-off below, with nothing
+  behind it.
   Sparkle's alerts (up to date, errors) are `NSAlert`s run modally, raised the way the quit
   confirmation is: to the alert level, two above the overlay, once the modal session runs and
   after each activation change (see [Windows and focus](#windows-and-focus)). They put SlyTerm in
@@ -1334,10 +1339,11 @@ latest release (see [Releases on GitHub](#releases-on-github)).
   closed at once.
 - **Installing.** An update installed from Sparkle's window relaunches SlyTerm through the usual
   quit: the quit confirmation comes up when several tabs are open or one runs a command, with Send
-  Back and Quit when a tab runs an agent, and Cancel keeps SlyTerm open. The tabs are saved as for
-  any quit and come back at the relaunch while "Restore tabs from the last session" is on. With
-  "Download and install updates automatically" on, Sparkle downloads an update in the background
-  and installs it when SlyTerm quits.
+  Back and Quit when a tab runs an agent. Cancel keeps SlyTerm open, and Sparkle's installer keeps
+  waiting: the update is installed at the next quit, and SlyTerm relaunches. The tabs are saved as
+  for any quit and come back at the relaunch while "Restore tabs from the last session" is on. With
+  "Download and install updates automatically" on, Sparkle downloads an update in the background and
+  installs it when SlyTerm quits.
 - **What an update has to pass.** The DMG's EdDSA signature against `SUPublicEDKey` in
   `Info.plist`, checked before anything is extracted (`SUVerifyUpdateBeforeExtraction`); the
   feed's own signature, made with the same key, which `SURequireSignedFeed` makes Sparkle require,
@@ -1843,13 +1849,14 @@ swiftc -O /tmp/main.swift Sources/SlyTerm/StartupAnimation.swift -o /tmp/make-re
 - Settings and the setup assistant are ordinary windows one level above the overlay while SlyTerm is
   active, and at the normal level when it is not, so they go behind the app you switch to. While
   either is open, `AppSwitcher` makes SlyTerm a regular app, with a Dock icon, a place in `⌘Tab` and
-  an app menu (Quit, an Edit menu, Close); when the last one closes it is an accessory again and the
-  menu is removed. The menu sees `⌘C`, `⌘V`, `⌘W` and the rest before the overlay's key handler,
-  so its Edit items and Close are enabled only while Settings, the assistant or a sheet on them is
-  key; a disabled item lets the key through to the terminal. An app that is already active when it
-  turns regular keeps the previous app's menu bar, so in that case activation goes to the Dock and
-  comes back 0.2 s later. About and Sparkle's windows and alerts are registered with `AppSwitcher`
-  in the same way (see [Updates](#updates)).
+  an app menu (Quit, an Edit menu, Close); when the last one closes, and no hold from the updater is
+  running, it is an accessory again and the menu is removed. The menu sees `⌘C`, `⌘V`, `⌘W` and the
+  rest before the overlay's key handler, so its Edit items and Close are enabled only while
+  Settings, the assistant or a sheet on them is key; a disabled item lets the key through to the
+  terminal. An app that is already active when it turns regular keeps the previous app's menu bar,
+  so in that case activation goes to the Dock and comes back 0.2 s later, to the newest window still
+  registered: the one that asked may have been replaced by then. About and Sparkle's windows and
+  alerts are registered with `AppSwitcher` in the same way (see [Updates](#updates)).
 - The quit confirmation and the confirmation before interrupting an agent run through
   `NSAlert.runModal(level:)`, two levels above the overlay. `runModal` puts an alert at the modal
   panel level, below the overlay and Settings, and does it again each time the app activates, so
@@ -2110,9 +2117,11 @@ in one of two ways.
 `./build.sh`, or `./build.sh --install`, which then copies the app to `/Applications` with `ditto`:
 
 1. `swift build -c release`, for the Mac's own architecture only.
-2. `dist/SlyTerm.app` gets the binary, `Resources/Info.plist`, the icons, the package's resource
-   bundles, and `Sparkle.framework` in `Contents/Frameworks`, copied with `ditto` to keep its
-   symlinks and without its XPC services, which only sandboxed apps use.
+2. `dist/SlyTerm.app` gets the binary, `Resources/Info.plist`, the icons, the licences of
+   SlyTerm, SwiftTerm and Sparkle in `Contents/Resources/Licenses` (Sparkle's asks binary copies to
+   carry it), the package's resource bundles, and `Sparkle.framework` in `Contents/Frameworks`,
+   copied with `ditto` to keep its symlinks and without its XPC services, which only sandboxed apps
+   use.
 3. It is signed inside out, never with `--deep`: Sparkle's `Autoupdate`, its `Updater.app`, the
    framework, then the app with `Resources/SlyTerm.entitlements`. `codesign --verify --deep
    --strict` checks the result.
@@ -2141,11 +2150,14 @@ Sparkle in `Contents/Frameworks`.
    `CODESIGN_IDENTITY`, with `--options runtime --timestamp`.
 4. The app is zipped with `ditto -c -k --keepParent`, notarized (`notarytool submit --wait`) and
    stapled.
-5. `dist/SlyTerm-<version>.dmg`, with the version from `Resources/Info.plist`, is made with
+5. `dist/SlyTerm-<version>.dmg`, with the version from the built app's `Info.plist`, is made with
    `hdiutil create` (UDZO, volume name SlyTerm) from a folder holding the stapled app and an
    `Applications` symlink. The DMG is signed with `--timestamp`, notarized and stapled.
 
-A submission that is not accepted prints its `notarytool log` and stops the build. `stapler staple`
+A submission that is not accepted within 90 minutes (`--timeout 90m`; a team's first can take
+most of an hour, later ones a few minutes) prints its `notarytool log`, is deleted from `dist/`,
+and stops the build; an exit trap removes the zip and the DMG's folder in any case, and a release
+build first removes older DMGs from `dist/`. `stapler staple`
 and `hdiutil create` are tried up to three times, 15 s apart: a new ticket can take a moment to
 reach the servers stapler asks, and `hdiutil` on CI runners now and then fails with "Resource
 busy". Stapling changes the DMG, so its update signature is made afterwards, by
@@ -2179,6 +2191,10 @@ which blocks both of these without it:
   macOS attributes the programs run in a tab to SlyTerm, so a coding agent's voice input asks for
   the microphone on SlyTerm's behalf.
 
+Nothing else is granted. Under the hardened runtime, a program in a tab that asks for the camera,
+contacts, calendars, photos or location is refused without a prompt, as SlyTerm has none of those
+entitlements; a plain build, without the runtime, does not have that limit.
+
 ### The update feed and the release notes
 
 The update key is an EdDSA key pair made with Sparkle's `generate_keys`. Its public half is
@@ -2203,8 +2219,8 @@ Tools/make-appcast.sh <dmg> <notes.html> <appcast.xml> [--ed-key-file <file>]
   (`sign_update` puts that signature in a comment at its end, which `SURequireSignedFeed` needs) and
   verifies both signatures. `sign_update` verifies with the key it was given, so the script also
   checks the DMG's signature against `SUPublicEDKey` with CryptoKit: a feed signed with any other
-  key would be refused by every copy of the app, and fails here instead. The DMG must be named `SlyTerm-<version>.dmg` after
-  `Resources/Info.plist`, and the URL is
+  key would be refused by every copy of the app, and fails here instead. The DMG must be named
+  `SlyTerm-<version>.dmg` after `Resources/Info.plist`, and the URL is
   `https://github.com/MushkyQT/SlyTerm/releases/download/v<version>/SlyTerm-<version>.dmg`, or
   `SLYTERM_DOWNLOAD_URL`. With `--ed-key-file` the private key comes from that file, as in CI;
   without it, `sign_update --account SlyTerm` reads it from the login keychain, and macOS shows a
@@ -2220,8 +2236,9 @@ Tools/make-appcast.sh <dmg> <notes.html> <appcast.xml> [--ed-key-file <file>]
 - **On a pull request** that changes `build.sh`, either Tools script above, `release.yml`,
   `tag.yml`, `Package.swift`, `Package.resolved`, `Resources/Info.plist` or
   `Resources/SlyTerm.entitlements`: a dry run of the pull request's head, signed and notarized,
-  never published. A branch of this repository gets the signing secrets; a pull request from a fork
-  gets none, and the run is skipped with a notice. A new push cancels the dry run in progress.
+  never published. A branch of this repository gets the signing secrets, and the run fails if one
+  is missing, so a green dry run means the release will sign; a pull request from a fork gets
+  none, and the run is skipped with a notice. A new push cancels the dry run in progress.
 
 Its jobs:
 
