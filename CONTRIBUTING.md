@@ -159,14 +159,17 @@ Match the code around you. In particular:
 
 ## Documentation
 
-- **README.md** is the product page. It says what a feature does for a player in a few sentences.
-  No setting keys, no internals, no edge cases.
+- **README.md** is the product page. It says what a feature does for a player in two or three
+  sentences. No setting keys, no internals, no edge cases. Keep its `## Shortcuts` heading: the
+  app's Help item opens that section.
+- **docs/GUIDE.md** is the player's guide: each feature in full, with the edge cases a player
+  meets, but still no setting keys or internals.
 - **docs/TECHNICAL.md** is the reference: behaviour in detail, every setting, the URL scheme, the
   command-line modes, troubleshooting and the architecture.
 - **CHANGELOG.md** lists what changed in each version, with a link to the pull request for each
   line. Leave out changes nobody would notice, such as a comment or a rename inside one file.
 
-Update all three in the same pull request as the behaviour they describe.
+Update all four in the same pull request as the behaviour they describe.
 
 ## Commits and pull requests
 
@@ -213,7 +216,7 @@ To make it a preset that ships with the app:
 5. Check it with `--probe`, `--index`, `--search "<name>" --preset <preset>` and
    `--guide-snapshot`, then with screenshots of the game through `--ocr --at`. Keep the
    screenshots out of the repository.
-6. Add the game to the presets in docs/TECHNICAL.md and to the list in the README.
+6. Add the game to the presets in docs/TECHNICAL.md and to the lists in docs/GUIDE.md and the README.
 
 Game and site names belong to their owners. A preset only opens public pages; it must never log
 in, scrape behind a login or get around a site's rate limits.

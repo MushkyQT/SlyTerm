@@ -21,6 +21,6 @@ Not verified:
 session. -->
 -
 
-- [ ] README.md and docs/TECHNICAL.md describe the change
+- [ ] README.md, docs/GUIDE.md and docs/TECHNICAL.md describe the change
 - [ ] CHANGELOG.md has its lines under `[Unreleased]`
 - [ ] It keeps to the [principles](https://github.com/MushkyQT/slyterm/blob/main/docs/TECHNICAL.md#principles)
