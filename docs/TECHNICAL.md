@@ -289,8 +289,8 @@ tab: for Claude Code, Return for the highlighted "Yes" and Escape for "No"; for 
 - and the agent is still the program running in the tab.
 
 Otherwise a small toast says why and nothing is typed ("Claude is not the program running in
-slyterm"). Every orange toast here stays 3.5 seconds, "Refused: …" included; the green
-"Allowed: …" stays 1.6. So a prompt that changed while you reached
+slyterm"). A toast that says why stays 3.5 seconds; "Allowed: …" and "Refused: …" stay 1.6. So
+a prompt that changed while you reached
 for the key wants another look at the card first, and some prompts always want the terminal: a
 question, which is never answered blind (the card says to press `⌃⌥Tab`), a plan to approve, a
 subagent asking for something, and several calls issued at once, where the transcript cannot say

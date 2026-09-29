@@ -7,6 +7,44 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## [Unreleased]
 
+### Added
+
+- When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
+  say it needs a reopen and offer a Reopen SlyTerm button.
+- The first three times the overlay switches to click-through by itself, an orange note by the
+  tab strip says that clicks and keys now go to the game and which key or button brings the
+  terminal back. In click-through with nothing else to report, the strip reads "click-through".
+- The menu bar item has Shortcuts…, which opens Settings on its Shortcuts tab, Help, which opens
+  the README's shortcut list, and About SlyTerm, which shows the version.
+- Settings has a Web tab: the search address, pausing videos, the opacity of a playing video, a
+  page zoom slider for every web tab and where guides open.
+- Settings › General sets how long a finished card stays, and Settings › Terminal how many lines
+  of scrollback a new tab keeps.
+
+### Changed
+
+- The setup assistant calls the permission Screen Recording, as System Settings does, and says
+  that SlyTerm needs to be reopened after it is allowed.
+- The setup assistant's last step says that clicking into the game switches to click-through by
+  itself, and names the click-through shortcut as the way back to the terminal.
+- A floating web window's toolbar shows the mode, as the strip does: a green dot in interact mode,
+  an orange dot on the strip's click-through colour in click-through. A click on its address field
+  in click-through says which shortcut to press to type there.
+- The lookup's message names the site that answered ("Guide: Dragon scimitar · OSRS Wiki") and,
+  when nothing matched, the game it asked. When no game claims the app in front, another game
+  names an app and the first game answered, a second line says so. Pick mode's hint names the
+  site it looks things up on.
+- Tab names stay readable on a narrow strip: the expand button makes way when tabs would be under
+  40 pt, the selected tab's × waits for the pointer when it would hide the name, and a very narrow
+  tab shows the first three letters of its name. The tooltip has the full name.
+- The activity card's key line is larger and brighter, with the shortcuts in bold ("⌃⌥Y Allow ·
+  ⌃⌥N Refuse · ⌃⌥Tab Look"), and the card's title is larger. The toasts that say why an answer key
+  did nothing stay 3.5 seconds.
+- Settings › General is grouped as Launch, Agents and Quitting, and Settings › Shortcuts lists the
+  main keys inside SlyTerm. The window levels in Settings › Window read "Above other windows",
+  "Above the menu bar" and "Above everything, for games that cover the terminal"; the stored
+  values are unchanged.
+
 ## [1.2.0] - 2026-09-28
 
 ### Added

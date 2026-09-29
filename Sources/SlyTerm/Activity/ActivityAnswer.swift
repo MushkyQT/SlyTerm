@@ -125,7 +125,7 @@ enum ActivityAnswer {
             Activity.card?.dismiss(tab: tab.id)
             Activity.host?.clearAttention(tab)
             toast("\(answer.verb.capitalized): \(summary)", tint: answer == .allow ? .systemGreen : .systemOrange,
-                  duration: answer == .allow ? 1.6 : 3.5)
+                  duration: 1.6)
         case .question:
             // Never answered: Return would pick the highlighted option, which nobody chose.
             Settings.log("answer: \(answer.verb) ignored, \(name) asks a question in \(tab.title)")
