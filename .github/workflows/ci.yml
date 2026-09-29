@@ -43,6 +43,15 @@ jobs:
               written "$out/pick-$(basename "$shot")"
             done
 
+      - name: App bundle
+        timeout-minutes: 15
+        run: |
+          ./build.sh
+          codesign --verify --deep --strict dist/SlyTerm.app
+          # The bundle's own binary has to find Sparkle in Contents/Frameworks to get this far.
+          dist/SlyTerm.app/Contents/MacOS/SlyTerm --strip-snapshot "$RUNNER_TEMP/bundle-strip.png"
+          test -s "$RUNNER_TEMP/bundle-strip.png"
+
       - name: Upload snapshots
         if: always()
         uses: actions/upload-artifact@v7
