@@ -109,7 +109,10 @@ future macOS update could stop it; that pane then says "Unavailable" and the hot
 macOS cannot be told to ignore the tap, so in System Settings › Trackpad › Point & Click set "Look
 up & data detectors" to Force Click or off, otherwise every tap also opens a dictionary panel. One
 tuning key has no control: `tapAlignment` (max vertical spread, default 0.50 of the trackpad
-height, 1 disables the check). Enable `debug` and tap a few times to see in
+height, 1 disables the check). While the [setup assistant](#the-setup-assistant) is open, on any
+step, a tap only tells it, for its try-it line, and the log says "held while the setup assistant is
+open": hiding the terminal or covering the screen behind that window would be confusing. The
+assistant's Shortcuts step also warns when macOS Look up is on the three-finger tap. Enable `debug` and tap a few times to see in
 `~/Library/Logs/SlyTerm.log` why a tap was or was not recognised.
 
 ### Tab bar
@@ -1243,14 +1246,27 @@ A fresh install opens a four-step window, and the terminal first appears when it
    at the next launch, since it was not finished. macOS shows its prompt below the assistant's
    raised level while SlyTerm stays the active app, so the assistant drops to the normal level
    when it asks, and goes back up when SlyTerm is activated again or the step changes.
-3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
-   on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
+3. **Shortcuts**: first the [trackpad tap](#trackpad-tap), "Tap with [2–5] fingers to [action]"
+   with the Trackpad pane's choices, and under it "Tap the trackpad with three fingers to try it."
+   (the count as a word). A tap while the assistant is open turns that into a green "Tap
+   recognised. It will …" naming the chosen action, and does nothing else. With three fingers and
+   macOS Look up on the three-finger tap, the line is instead the orange "macOS also opens Look up
+   on a three-finger tap." with **Open Trackpad Settings…**; SlyTerm reads
+   `TrackpadThreeFingerTapGesture` from `com.apple.AppleMultitouchTrackpad` and
+   `com.apple.driver.AppleBluetoothMultitouch.trackpad` (nonzero in either is on, anything
+   unreadable off) when the step opens, the finger count changes or SlyTerm is activated again.
+   With the tap off there is no line; with no trackpad, or the framework unavailable, no row.
+   Then show / hide, click-through and panic, plus the lookup and pick keys when games are on and
+   Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
 4. **Done**: the main shortcuts as chosen (the click-through one as "takes you back to the
-   terminal"), a caption saying that clicking into the game switches to click-through by itself
+   terminal"), and while the tap is on and there is a trackpad, a row such as "Three-finger tap
+   takes you back to the terminal" right after the hotkey with the same action (last for
+   Fullscreen); a caption saying that clicking into the game switches to click-through by itself
    (only while that setting is on), **Open Settings** and **Start**.
 
 Nothing is saved until **Start** or **Open Settings** on the last step; closing the window keeps
-everything as it was. A new game list starts with the Dofus preset: on the first run it stays only
+everything as it was, except the trackpad tap, which is saved as soon as it changes so that the
+try-it counts the new fingers. A new game list starts with the Dofus preset: on the first run it stays only
 if Dofus is checked, so "No" leaves no game at all. The games already there show as checked and
 stay, and a preset or a name that is already in the list is not added twice. Run again from
 Settings › General, it only adds. Closing it sets `setupDone`, and it does not open by itself

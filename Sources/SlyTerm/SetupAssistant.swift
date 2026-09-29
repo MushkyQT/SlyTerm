@@ -25,7 +25,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     }
 
     private static let width: CGFloat = 560
-    private static let height: CGFloat = 500
+    private static let height: CGFloat = 540
     private static let margin: CGFloat = 40
 
     private let window: NSWindow
@@ -48,6 +48,23 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private var captureAllowed: () -> Bool = { CGPreflightScreenCaptureAccess() }
     private var captureAllowedAtLaunch: () -> Bool = { Lookup.captureGrantedAtLaunch }
     private var canReopen: () -> Bool = { ScreenRecording.canReopen }
+    private var tapFingers = 3
+    private var tapAction = ""
+    private var tapSeen = false
+    private var hasTrackpad: () -> Bool = { TrackpadTapDetector.shared.hasTrackpad }
+    private var lookUpOnTap: () -> Bool = { SetupAssistant.lookUpOnThreeFingerTap() }
+    private var saveTap: (Int, String) -> Void = { SetupAssistant.saveTap(fingers: $0, action: $1) }
+
+    private static let tapActions: [(title: String, value: String, effect: String, done: String)] = [
+        ("Off", "", "", ""),
+        ("Toggle click-through", "ghost", "switch between the game and the terminal",
+         "takes you back to the terminal"),
+        ("Show or hide the terminal", "toggle", "show or hide SlyTerm", "shows or hides SlyTerm"),
+        ("Panic mode", "panic", "cover the screen with an opaque terminal",
+         "covers the screen with an opaque terminal"),
+        ("Fullscreen", "fullscreen", "fill the screen with the terminal",
+         "fills the screen with the terminal"),
+    ]
 
     private let dots = StepDots()
     private let icon = NSImageView()
@@ -83,6 +100,12 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     private var recorders: [HotkeyAction: HotkeyRecorderView] = [:]
     private var warnings: [HotkeyAction: NSTextField] = [:]
     private var shortcutRows: [HotkeyAction: [NSGridRow]] = [:]
+    private let tapSection = NSStackView()
+    private let tapFingersPopup = NSPopUpButton()
+    private let tapActionPopup = NSPopUpButton()
+    private let tapStatus = NSTextField(labelWithString: "")
+    private var tapStatusRow = NSStackView()
+    private var openTrackpad = NSButton()
 
     private let doneLines = NSGridView()
 
@@ -103,6 +126,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
                                queue: .main) { [weak self] _ in
                 guard let self else { return }
                 window.level = level
+                if step == .shortcuts { refreshTap() }
             },
         ]
     }
@@ -114,8 +138,11 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         if opening {
             var combos: [HotkeyAction: String] = [:]
             for action in HotkeyAction.allCases { combos[action] = Settings.shared.hotkey(action) }
-            reset(existing: LookupStore.shared.games, firstRun: !Settings.shared.setupDone,
-                  combos: combos, activityCards: Settings.shared.activityCards)
+            let s = Settings.shared
+            let known = Self.tapActions.contains { $0.value == s.tapGestureAction }
+            reset(existing: LookupStore.shared.games, firstRun: !s.setupDone, combos: combos,
+                  activityCards: s.activityCards, tapFingers: s.tapFingers,
+                  tapAction: s.tapGesture ? (known ? s.tapGestureAction : "ghost") : "")
             window.center()
         }
         AppSwitcher.shared.windowOpened(window)
@@ -127,7 +154,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
     var isVisible: Bool { window.isVisible }
 
     private func reset(existing: [LookupGame], firstRun: Bool, combos: [HotkeyAction: String],
-                       activityCards: Bool) {
+                       activityCards: Bool, tapFingers: Int, tapAction: String) {
         // A fresh list holds only the Dofus game LookupStore seeds. The first run treats it as not
         // added: kept if Dofus is checked, removed otherwise. Anything else is the user's own.
         let seeded = existing.count == 1 && existing[0].preset == LookupPresets.Preset.dofus.rawValue
@@ -138,6 +165,9 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         customGames = []
         pending = combos
         self.activityCards = activityCards
+        self.tapFingers = tapFingers
+        self.tapAction = tapAction
+        tapSeen = false
         closeReported = false
         generation += 1
         clearForm()
@@ -452,15 +482,45 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         let stack = column([
             label("Shortcuts", size: 17, weight: .semibold),
             label("These work from any app. Click one and press the new shortcut.", size: 13),
+            tapPart(),
             grid,
             button("Restore Defaults", #selector(restoreDefaults)),
             caption("Other shortcuts are in Settings › Shortcuts."),
         ], spacing: 12)
         stack.setCustomSpacing(6, after: stack.arrangedSubviews[0])
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[1])
+        stack.setCustomSpacing(18, after: tapSection)
         stack.setCustomSpacing(18, after: grid)
-        stack.setCustomSpacing(6, after: stack.arrangedSubviews[3])
+        stack.setCustomSpacing(6, after: stack.arrangedSubviews[4])
         return topAligned(stack)
+    }
+
+    private func tapPart() -> NSView {
+        tapFingersPopup.target = self
+        tapFingersPopup.action = #selector(setTapFingers)
+        for n in 2...5 {
+            let item = NSMenuItem(title: "\(n)", action: nil, keyEquivalent: "")
+            item.tag = n
+            tapFingersPopup.menu?.addItem(item)
+        }
+        tapActionPopup.target = self
+        tapActionPopup.action = #selector(setTapAction)
+        for action in Self.tapActions {
+            let item = NSMenuItem(title: action.title, action: nil, keyEquivalent: "")
+            item.representedObject = action.value
+            tapActionPopup.menu?.addItem(item)
+        }
+        tapStatus.font = .systemFont(ofSize: 11)
+        openTrackpad = button("Open Trackpad Settings…", #selector(openTrackpadSettings))
+        openTrackpad.controlSize = .small
+        tapStatusRow = row([tapStatus, openTrackpad])
+        tapSection.orientation = .vertical
+        tapSection.alignment = .leading
+        tapSection.spacing = 6
+        tapSection.addArrangedSubview(row([label("Tap with", size: 13), tapFingersPopup,
+                                           label("fingers to", size: 13), tapActionPopup]))
+        tapSection.addArrangedSubview(tapStatusRow)
+        return tapSection
     }
 
     private func donePage() -> NSView {
@@ -510,7 +570,10 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
             refreshGames()
             gamesDocument.scroll(.zero)
         }
-        if next == .shortcuts { refreshShortcuts() }
+        if next == .shortcuts {
+            refreshShortcuts()
+            refreshTap()
+        }
         if next == .done { refreshDone() }
     }
 
@@ -926,6 +989,80 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         refreshShortcuts()
     }
 
+    func tapRecognised() {
+        tapSeen = true
+        refreshTap()
+    }
+
+    private var tapWord: String {
+        ["two", "three", "four", "five"][max(0, min(3, tapFingers - 2))]
+    }
+
+    private var tapShown: Bool { !tapAction.isEmpty && hasTrackpad() }
+
+    private func refreshTap() {
+        tapSection.isHidden = !hasTrackpad()
+        tapFingersPopup.selectItem(withTag: tapFingers)
+        tapActionPopup.select(tapActionPopup.itemArray.first {
+            ($0.representedObject as? String) == tapAction
+        } ?? tapActionPopup.itemArray.first)
+        tapStatusRow.isHidden = tapAction.isEmpty
+        let conflict = !tapAction.isEmpty && tapFingers == 3 && lookUpOnTap()
+        openTrackpad.isHidden = !conflict
+        if conflict {
+            tapStatus.stringValue = "macOS also opens Look up on a three-finger tap."
+            tapStatus.textColor = .systemOrange
+        } else if tapSeen, let action = Self.tapActions.first(where: { $0.value == tapAction }) {
+            tapStatus.stringValue = "Tap recognised. It will \(action.effect)."
+            tapStatus.textColor = .systemGreen
+        } else {
+            tapStatus.stringValue = "Tap the trackpad with \(tapWord) fingers to try it."
+            tapStatus.textColor = .secondaryLabelColor
+        }
+    }
+
+    // Written at once, unlike the hotkeys, so the detector counts the new fingers for the try-it.
+    @objc private func setTapFingers() {
+        tapFingers = tapFingersPopup.selectedTag()
+        tapSeen = false
+        saveTap(tapFingers, tapAction)
+        refreshTap()
+    }
+
+    @objc private func setTapAction() {
+        tapAction = tapActionPopup.selectedItem?.representedObject as? String ?? ""
+        saveTap(tapFingers, tapAction)
+        refreshTap()
+    }
+
+    @objc private func openTrackpadSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Trackpad-Settings.extension")
+        else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private static func saveTap(fingers: Int, action: String) {
+        let s = Settings.shared
+        if s.tapFingers != fingers { s.tapFingers = fingers }
+        if action.isEmpty {
+            if s.tapGesture { s.tapGesture = false }
+            return
+        }
+        if s.tapGestureAction != action { s.tapGestureAction = action }
+        if !s.tapGesture { s.tapGesture = true }
+    }
+
+    // System Settings › Trackpad › "Look up & data detectors" stores its choice under this key, once
+    // per trackpad driver; nonzero is the three-finger tap. Undocumented: anything else counts as off.
+    static func lookUpOnThreeFingerTap() -> Bool {
+        ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"]
+            .contains { domain in
+                let value = CFPreferencesCopyAppValue("TrackpadThreeFingerTapGesture" as CFString,
+                                                      domain as CFString)
+                return (value as? NSNumber).map { $0.intValue != 0 } ?? false
+            }
+    }
+
     private func refreshDone() {
         while doneLines.numberOfRows > 0 { doneLines.removeRow(at: 0) }
         var lines: [(HotkeyAction, String)] = [
@@ -935,11 +1072,21 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         ]
         if playsGames { lines.append((.quest, "looks up what's under the pointer")) }
         if activityCards { lines.append((.allow, "allows what a coding agent asks")) }
-        for (action, text) in lines {
-            guard let combo = pending[action], !combo.isEmpty else { continue }
-            doneLines.addRow(with: [label(KeyCombo.pretty(combo), size: 13, weight: .semibold),
-                                    label(text, size: 13)])
+        var tap = tapShown ? Self.tapActions.first { $0.value == tapAction } : nil
+        func addTap() {
+            guard let action = tap else { return }
+            doneLines.addRow(with: [label(tapWord.capitalized + "-finger tap", size: 13,
+                                          weight: .semibold), label(action.done, size: 13)])
+            tap = nil
         }
+        for (action, text) in lines {
+            if let combo = pending[action], !combo.isEmpty {
+                doneLines.addRow(with: [label(KeyCombo.pretty(combo), size: 13, weight: .semibold),
+                                        label(text, size: 13)])
+            }
+            if action.rawValue == tapAction { addTap() }
+        }
+        addTap()
         if doneLines.numberOfColumns > 0 { doneLines.column(at: 0).xPlacement = .trailing }
         doneLines.rowAlignment = .firstBaseline
     }
@@ -1074,9 +1221,13 @@ extension SetupAssistant {
             guard only == nil || only == step.rawValue + 1 else { return }
             let assistant = SetupAssistant(snapshot: true)
             assistant.captureAllowed = { false }
+            assistant.hasTrackpad = { false }
+            assistant.lookUpOnTap = { false }
+            assistant.saveTap = { _, _ in }
             var combos: [HotkeyAction: String] = [:]
             for action in HotkeyAction.allCases { combos[action] = action.defaultCombo }
-            assistant.reset(existing: [], firstRun: true, combos: combos, activityCards: true)
+            assistant.reset(existing: [], firstRun: true, combos: combos, activityCards: true,
+                            tapFingers: 3, tapAction: "ghost")
             prepare(assistant)
             assistant.go(to: step)
             if let image = assistant.render(fitting: step == .games) { frames.append((caption, image)) }
@@ -1101,8 +1252,26 @@ extension SetupAssistant {
                 searchURL: "https://terraria.wiki.gg/wiki/Special:Search?search={query}",
                 kind: .mediaWiki), status: "Wiki, 5,210 pages")]
         }
-        add("Shortcuts, with games", .shortcuts) { $0.playsGames = true }
+        add("Shortcuts, with games, no trackpad", .shortcuts) { $0.playsGames = true }
+        add("Shortcuts, trackpad", .shortcuts) { assistant in
+            assistant.playsGames = true
+            assistant.hasTrackpad = { true }
+        }
+        add("Shortcuts, a tap recognised", .shortcuts) { assistant in
+            assistant.playsGames = true
+            assistant.hasTrackpad = { true }
+            assistant.tapSeen = true
+        }
+        add("Shortcuts, Look up on the three-finger tap", .shortcuts) { assistant in
+            assistant.playsGames = true
+            assistant.hasTrackpad = { true }
+            assistant.lookUpOnTap = { true }
+        }
         add("Done, with games", .done) { $0.playsGames = true }
+        add("Done, with games and the tap", .done) { assistant in
+            assistant.playsGames = true
+            assistant.hasTrackpad = { true }
+        }
         if only != nil, frames.count > 1 { frames = [frames[frames.count - 1]] }
         write(frames, to: output)
     }

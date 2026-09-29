@@ -215,7 +215,8 @@ reopens SlyTerm.
 
 The first time SlyTerm opens, a short setup asks whether you play games with it open and which
 ones, so the lookup knows where to search, and shows the main shortcuts so you can change them.
-Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
+On a Mac with a trackpad it also sets what a tap with several fingers does and lets you try it
+there, and says when macOS opens Look up on the same tap. Add your own game with its name and a wiki or site address. Everything it sets is in Settings,
 which can run the setup again.
 
 1. Set your game to **borderless windowed**, or use macOS fullscreen. Exclusive fullscreen can hide

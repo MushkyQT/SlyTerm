@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pendingURLs: [URL] = []
     private var quitPending = false
     private var reopenOnQuit = false
+    private var setupOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Only asks whether the grant is there; nothing is captured.
@@ -139,6 +140,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func performGestureAction() {
+        // The assistant lets the player try the tap; hiding or covering the screen behind it would
+        // lose the window they are reading.
+        if setupOpen {
+            SetupAssistant.shared.tapRecognised()
+            Settings.log("tap gesture: held while the setup assistant is open")
+            return
+        }
         switch Settings.shared.tapGestureAction {
         case "toggle": controller.toggleVisible()
         case "panic": controller.togglePanic()
@@ -230,10 +238,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         assistant.onEndRecording = { [weak self] in self?.registerHotkeys() }
         assistant.onClose = { [weak self] in
+            self?.setupOpen = false
             Settings.shared.setupDone = true
             self?.registerHotkeys()
             then?()
         }
+        setupOpen = true
         assistant.show(level: Settings.shared.dialogLevel)
     }
 

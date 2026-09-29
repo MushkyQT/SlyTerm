@@ -22,6 +22,11 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - Settings › General sets how long a finished card stays, up to 300 seconds, and Settings ›
   Terminal how many lines of scrollback a new tab keeps, from 1,000 to 100,000.
 - A tab's right-click menu has Close Tab.
+- On a Mac with a trackpad, the setup assistant's Shortcuts step sets what the trackpad tap does
+  and with how many fingers, says when a tap is recognised and what it will do, and warns when
+  macOS opens Look up on the same three-finger tap, with a button to Trackpad Settings. While the
+  assistant is open a tap does nothing else. Its last step lists the tap next to the hotkey with
+  the same action.
 
 ### Changed
 
