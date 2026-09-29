@@ -11,54 +11,71 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 - When Screen Recording was granted after SlyTerm opened, Settings › Lookup and the setup assistant
   say it needs a reopen and offer a Reopen SlyTerm button.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - The first three times the overlay switches to click-through by itself because another app took
   the keyboard, an orange note by the tab strip says that click-through is on and which shortcut
   brings the focus back to SlyTerm. In click-through with nothing else to report, the
   strip reads "click-through".
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - The menu bar item has Shortcuts…, which opens Settings on its Shortcuts tab, Help, which opens
   the README's shortcut list, and About SlyTerm, which shows the version.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - Settings has a Web tab: the search address, pausing videos, the opacity of a playing video, a
   page zoom slider for every web tab and where guides open.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - Settings › General sets how long a finished card stays, up to 300 seconds, and Settings ›
   Terminal how many lines of scrollback a new tab keeps, from 1,000 to 100,000.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - A tab's right-click menu has Close Tab.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - On a Mac with a trackpad, the setup assistant's Shortcuts step sets what the trackpad tap does
   and with how many fingers, says when a tap is recognised and what it will do, and warns when
   macOS opens Look up on the same three-finger tap, with a button to Trackpad Settings. While the
   assistant is open a tap does nothing else. Its last step lists the tap next to the hotkey with
   the same action.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 
 ### Changed
 
 - The setup assistant calls the permission Screen Recording, as System Settings does, and says
   that SlyTerm needs to be reopened after it is allowed.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - The setup assistant's last step says that clicking into the game switches to click-through by
   itself, and names the click-through shortcut as the way back to the terminal.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - A floating web window's toolbar shows the mode, as the strip does: a green dot in interact mode,
   an orange dot on the strip's click-through colour in click-through. A click on its address field
   in click-through says which shortcut to press to type there.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - The lookup's message names the site that answered ("Guide: Dragon scimitar · OSRS Wiki") and,
   when nothing matched, the game it asked, in its own colour so a wrong game stands out. Pick
   mode's hint names the site it looks things up on.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - Tab names stay readable on a narrow strip: the expand button makes way when tabs would be under
   40 pt, a tab too narrow for its × plus three letters of its name has no ×, and a tab where an
   ellipsis would leave one or two letters shows the first three letters of its name. The tooltip
   has the full name.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - The activity card's title is larger, and the toasts that say why an answer key did nothing stay
   3.5 seconds.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - Settings › General is grouped as Launch, Agents and Quitting, and Settings › Shortcuts lists the
   main keys inside SlyTerm. The window levels in Settings › Window read "Above other windows",
   "Above the menu bar" and "Above everything, for games that cover the terminal"; the stored
   values are unchanged.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 
 ### Fixed
 
 - Quitting during the first-run setup assistant, as macOS offers to after Screen Recording is
   allowed, no longer skips it: SlyTerm reopens it at the next launch on the same step, with the
   games already chosen.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - In Settings › Shortcuts, each shortcut's name and Clear button sit level with its field.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 - macOS's Screen Recording prompt, asked for from the setup assistant, is no longer hidden behind
   the assistant.
+  ([#9](https://github.com/MushkyQT/slyterm/pull/9))
 
 ## [1.2.0] - 2026-09-28
 
