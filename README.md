@@ -16,6 +16,23 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/MushkyQT/SlyTerm/releases/latest"><img
+    src="https://img.shields.io/github/v/release/MushkyQT/SlyTerm?label=release"
+    alt="Latest release"></a>
+  <a href="https://github.com/MushkyQT/SlyTerm/releases"><img
+    src="https://img.shields.io/github/downloads/MushkyQT/SlyTerm/total?label=downloads"
+    alt="Downloads"></a>
+  <a href="https://github.com/MushkyQT/homebrew-tap"><img
+    src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FMushkyQT%2Fhomebrew-tap%2Fmain%2FCasks%2Fslyterm.rb&search=version%20%22(%5B%5E%22%5D%2B)%22&replace=%241&label=homebrew%20tap"
+    alt="Homebrew tap version"></a>
+  <a href="https://github.com/MushkyQT/SlyTerm/actions/workflows/ci.yml"><img
+    src="https://img.shields.io/github/actions/workflow/status/MushkyQT/SlyTerm/ci.yml?branch=main&label=CI"
+    alt="CI status"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-lightgrey" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/MushkyQT/SlyTerm" alt="MIT License"></a>
+</p>
+
+<p align="center">
   macOS 14 or later · Native Swift app · Free and open source
 </p>
 
