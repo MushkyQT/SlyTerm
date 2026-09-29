@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     private var controller: OverlayController!
     private var statusItem: NSStatusItem!
     private var hotkeyOK: [String: Bool] = [:]
@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Lookup.shared.openGuide = { [weak self] url in self?.controller.showGuide(url) }
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged(_:)), name: Settings.didChange, object: nil)
         buildStatusItem()
+        Updater.shared.start()
         if Settings.shared.setupDone {
             controller.show()
             controller.playStartupAnimation()
@@ -265,6 +266,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         let s = Settings.shared
 
+        if let version = Updater.shared.pendingVersion {
+            menu.addItem(item("Update to SlyTerm \(version)…", #selector(checkForUpdates)))
+            menu.addItem(.separator())
+        }
         menu.addItem(item(controller.isVisible ? "Hide Terminal" : "Show Terminal", #selector(toggleVisible), hotkey: .toggle))
         menu.addItem(item("New Tab", #selector(newTab), key: "t", modifiers: .command))
         menu.addItem(item("Bring In a Session…", #selector(bringIn), key: "t", modifiers: [.command, .shift]))
@@ -317,6 +322,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Settings…", #selector(showSettings), key: ",", modifiers: .command))
         menu.addItem(item("Reset Window Position", #selector(resetPosition)))
         menu.addItem(item("About SlyTerm", #selector(showAbout)))
+        if Updater.shared.isEnabled {
+            menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
+        }
         menu.addItem(.separator())
         menu.addItem(item("Quit SlyTerm", #selector(quit), key: "q", modifiers: .command))
     }
@@ -411,8 +419,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
     @objc private func showAbout() { AppSwitcher.shared.showAbout() }
+    @objc private func checkForUpdates() { Updater.shared.check() }
     @objc private func resetPosition() { controller.resetPosition() }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    // The status menu enables its items itself, so isEnabled set on one has no effect.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action != #selector(checkForUpdates) || Updater.shared.canCheck
+    }
 }
 
 // Settings and the setup assistant fall behind other apps' windows when SlyTerm is not active, and
