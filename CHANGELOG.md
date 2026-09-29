@@ -14,7 +14,7 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
 - The first three times the overlay switches to click-through by itself because another app took
   the keyboard, an orange note by the tab strip says that clicks and keys now go to the game and
   which key or button brings the terminal back. In click-through with nothing else to report, the
-  strip reads "click-through" in the room the tabs leave, without making them narrower.
+  strip reads "click-through".
 - The menu bar item has Shortcuts…, which opens Settings on its Shortcuts tab, Help, which opens
   the README's shortcut list, and About SlyTerm, which shows the version.
 - Settings has a Web tab: the search address, pausing videos, the opacity of a playing video, a

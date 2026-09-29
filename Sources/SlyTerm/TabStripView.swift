@@ -190,9 +190,7 @@ final class TabStripView: NSView {
         }
 
         hint = delegate?.stripHint
-        // The idle click-through hint only takes room left over, so a mode switch does not reflow.
         let hintWidth = hint.map { hint in
-            guard hint.text != TabStripView.ghostHint else { return 0 }
             let size = (hint.text as NSString).size(withAttributes: [.font: TabStripView.hintFont])
             return (size.width + 18).rounded(.up)
         } ?? 0
@@ -728,10 +726,8 @@ enum StripSnapshotCLI {
             width: 360, selected: 5, web: many(12), titles: six)
         let seven = six + ["tests"]
         add("interact, three web tabs", selected: 1, web: three)
-        add("click-through, nothing running: the tabs keep their width, no room left for the hint",
+        add("click-through, nothing running: the hint says so",
             selected: 1, web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
-        add("click-through, one terminal: the hint in the room left over", selected: 0, web: three,
-            ghost: true, hint: (TabStripView.ghostHint, .systemOrange), titles: ["slyterm"])
         add("360 pt wide, click-through, nothing running: no room for the hint", width: 360, selected: 1,
             web: three, ghost: true, hint: (TabStripView.ghostHint, .systemOrange))
         add("360 pt wide, four terminals, three web tabs: 46 pt tabs, the web tabs behind …", width: 360,

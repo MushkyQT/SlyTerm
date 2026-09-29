@@ -95,7 +95,7 @@ floating window that had the keyboard, or a window of SlyTerm's own such as Sett
 keyboard; with the setting off nothing does. The count is kept in `ghostHintsShown`. The toast is
 a non-activating panel that ignores the mouse, so the game keeps the keyboard. While the overlay
 is in click-through and no agent hint is due, the strip reads "click-through" in orange in the
-room the tabs leave over; the tabs never shrink for it, so switching modes does not move them.
+hint slot; the tabs make room for it as they do for an agent hint.
 
 ### Trackpad tap
 
