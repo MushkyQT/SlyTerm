@@ -628,12 +628,8 @@ you have open), press `⌃⌥Q`, and the page your game's sources have for it op
 next to your terminals, never in your browser: a browser would come to the front and take the
 keyboard, which is the one thing you cannot afford mid-fight. A small message next to the pointer
 says which page is opening and on which site (`Guide: Dragon scimitar · OSRS Wiki`), or what was
-read and which game was asked when nothing matched (`No guide on Dofus for “Hogger”`). When the
-game came from the fallback, with "Detect the game from the app in front" on and another game
-naming an app, a second line says so for 4 seconds: `Dofus answered; no game claims World of
-Warcraft. Set the game app in Settings › Lookup.` It names the app under the pointer, or the app
-in front when that one is SlyTerm. With one game, or for a lookup given its text
-(`slyterm://lookup?text=`, `--search`), there is no second line. Typical time from key press to the
+read and which game was asked when nothing matched (`No guide on Dofus for “Hogger”`), the game's
+name in cyan so a lookup that asked the wrong game stands out. Typical time from key press to the
 tab: 200 to 400 ms, plus about half a second for the page.
 
 The overlay does not take focus when a guide arrives: if it was hidden it comes back in
@@ -1461,8 +1457,7 @@ $B --pick-snapshot screenshot.png 1204 880 pick.png --scale 2
                                           # draw pick mode offscreen over that image, the pointer at
                                           # that pixel, and write a PNG; `--scale 2` for a Retina
                                           # screenshot; takes `--game`
-$B --lookup                               # the whole pipeline at the pointer, opens nothing; its
-                                          # `toast:` line leaves out the fallback note
+$B --lookup                               # the whole pipeline at the pointer, opens nothing
 $B --lookup 360 531                       # same at a screen point (origin bottom-left)
 $B --search "Abyssal whip" --game osrs    # what each source that can be asked resolves it to,
                                           # and the answer the lookup would take
@@ -1607,8 +1602,7 @@ a separate `SlyTerm` defaults domain.
   size and the age of every index; `--index --refresh` rebuilds them on the spot.
 - **The wrong game was picked.** The lookup asks the app under the pointer, then the app in front,
   then the game chosen by hand ("Otherwise use"), and the message names the game or the site that
-  answered. When the game chosen by hand answered for an app no game claims while another game
-  names an app, the message's second line names the app. Set each game's **Game app** in Settings
+  answered, the game in cyan when nothing matched. Set each game's **Game app** in Settings
   › Lookup so it can be recognised, or turn "Detect the game from the app in front" off and pick
   the game yourself, in that pane or in the menu bar's "Lookup Game" submenu.
 - **The lookup opened a new web tab instead of its own.** Its own was playing something, and the

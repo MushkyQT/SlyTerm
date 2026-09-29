@@ -33,9 +33,8 @@ How each feature behaves in detail is in [docs/TECHNICAL.md](docs/TECHNICAL.md).
   an orange dot on the strip's click-through colour in click-through. A click on its address field
   in click-through says which shortcut to press to type there.
 - The lookup's message names the site that answered ("Guide: Dragon scimitar · OSRS Wiki") and,
-  when nothing matched, the game it asked. When no game claims the app in front, another game
-  names an app and the game under "Otherwise use" answered, a second line says so. Pick mode's
-  hint names the site it looks things up on.
+  when nothing matched, the game it asked, in its own colour so a wrong game stands out. Pick
+  mode's hint names the site it looks things up on.
 - Tab names stay readable on a narrow strip: the expand button makes way when tabs would be under
   40 pt, a tab too narrow for its × plus three letters of its name has no ×, and a tab where an
   ellipsis would leave one or two letters shows the first three letters of its name. The tooltip

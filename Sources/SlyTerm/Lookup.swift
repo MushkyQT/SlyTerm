@@ -117,7 +117,6 @@ final class Lookup {
     private struct Press {
         var outcome: Outcome
         var game: LookupGame?
-        var unclaimed: String?
         var reading = Reading()
         var answered: Int?
         var rowText: String?
@@ -162,26 +161,23 @@ final class Lookup {
             if let s = continued, await !self.rowUnchanged(since: s, at: mouse) { continued = nil }
             let outcome: Outcome
             let kept: Session?
-            let answering: LookupGame?, unclaimed: String?
+            let answering: LookupGame?
             if var s = continued {
                 outcome = await self.again(&s)
                 s.pressed = Date()
                 kept = s
                 answering = s.game
-                unclaimed = nil
             } else {
                 let press = await self.press(at: mouse, text: text, game: game)
                 outcome = press.outcome
                 answering = press.game
-                unclaimed = press.unclaimed
                 kept = text == nil ? Self.startSession(after: press, at: mouse, forced: game, dryRun: dryRun) : nil
             }
             let next = kept.flatMap { self.upcoming($0) }
             await MainActor.run {
                 self.sessionLock.withLock { self.session = kept }
                 self.running = false
-                self.finish(outcome, at: mouse, dryRun: dryRun, next: next, game: answering,
-                            unclaimed: unclaimed)
+                self.finish(outcome, at: mouse, dryRun: dryRun, next: next, game: answering)
                 if kept != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + Self.againWindow + 1) { [weak self] in self?.expireSession() }
                 }
@@ -213,13 +209,8 @@ final class Lookup {
                 : nil
             if grabber != nil { Settings.log("lookup: shareable content in \(clock.ms) ms") }
 
-            // Text from a URL or --search did not come from the app in front: no note about it.
-            let resolved = await resolveGame(forced: forced, at: point, with: grabber, noting: text == nil)
-            guard let resolved else {
-                return Press(outcome: .noGame)
-            }
-            let game = resolved.game
-            var press = Press(outcome: .noText, game: game, unclaimed: resolved.unclaimed)
+            guard let game = await resolveGame(forced: forced, at: point, with: grabber) else { return Press(outcome: .noGame) }
+            var press = Press(outcome: .noText, game: game)
             let indexed = LookupIndices.indexed(game)
             for (_, index) in indexed { index.ensureLoaded() }
 
@@ -695,9 +686,7 @@ final class Lookup {
         do {
             let point = ScreenGrabber.cgPoint(fromAppKit: mouse)
             let grabber = ScreenGrabber(content: try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true))
-            guard let game = await resolveGame(forced: forced, at: point, with: grabber)?.game else {
-                return .failed(.noGame)
-            }
+            guard let game = await resolveGame(forced: forced, at: point, with: grabber) else { return .failed(.noGame) }
             var shot = try await grabber.captureWindow(around: point, game: game)
             if shot == nil { shot = try await grabber.captureDisplay(containing: point) }
             guard let shot else { return .nothing }
@@ -726,13 +715,10 @@ final class Lookup {
         return try OCR.lines(in: shot.image, fast: false, languages: game.ocrLanguages)
     }
 
-    // `unclaimed` names the app no game claims when the fallback game answered and another game
-    // names an app: the toast says so, or a wrong wiki's answer looks like the right one.
-    private func resolveGame(forced: LookupGame?, at point: CGPoint, with grabber: ScreenGrabber?,
-                             noting: Bool = false) async -> (game: LookupGame, unclaimed: String?)? {
+    private func resolveGame(forced: LookupGame?, at point: CGPoint, with grabber: ScreenGrabber?) async -> LookupGame? {
         if let forced {
             Settings.log("lookup: game \(forced.name), asked for by name")
-            return (forced, nil)
+            return forced
         }
         let pointed = grabber?.bundleID(under: point)
         let front = await MainActor.run { NSWorkspace.shared.frontmostApplication?.bundleIdentifier }
@@ -740,29 +726,16 @@ final class Lookup {
             Settings.log("lookup: no game configured")
             return nil
         }
-        let store = LookupStore.shared
         let why: String
-        var unclaimed: String?
-        if store.autoDetect, game.matches(bundleID: pointed) {
+        if LookupStore.shared.autoDetect, game.matches(bundleID: pointed) {
             why = "\(pointed ?? "") under the pointer"
-        } else if store.autoDetect, game.matches(bundleID: front) {
+        } else if LookupStore.shared.autoDetect, game.matches(bundleID: front) {
             why = "\(front ?? "") in front"
         } else {
-            if noting, store.autoDetect,
-               store.games.contains(where: { $0.id != game.id && !$0.appBundleIDs.isEmpty }) {
-                unclaimed = await MainActor.run { [pointed, front].compactMap { Self.appName($0) }.first }
-            }
-            why = "the game chosen by hand" + (unclaimed.map { ", no game claims \($0)" } ?? "")
+            why = "the game chosen by hand"
         }
         Settings.log("lookup: game \(game.name), from \(why)")
-        return (game, unclaimed)
-    }
-
-    @MainActor
-    private static func appName(_ bundleID: String?) -> String? {
-        guard let bundleID else { return nil }
-        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-            .first { $0.processIdentifier != getpid() }?.localizedName
+        return game
     }
 
     private func bestMatch(for cleaned: String, in indexed: [(source: LookupSource, index: LookupIndex)]) -> (source: LookupSource, match: LookupIndex.Match)? {
@@ -807,13 +780,8 @@ final class Lookup {
 
     @MainActor
     private func finish(_ outcome: Outcome, at mouse: NSPoint, dryRun: Bool, next: String? = nil,
-                        game: LookupGame? = nil, unclaimed: String? = nil) {
+                        game: LookupGame? = nil) {
         Settings.log("lookup: \(outcome)\(next.map { ", next: \($0)" } ?? "")")
-        let note = game.flatMap { game in unclaimed.map { Self.fallbackNote(game: game.name, app: $0) } }
-        func show(_ text: String, tint: NSColor, duration: TimeInterval = 1.8) {
-            Toast.shared.show(note.map { text + "\n" + $0 } ?? text, near: mouse, tint: tint,
-                              duration: note == nil ? duration : max(duration, 4))
-        }
         switch outcome {
         case .found(_, let url, _, _):
             let inApp = Settings.shared.questOpenInApp && openGuide != nil
@@ -822,18 +790,20 @@ final class Lookup {
                 let combo = KeyCombo.pretty(Settings.shared.hotkey(.quest))
                 message += "  ·  \(combo.isEmpty ? "" : combo + " ")again: \(next)"
             }
-            show(message, tint: .systemGreen)
+            Toast.shared.show(message, near: mouse, tint: .systemGreen)
             if !dryRun {
                 if inApp { openGuide?(url) } else { open(url) }
             }
         case .noGame:
             Toast.shared.show("Add a game in Settings › Lookup", near: mouse, tint: .systemOrange, duration: 3)
         case .noText:
-            show("No text under the pointer", tint: .systemOrange)
+            Toast.shared.show("No text under the pointer", near: mouse, tint: .systemOrange)
         case .noMatch:
-            show(Self.toastText(outcome, game: game?.name), tint: .systemOrange, duration: 3)
+            // The game in its own colour, so a lookup that asked the wrong game stands out.
+            Toast.shared.show(Self.toastText(outcome, game: game?.name), near: mouse, tint: .systemOrange,
+                              duration: 3, highlight: game?.name)
         case .nothingElse:
-            show("Nothing else near the pointer", tint: .systemOrange)
+            Toast.shared.show("Nothing else near the pointer", near: mouse, tint: .systemOrange)
         case .noPermission:
             Toast.shared.show("Allow Screen Recording for SlyTerm in System Settings › Privacy & Security, then relaunch it",
                               near: mouse, tint: .systemRed, duration: 6)
@@ -852,10 +822,6 @@ final class Lookup {
         default:
             return outcome.description
         }
-    }
-
-    static func fallbackNote(game: String, app: String) -> String {
-        "\(game) answered; no game claims \(app). Set the game app in Settings › Lookup."
     }
 
     private static func pageLabel(of url: URL) -> String {
@@ -1007,17 +973,24 @@ final class Toast {
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.textColor = .white
         label.isSelectable = false
-        label.maximumNumberOfLines = 5
+        label.maximumNumberOfLines = 3
         background.addSubview(label)
         panel.contentView = background
     }
 
-    func show(_ text: String, near point: NSPoint, tint: NSColor = .white, duration: TimeInterval = 1.8) {
+    func show(_ text: String, near point: NSPoint, tint: NSColor = .white, duration: TimeInterval = 1.8,
+              highlight: String? = nil) {
         hideWork?.cancel()
         generation += 1
         let current = generation
         label.stringValue = text
         label.textColor = tint
+        if let highlight, let range = text.range(of: highlight) {
+            let styled = NSMutableAttributedString(string: text, attributes: [.font: label.font as Any,
+                                                                              .foregroundColor: tint])
+            styled.addAttribute(.foregroundColor, value: NSColor.systemCyan, range: NSRange(range, in: text))
+            label.attributedStringValue = styled
+        }
         let maxWidth: CGFloat = 440
         label.preferredMaxLayoutWidth = maxWidth - 24
         var size = label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: maxWidth - 24, height: 200)) ?? NSSize(width: 200, height: 20)
