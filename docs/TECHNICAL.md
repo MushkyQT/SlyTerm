@@ -262,8 +262,8 @@ With the mark comes a card, hung off the strip and readable over the game: the t
 happened and, for a finished turn, how long it took and the last paragraph of the agent's answer;
 for a permission prompt, the command it wants to run or the file it wants to edit; for a question,
 the question and its options; for a notification, its title and its text. Its last line names the
-keys that act on it, each combo in bold and taken from Settings › Shortcuts: `⌃⌥Y Allow · ⌃⌥N
-Refuse · ⌃⌥Tab Look` for a permission prompt, on two lines when the card is too narrow for one.
+keys that act on it, taken from Settings › Shortcuts: `⌃⌥Y allow · ⌃⌥N refuse · ⌃⌥Tab to look`
+for a permission prompt.
 The less SlyTerm can read of an agent, the less its card says: Gemini CLI's and Qwen Code's only
 say that a turn finished or that something waits, and so does the card of a Codex whose rollout
 cannot be found. A finished card fades after the time set in Settings › General › Agents, 10
