@@ -706,7 +706,22 @@ final class OverlayController: NSObject, TabStripDelegate {
             let shown = self.main.isVisible || self.floating.values.contains { $0.panel.isVisible }
             guard shown, !self.hasKeyboard, !self.isGhost, !self.isPanic else { return }
             self.setGhost(true)
+            self.explainAutoGhost()
         }
+    }
+
+    // App state, not a setting: the first three switches say why the terminal stopped typing.
+    private static let ghostHintsKey = "ghostHintsShown"
+
+    @MainActor
+    private func explainAutoGhost() {
+        let shown = UserDefaults.standard.integer(forKey: OverlayController.ghostHintsKey)
+        guard shown < 3 else { return }
+        UserDefaults.standard.set(shown + 1, forKey: OverlayController.ghostHintsKey)
+        let back = hintKey(settings.hotkeyGhost).map { "\($0) or the eye button" } ?? "The eye button"
+        let point = main.isVisible ? NSPoint(x: strip.frame.maxX, y: strip.frame.maxY) : NSEvent.mouseLocation
+        Toast.shared.show("Click-through: clicks and keys go to the game. \(back) to type here.",
+                          near: point, tint: .systemOrange, duration: 4)
     }
 
     private func floatingKeyChanged(_ id: UUID) {
@@ -1262,6 +1277,7 @@ final class OverlayController: NSObject, TabStripDelegate {
             }
             if activity.isWaiting { return ("waiting for you", .systemOrange) }
         }
+        if isGhost { return ("click-through", .systemOrange) }
         return nil
     }
     private func hintKey(_ combo: String) -> String? {

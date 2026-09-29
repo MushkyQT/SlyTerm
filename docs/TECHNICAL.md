@@ -86,6 +86,15 @@ keyboard moving between SlyTerm's own windows, from the terminal to a floating w
 does not count. Turn this off in Settings › Window ("Switch to click-through when the terminal
 loses focus") if you would rather switch modes only by hand.
 
+The first three automatic switches say why the terminal stopped typing: a toast by the strip's
+corner, orange, for 4 seconds, "Click-through: clicks and keys go to the game. ⌃⌥Tab or the eye
+button to type here." (the click-through shortcut as set, or "The eye button to type here." when
+it has none). The hotkey, the eye button and the tap never show it, nor does panic, and with the
+setting off nothing does; the count is kept in `ghostHintsShown`. The toast is a non-activating
+panel that ignores the mouse, so the game keeps the keyboard. While the overlay is in
+click-through and no agent hint is due, the strip's hint slot reads "click-through" in orange,
+when there is room for it.
+
 ### Trackpad tap
 
 A quick tap with three fingers roughly side by side, anywhere on the trackpad, toggles
@@ -109,6 +118,15 @@ the terminal goes back above it. The bar itself never leaves your pointer (the t
 moves), so the bar is always the window's outer edge and the terminal is what reaches toward the
 middle, where the game is. Settings › Window › Tab bar pins it to the top or the bottom of the
 window instead.
+
+On a narrow strip the tab names keep the room. Web tabs go behind a single `…` square before a
+terminal's tab gets under 44 pt (see [Web tabs on the strip](#web-tabs-on-the-strip)); if tabs
+would still be under 40 pt, the expand button goes (`⌘Return` and `⌃⌥M` still toggle
+Fullscreen). The selected tab's `×`, which a tab only shows otherwise while the pointer is on
+it, also waits for the pointer when it would leave less than three letters of the name;
+middle-click and `⌘W` close a tab either way. A tab under 40 pt shows its mark and the first three letters of its name, with no
+ellipsis ("sly", "cla", "Pro"). The eye, the minus and `+` always stay. A tab whose name is
+shortened has it in its tooltip, above what its agent is doing.
 
 ### Tabs and folders
 
@@ -164,7 +182,7 @@ logo animation", key `startupAnimation`).
 | Pause what web tabs are playing, or play it again | `⌃⌥V` (configurable), or "Play / Pause" in the menu bar item |
 | Move the window | Drag the tab strip |
 | Resize | Drag the left or right edge, or the edge the tab strip is not on |
-| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip; middle-click closes a tab or a web tab's square |
+| New tab / close tab | `⌘T` (a terminal in the current tab's folder from a terminal, a web tab from a web tab) / `⌘W` (the tab in front, terminal or web), or `+` and `×` on the strip (on a narrow strip, the selected tab's `×` shows while the pointer is on it); middle-click closes a tab or a web tab's square |
 | Switch tabs | `⌘1`…`⌘9` (terminals only); `⌃Tab` / `⌃⇧Tab`, `⌘⌥←` / `⌘⌥→` or `⌘⇧[` / `⌘⇧]` go through the terminals from a terminal, and through the web tabs in the SlyTerm window from a web tab |
 | Go to a web tab | `⌥⌘1`…`⌥⌘9`, the web tabs in the order of their squares, from a terminal, a web tab or a floating window; hover a square to see its key |
 | Web tab ↔ terminal | `⌘G` (the last web tab in front in the SlyTerm window; opens the active game's first source when there is none) |
@@ -1190,7 +1208,9 @@ A fresh install opens a four-step window, and the terminal first appears when it
    nothing is captured.
 3. **Shortcuts**: show / hide, click-through and panic, plus the lookup and pick keys when games are
    on and Allow / Refuse when the card is on, with the Shortcuts pane's recorder and warnings.
-4. **Done**: the main shortcuts as chosen, **Open Settings** and **Start**.
+4. **Done**: the main shortcuts as chosen (the click-through one as "takes you back to the
+   terminal"), a caption saying that clicking into the game switches to click-through by itself
+   (only while that setting is on), **Open Settings** and **Start**.
 
 Nothing is saved until **Start** or **Open Settings** on the last step; closing the window keeps
 everything as it was. A new game list starts with the Dofus preset: on the first run it stays only
@@ -1298,7 +1318,8 @@ defaults write com.charlesmelki.slyterm debug -bool true   # trace to ~/Library/
 The app also keeps state of its own in the same domain, which is not worth editing: `frame` and
 `frameEdge` (the window and the edge its strip was on), `floatFrame` and `floatVideoFrame` (where
 the last floating page and the last floating video were), `sessionDirectories` and
-`sessionSelected` (the tabs to restore), `lookupGamesVersion` and `lookupGames.v0` (see
+`sessionSelected` (the tabs to restore), `ghostHintsShown` (how many times the automatic switch to
+click-through has said so, up to 3), `lookupGamesVersion` and `lookupGames.v0` (see
 [Migration notes](#migration-notes)), and `migratedFormerDefaults`.
 
 `hotkeyQuest`, `questOpenInApp` and `questOpenInBackground` keep the names they were given when the

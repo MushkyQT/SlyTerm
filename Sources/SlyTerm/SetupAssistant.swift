@@ -467,15 +467,20 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         check.contentTintColor = .systemGreen
         doneLines.rowSpacing = 8
         doneLines.columnSpacing = 12
+        let autoGhost = caption("Clicking into the game switches to click-through by itself.")
+        autoGhost.alignment = .center
+        autoGhost.isHidden = !Settings.shared.autoGhost
         let stack = column([
             check,
             label("You're set.", size: 22, weight: .bold),
             doneLines,
+            autoGhost,
             label("Everything else is in Settings (⌘,).", size: 13, color: .secondaryLabelColor),
         ], spacing: 10)
         stack.alignment = .centerX
         stack.setCustomSpacing(22, after: stack.arrangedSubviews[1])
-        stack.setCustomSpacing(22, after: doneLines)
+        stack.setCustomSpacing(autoGhost.isHidden ? 22 : 12, after: doneLines)
+        stack.setCustomSpacing(22, after: autoGhost)
         return centered(stack)
     }
 
@@ -909,7 +914,7 @@ final class SetupAssistant: NSObject, NSWindowDelegate, NSTextFieldDelegate, @un
         while doneLines.numberOfRows > 0 { doneLines.removeRow(at: 0) }
         var lines: [(HotkeyAction, String)] = [
             (.toggle, "shows or hides SlyTerm"),
-            (.ghost, "lets clicks through to what's behind"),
+            (.ghost, "takes you back to the terminal"),
             (.panic, "covers the screen with an opaque terminal"),
         ]
         if playsGames { lines.append((.quest, "looks up what's under the pointer")) }
